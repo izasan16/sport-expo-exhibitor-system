@@ -1,39 +1,19 @@
 package com.sportexpo.exhibitor.booth;
 
+import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.booth.dto.CreateBoothRequest;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Testcontainers
 @SpringBootTest
-class BoothServiceTest {
-    @Container
-    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("exhibitor")
-            .withUsername("exhibitor")
-            .withPassword("exhibitor");
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("app.db.schema", () -> "exhibitor_sys_test");
-        registry.add("spring.jpa.properties.hibernate.default_schema", () -> "exhibitor_sys_test");
-    }
-
+class BoothServiceTest extends TestDatabaseSupport {
     @Autowired
     EventService eventService;
 

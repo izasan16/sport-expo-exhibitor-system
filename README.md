@@ -54,7 +54,18 @@ cd backend
 mvn test -DskipTests
 ```
 
-Backend Testcontainers tests, requires Docker:
+Backend tests with an external PostgreSQL instance:
+
+```bash
+cd backend
+SPRING_DATASOURCE_URL=jdbc:postgresql://host:5432/database \
+SPRING_DATASOURCE_USERNAME=username \
+SPRING_DATASOURCE_PASSWORD=password \
+APP_DB_SCHEMA=exhibitor_sys_test \
+mvn test
+```
+
+Backend Testcontainers tests, used when no external datasource is configured and requires Docker:
 
 ```bash
 cd backend
