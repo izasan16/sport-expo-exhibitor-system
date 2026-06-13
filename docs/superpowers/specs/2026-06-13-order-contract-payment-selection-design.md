@@ -116,11 +116,13 @@ demo exhibitorId = 00000000-0000-0000-0000-000000000001
 | 当前状态 | 事件 | 下一状态 | 责任角色 | 同步动作 |
 | --- | --- | --- | --- | --- |
 | 待销售确认 | 销售确认订单 | 待签合同 | 销售/管理员 | 生成合同主记录和 v1 合同版本 |
-| 待签合同 | 合同标记已生成/待付款 | 待付款 | 系统/销售 | 初始化付款入口 |
+| 待签合同 | 后台标记合同已生成 | 待付款 | 系统/销售 | 合同进入 EFFECTIVE，初始化付款入口 |
 | 待付款 | 财务确认部分金额 | 部分付款 | 财务 | 选位资格保持未开放 |
 | 待付款/部分付款 | 财务确认金额满足订单总价 | 已付款 | 财务 | 选位资格变为可选位 |
 | 已付款 | 选位提交待审核 | 已付款 | 展商 | 选位资格变为暂停中 |
 | 已付款 | 展会归档或管理员完成归档 | 已完成 | 管理员 | 本轮只保留状态入口，不实现归档页 |
+
+本轮订单没有单独的“已确认展位”状态。我的订单页面必须结合 `SelectionEligibility.status` 和最新 `BoothSelection.status` 展示选位进度，不能只看订单状态。`已完成` 迁移本轮不可达，只为后续归档流程预留。
 
 ### 4.2 付款 Payment.status
 
@@ -161,6 +163,32 @@ demo exhibitorId = 00000000-0000-0000-0000-000000000001
 | 锁定中 | 选位驳回 | 可选 | BoothSelection、BoothLock |
 | 锁定中 | 锁位超时释放 | 可选 | BoothSelection、BoothLock |
 
+### 4.6 合同 Contract.status 与 ContractVersion.sign_status
+
+`contracts.status` 表示当前合同主记录状态，`contract_versions.sign_status` 表示该版本的签署状态。本轮不做电子签章，只做线下盖章的后台简化标记。
+
+Contract 状态：
+
+| 当前状态 | 事件 | 下一状态 | 同步动作 |
+| --- | --- | --- | --- |
+| DRAFT | 销售确认订单后系统生成合同 | GENERATED | 创建 contracts 主记录和 contract_versions v1 |
+| GENERATED | 后台标记合同已生成/线下签署完成 | EFFECTIVE | 订单从待签合同进入待付款 |
+
+ContractVersion 签署状态：
+
+| 当前状态 | 事件 | 下一状态 | 同步字段 |
+| --- | --- | --- | --- |
+| UNSIGNED | 生成 v1 合同版本 | UNSIGNED | `sign_status = UNSIGNED` |
+| UNSIGNED | 后台标记线下签署完成 | MARKED_SIGNED | `sign_status = MARKED_SIGNED`，可写入 `signer_id`、`signed_at`、`file_id` |
+
+合同 v1 快照字段映射：
+
+- 订单金额写入 `contract_versions.amount`。
+- 订单面积写入 `contract_versions.area_sqm`。
+- 合同版本签署状态写入 `contract_versions.sign_status`。
+- 创建人写入 `contract_versions.created_by`。
+- 合同内容快照写入 `contract_versions.content_snapshot`。
+
 ## 5. 后端设计
 
 ### 5.1 模块
@@ -193,6 +221,14 @@ selection
 
 下单时按订单所选展区/展位类型匹配价格规则。本轮若没有展区配置，可使用 event 级默认价格规则。
 
+档位和价格匹配规则：
+
+- 面积档位业务层禁止同一 `event_id + zone_id + area_sqm` 重复。
+- `zone_id` 为空表示 event 级默认档位。
+- 价格规则业务层禁止同一 `event_id + zone_id + booth_type` 出现多条启用规则。
+- 下单匹配价格时，zone 级规则优先于 event 级默认规则。
+- 若多条规则同时命中，按 `updated_at` 最新的一条作为兜底选择，并记录审计风险；实现时应优先通过唯一校验避免多命中。
+
 ### 5.3 参展订单
 
 创建订单输入：
@@ -219,9 +255,10 @@ selection
 
 - 订单必须处于 `待销售确认`。
 - 确认后订单进入 `待签合同`。
-- 系统生成 `contracts` 主记录和 `contract_versions` v1 快照。
-- 合同 v1 快照包含订单金额、面积、展会、展商、状态和创建人。
-- 本轮可将合同签署简化为后台标记合同已生成，然后订单进入 `待付款`。
+- 系统生成 `contracts` 主记录，`contracts.status = GENERATED`。
+- 系统生成 `contract_versions` v1 快照，`contract_versions.sign_status = UNSIGNED`。
+- 合同 v1 快照包含订单金额、面积、展会、展商、签署状态和创建人。
+- 本轮将合同签署简化为后台标记线下签署完成。标记后 `contracts.status = EFFECTIVE`，当前版本 `sign_status = MARKED_SIGNED`，订单进入 `待付款`。
 
 ### 5.4 付款
 
@@ -234,10 +271,13 @@ selection
 财务确认付款：
 
 - 付款必须处于 `待财务确认`。
+- 事务第一步必须对订单行执行 `SELECT * FROM participation_orders WHERE id = ? FOR UPDATE`。
 - 财务确认后付款进入 `已确认`。
-- 在同一事务内执行订单付款聚合。
+- 在同一事务内重新读取该订单所有付款记录并执行订单付款聚合。
 - 若订单进入 `已付款`，同步选位资格为 `可选位`。
 - 写审计日志。
+
+订单行级锁是付款聚合的并发边界。两笔付款同时确认时，后进入事务的一方必须等待前一方提交后再读取付款合计，避免订单停留在错误的部分付款状态。
 
 ### 5.5 选位提交
 
@@ -255,13 +295,16 @@ selection
 - 同一订单不能存在待审核选位申请。
 - 所选展位必须全部属于订单展会。
 - 所选展位必须全部为 `可选`。
+- 所选展位 `booth_type` 必须全部等于订单 `boothType`。
 - 面积合计必须严格等于订单面积档位。
-- 在事务内锁定相关 booth 行。
+- 在事务内按稳定顺序锁定相关 booth 行。锁定顺序为 booth UUID 升序；若实现使用 booth_no 排序，必须在全系统保持一致。
 - 创建 `booth_selections`，状态为 `待审核`。
 - 创建 `booth_locks`。
 - 更新 booth 状态为 `锁定中`。
 - 更新选位资格为 `暂停中`，`pause_reason = selection_pending`。
 - 写审计日志。
+
+排序加锁是选位并发的死锁防护。两个展商同时选择重叠展位时，所有事务必须按相同顺序 `SELECT ... FOR UPDATE`。
 
 ### 5.6 选位审核
 
@@ -284,6 +327,8 @@ selection
 - BoothLock 状态更新为 rejected 或 released。
 - 选位资格回到 `可选位`。
 - 写审计日志。
+
+选位申请历史不物理删除。展商端选位结果页和后台订单详情应展示完整选位时间线，包括已驳回、已超时和已确认记录。本轮不限制重试次数。
 
 超时释放：
 
@@ -351,6 +396,14 @@ selection
 
 该值集中放在前端 auth 或 demo context 文件中。后续接入登录后替换。
 
+后台操作使用临时固定管理员 ID：
+
+```text
+demo adminId = 00000000-0000-0000-0000-000000000002
+```
+
+后端应集中定义 `DEMO_EXHIBITOR_ID` 和 `DEMO_ADMIN_ID`，审计日志 `actor_id` 不应散落写 `null` 或重复硬编码 UUID。
+
 ## 7. API 设计
 
 建议 API：
@@ -373,6 +426,7 @@ GET    /api/payments?orderId=&status=
 POST   /api/payments/{paymentId}/confirm
 POST   /api/payments/{paymentId}/fail
 
+GET    /api/booths?eventId=&status=
 GET    /api/selection-eligibilities?orderId=
 POST   /api/booth-selections
 GET    /api/booth-selections?orderId=&status=
@@ -382,6 +436,8 @@ POST   /api/booth-selections/{selectionId}/timeout-release
 ```
 
 所有写接口保留 `requestId` 或 `clientToken` 参数位。本轮可先记录字段或方法参数，后续幂等表统一实现时接入。
+
+`GET /api/booths` 必须支持 `status` 可选参数。选位页面使用 `GET /api/booths?eventId=&status=AVAILABLE` 获取可选展位，不在前端只靠客户端过滤状态。
 
 ## 8. 事务与并发
 
@@ -395,6 +451,12 @@ POST   /api/booth-selections/{selectionId}/timeout-release
 - 锁位超时释放 + 展位释放 + 锁定记录更新 + 资格恢复。
 
 选位提交必须对所选 booth 行加锁，避免并发重复锁定。本轮以 PostgreSQL 行级锁为准，Redis 辅助锁可留到后续。
+
+并发约束：
+
+- 财务确认付款：先锁定 `participation_orders` 当前订单行，再更新付款和聚合订单状态。
+- 选位提交：按 booth UUID 升序锁定 booth 行，禁止按请求入参原始顺序加锁。
+- 展位锁定冲突：若任一展位已不是可选，整个选位提交失败，不允许部分成功。
 
 ## 9. 测试验收
 
@@ -413,6 +475,9 @@ POST   /api/booth-selections/{selectionId}/timeout-release
 - 选位审核通过后展位变为已确认。
 - 选位驳回后展位恢复可选，资格回到可选位。
 - 锁位超时释放后展位恢复可选，资格回到可选位。
+- 两笔付款同时被财务确认时，订单付款聚合最终正确收敛到已付款。
+- 两个展商并发提交包含同一展位的选位申请时，仅一个成功，另一个得到业务错误。
+- 两个展商按不同 boothIds 顺序提交重叠展位时，不发生应用层死锁或部分锁定成功。
 
 ### 9.2 前端验证
 
@@ -433,3 +498,5 @@ POST   /api/booth-selections/{selectionId}/timeout-release
 - 本轮合同只生成版本快照，不做电子签署；后续合同签署方式确认后扩展。
 - 本轮超时释放由接口触发，后续调度器接入后周期执行。
 - 本轮不处理退款，后续退款完成后应触发展位释放待办。
+- 本轮不限制选位重试次数。若展商反复提交后被驳回，后台应通过选位时间线追溯，后续可增加重试次数或人工干预规则。
+- 已付款订单的选位资格不会因展商长期不操作而自动过期。本轮不实现资格过期；后续可按展会选位截止时间关闭资格。
