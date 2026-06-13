@@ -88,9 +88,31 @@ create table if not exists __schema__.price_rules (
     updated_by uuid
 );
 
+create table if not exists __schema__.participation_orders (
+    id uuid primary key,
+    event_id uuid not null references __schema__.events(id),
+    exhibitor_id uuid not null,
+    registration_id uuid,
+    zone_id uuid references __schema__.zones(id),
+    area_tier_id uuid not null references __schema__.area_tiers(id),
+    area_sqm numeric(14,2) not null,
+    booth_type varchar(60) not null,
+    status varchar(40) not null,
+    area_fee numeric(14,2) not null,
+    service_fee numeric(14,2) not null default 0,
+    discount_amount numeric(14,2) not null default 0,
+    adjustment_amount numeric(14,2) not null default 0,
+    total_amount numeric(14,2) not null,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+
 create table if not exists __schema__.contracts (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
+    order_id uuid not null references __schema__.participation_orders(id),
     current_version_id uuid,
     contract_no varchar(100) not null,
     status varchar(40) not null,
@@ -117,25 +139,6 @@ create table if not exists __schema__.contract_versions (
     created_at timestamptz not null,
     created_by uuid,
     unique(contract_id, version_no)
-);
-
-create table if not exists __schema__.participation_orders (
-    id uuid primary key,
-    event_id uuid not null references __schema__.events(id),
-    exhibitor_id uuid not null,
-    registration_id uuid,
-    zone_id uuid references __schema__.zones(id),
-    area_tier_id uuid references __schema__.area_tiers(id),
-    status varchar(40) not null,
-    area_fee numeric(14,2) not null,
-    service_fee numeric(14,2) not null default 0,
-    discount_amount numeric(14,2) not null default 0,
-    adjustment_amount numeric(14,2) not null default 0,
-    total_amount numeric(14,2) not null,
-    created_at timestamptz not null,
-    updated_at timestamptz not null,
-    created_by uuid,
-    updated_by uuid
 );
 
 create table if not exists __schema__.payments (
@@ -258,3 +261,10 @@ create index if not exists idx_refunds_order_status on __schema__.refunds(order_
 create index if not exists idx_booth_locks_event_booth_status on __schema__.booth_locks(event_id, booth_id, status);
 create index if not exists idx_release_tasks_event_status on __schema__.booth_release_tasks(event_id, status);
 create index if not exists idx_audit_logs_object on __schema__.audit_logs(object_type, object_id);
+
+create unique index if not exists uidx_area_tiers_event_zone_area
+    on __schema__.area_tiers(event_id, coalesce(zone_id, '00000000-0000-0000-0000-000000000000'::uuid), area_sqm);
+
+create unique index if not exists uidx_price_rules_event_zone_booth_type_enabled
+    on __schema__.price_rules(event_id, coalesce(zone_id, '00000000-0000-0000-0000-000000000000'::uuid), booth_type)
+    where enabled = true;

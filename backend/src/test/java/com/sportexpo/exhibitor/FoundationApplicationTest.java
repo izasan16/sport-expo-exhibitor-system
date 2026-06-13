@@ -27,4 +27,34 @@ class FoundationApplicationTest extends TestDatabaseSupport {
 
         assertThat(tableCount).isEqualTo(5);
     }
+
+    @Test
+    void createsSecondRoundBaselineColumns() {
+        var orderColumns = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'participation_orders'
+                  and column_name in ('area_sqm', 'booth_type')
+                """, Integer.class, schema);
+
+        var contractOrderColumn = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'contracts'
+                  and column_name = 'order_id'
+                """, Integer.class, schema);
+
+        var pricingIndexes = jdbcTemplate.queryForObject("""
+                select count(*)
+                from pg_indexes
+                where schemaname = ?
+                  and indexname in ('uidx_area_tiers_event_zone_area', 'uidx_price_rules_event_zone_booth_type_enabled')
+                """, Integer.class, schema);
+
+        assertThat(orderColumns).isEqualTo(2);
+        assertThat(contractOrderColumn).isEqualTo(1);
+        assertThat(pricingIndexes).isEqualTo(2);
+    }
 }
