@@ -2032,3 +2032,6 @@ git commit -m "chore: add local development docs"
 
 - [ ] `schema-foundation.sql` is the v1 full baseline. Later implementation plans must add incremental `db/schema-v{N}.sql` scripts plus a `schema_version` table or equivalent mechanism, and extend `SchemaInitializer` to execute pending scripts by version after approval.
 - [ ] `BoothListPage` currently verifies the backend list API through a manual event ID filter. Later UI plans must replace this with current-event context or an Ant Design selector populated from `/api/events`.
+- [ ] Foundation entities intentionally map only the columns needed by the current Event/Booth APIs. The next selection/order plan must complete mappings for event time windows, `default_lock_minutes`, booth pavilion/zone IDs, and booth coordinate fields before implementing lock TTL and map selection.
+- [ ] `AuditService` currently records `request_source` as `api`. Later audit work must resolve request source from HTTP context, scheduled jobs, and future async/MQ entry points.
+- [ ] `BoothListPage` should not require users to paste an event UUID in production. Replace the manual filter with current-event context or an Ant Design event selector populated from `/api/events`.

@@ -13,7 +13,7 @@ public abstract class TestDatabaseSupport {
         if (externalUrl != null && !externalUrl.isBlank()) {
             var schema = envOrDefault("APP_DB_SCHEMA", "exhibitor_sys_test");
             registry.add("spring.datasource.url", () -> externalUrl);
-            registry.add("spring.datasource.username", () -> envOrDefault("SPRING_DATASOURCE_USERNAME", "postgres"));
+            registry.add("spring.datasource.username", () -> envOrDefault("SPRING_DATASOURCE_USERNAME", "exhibitor"));
             registry.add("spring.datasource.password", () -> envOrDefault("SPRING_DATASOURCE_PASSWORD", ""));
             registry.add("app.db.schema", () -> schema);
             registry.add("spring.jpa.properties.hibernate.default_schema", () -> schema);

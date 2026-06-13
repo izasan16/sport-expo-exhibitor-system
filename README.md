@@ -59,8 +59,8 @@ Backend tests with an external PostgreSQL instance:
 ```bash
 cd backend
 SPRING_DATASOURCE_URL=jdbc:postgresql://host:5432/database \
-SPRING_DATASOURCE_USERNAME=username \
-SPRING_DATASOURCE_PASSWORD=password \
+SPRING_DATASOURCE_USERNAME=exhibitor \
+SPRING_DATASOURCE_PASSWORD=exhibitor \
 APP_DB_SCHEMA=exhibitor_sys_test \
 mvn test
 ```

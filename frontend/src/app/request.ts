@@ -13,12 +13,27 @@ export async function apiGet<T>(url: string): Promise<T> {
     },
   });
 
+  const parseBody = async () => {
+    try {
+      return (await response.json()) as ApiResponse<T>;
+    } catch {
+      return undefined;
+    }
+  };
+
   if (!response.ok) {
-    message.error('请求失败，请稍后重试');
-    throw new Error(`Request failed: ${response.status}`);
+    const body = await parseBody();
+    const errorMessage = body?.message || '请求失败，请稍后重试';
+    message.error(errorMessage);
+    throw new Error(errorMessage);
   }
 
-  const body = (await response.json()) as ApiResponse<T>;
+  const body = await parseBody();
+  if (!body) {
+    message.error('请求失败，请稍后重试');
+    throw new Error('Request failed');
+  }
+
   if (!body.success) {
     message.error(body.message || '请求失败，请稍后重试');
     throw new Error(body.message || 'Request failed');
