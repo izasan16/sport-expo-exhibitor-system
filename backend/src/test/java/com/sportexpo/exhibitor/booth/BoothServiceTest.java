@@ -3,6 +3,7 @@ package com.sportexpo.exhibitor.booth;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.booth.dto.CreateBoothRequest;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
+import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,6 +32,9 @@ class BoothServiceTest extends TestDatabaseSupport {
 
     @Autowired
     BoothService boothService;
+
+    @Autowired
+    BoothRepository boothRepository;
 
     @Autowired
     MockMvc mockMvc;
@@ -57,12 +62,19 @@ class BoothServiceTest extends TestDatabaseSupport {
     @Test
     void listsBoothsByEventAndStatus() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
-        boothService.create(new CreateBoothRequest(event.id(), "A001", new BigDecimal("9.00"), "STANDARD"));
-        boothService.create(new CreateBoothRequest(event.id(), "A002", new BigDecimal("9.00"), "CUSTOM"));
+        var stillAvailable = boothService.create(new CreateBoothRequest(
+                event.id(), "A001", new BigDecimal("9.00"), "STANDARD"));
+        var locked = boothService.create(new CreateBoothRequest(
+                event.id(), "A002", new BigDecimal("9.00"), "CUSTOM"));
+
+        var lockedBooth = boothRepository.findById(locked.id()).orElseThrow();
+        lockedBooth.markLocked(OffsetDateTime.now(), DemoActors.DEMO_ADMIN_ID);
+        boothRepository.saveAndFlush(lockedBooth);
 
         var available = boothService.list(event.id(), BusinessStatuses.BOOTH_AVAILABLE);
 
-        assertThat(available).hasSize(2);
+        assertThat(available).extracting(booth -> booth.id()).containsExactly(stillAvailable.id());
+        assertThat(available).extracting(booth -> booth.id()).doesNotContain(locked.id());
         assertThat(available).allMatch(booth -> booth.status().equals(BusinessStatuses.BOOTH_AVAILABLE));
     }
 
