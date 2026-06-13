@@ -1,6 +1,8 @@
 package com.sportexpo.exhibitor;
 
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.contract.ContractRepository;
+import com.sportexpo.exhibitor.contract.ContractService;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.sportexpo.exhibitor.order.ParticipationOrderService;
@@ -20,13 +22,18 @@ public class TestBusinessFixture {
     private final AreaTierService areaTierService;
     private final PriceRuleService priceRuleService;
     private final ParticipationOrderService orderService;
+    private final ContractRepository contractRepository;
+    private final ContractService contractService;
 
     public TestBusinessFixture(EventService eventService, AreaTierService areaTierService,
-                               PriceRuleService priceRuleService, ParticipationOrderService orderService) {
+                               PriceRuleService priceRuleService, ParticipationOrderService orderService,
+                               ContractRepository contractRepository, ContractService contractService) {
         this.eventService = eventService;
         this.areaTierService = areaTierService;
         this.priceRuleService = priceRuleService;
         this.orderService = orderService;
+        this.contractRepository = contractRepository;
+        this.contractService = contractService;
     }
 
     public ParticipationOrderResponse createPendingSalesOrder(String areaSqm, String unitPrice, String boothType) {
@@ -36,5 +43,13 @@ public class TestBusinessFixture {
         return orderService.create(new CreateParticipationOrderRequest(
                 event.id(), DemoActors.DEMO_EXHIBITOR_ID, null, tier.id(), boothType
         ));
+    }
+
+    public ParticipationOrderResponse createPendingPaymentOrder(String areaSqm, String unitPrice, String boothType) {
+        var order = createPendingSalesOrder(areaSqm, unitPrice, boothType);
+        var confirmed = orderService.confirmSales(order.id(), DemoActors.DEMO_ADMIN_ID);
+        var contract = contractRepository.findByOrderId(confirmed.id()).orElseThrow();
+        contractService.markOfflineSigned(contract.getId(), DemoActors.DEMO_ADMIN_ID);
+        return orderService.get(order.id());
     }
 }
