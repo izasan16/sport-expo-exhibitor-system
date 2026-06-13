@@ -80,6 +80,7 @@ backend/src/main/java/com/sportexpo/exhibitor/booth/BoothRepository.java
 backend/src/main/java/com/sportexpo/exhibitor/booth/BoothService.java
 backend/src/main/java/com/sportexpo/exhibitor/booth/BoothController.java
 backend/src/main/java/com/sportexpo/exhibitor/booth/dto/BoothResponse.java
+backend/src/main/java/com/sportexpo/exhibitor/event/Event.java
 backend/src/test/java/com/sportexpo/exhibitor/booth/BoothServiceTest.java
 ```
 
@@ -144,6 +145,11 @@ CONTRACT_GENERATED = GENERATED
 CONTRACT_EFFECTIVE = EFFECTIVE
 CONTRACT_VERSION_UNSIGNED = UNSIGNED
 CONTRACT_VERSION_MARKED_SIGNED = MARKED_SIGNED
+
+LOCK_ACTIVE = ACTIVE
+LOCK_CONFIRMED = CONFIRMED
+LOCK_REJECTED = REJECTED
+LOCK_TIMEOUT_RELEASED = TIMEOUT_RELEASED
 ```
 
 Use these demo actors in backend and frontend until real authentication lands:
@@ -519,13 +525,19 @@ Expected: FAIL because order and eligibility classes do not exist.
 
 `ParticipationOrder` must map every column in `participation_orders`, including `areaSqm` and `boothType`.
 
-`SelectionEligibility` must map:
+`SelectionEligibility` must map every persisted column required by JPA and audit:
 
 ```java
+@Id
+@Column(name = "id") private UUID id;
 @Column(name = "event_id") private UUID eventId;
 @Column(name = "order_id") private UUID orderId;
 @Column(name = "status") private String status;
 @Column(name = "pause_reason") private String pauseReason;
+@Column(name = "created_at") private OffsetDateTime createdAt;
+@Column(name = "updated_at") private OffsetDateTime updatedAt;
+@Column(name = "created_by") private UUID createdBy;
+@Column(name = "updated_by") private UUID updatedBy;
 ```
 
 Add these mutator methods with business names:
@@ -697,7 +709,12 @@ class ContractFlowTest extends TestDatabaseSupport {
 
 - [ ] **Step 2: Implement contract entities**
 
-`contracts` currently lacks `order_id`. Add `order_id uuid not null references __schema__.participation_orders(id)` to schema and map it in `Contract`.
+Map the `order_id` column added in Task 1 on `Contract`:
+
+```java
+@Column(name = "order_id")
+private UUID orderId;
+```
 
 `ContractVersion.contentSnapshot` may be mapped as `String` with column definition:
 
@@ -1014,6 +1031,7 @@ git commit -m "feat: add payment confirmation aggregation"
 ## Task 6: Extend Booth Listing and Add Locking Support
 
 **Files:**
+- Modify: `Event.java`
 - Modify: `Booth.java`
 - Modify: `BoothRepository.java`
 - Modify: `BoothService.java`
@@ -1040,6 +1058,19 @@ void listsBoothsByEventAndStatus() {
 ```
 
 - [ ] **Step 2: Complete booth mappings**
+
+Before selection work, complete the event lock TTL mapping in `Event`:
+
+```java
+@Column(name = "default_lock_minutes")
+private int defaultLockMinutes;
+
+public int getDefaultLockMinutes() {
+    return defaultLockMinutes;
+}
+```
+
+Keep the existing constructor behavior by setting `defaultLockMinutes` to `1440` when new events are created in `EventService.create`.
 
 Add mapped fields for `pavilionId`, `zoneId`, `x`, `y`, `width`, `height`, and `updatedBy` to `Booth`. Add these setters with business names:
 
@@ -1085,6 +1116,16 @@ Change list signatures to:
 public List<BoothResponse> list(UUID eventId, String status)
 ```
 
+Add a read method used by selection tests and detail pages:
+
+```java
+public BoothResponse get(UUID id) {
+    return repository.findById(id)
+            .map(this::toResponse)
+            .orElseThrow(() -> new BusinessException("Booth does not exist"));
+}
+```
+
 Controller:
 
 ```java
@@ -1092,6 +1133,11 @@ Controller:
 public ApiResponse<List<BoothResponse>> list(@RequestParam UUID eventId,
                                              @RequestParam(required = false) String status) {
     return ApiResponse.ok(service.list(eventId, status));
+}
+
+@GetMapping("/{id}")
+public ApiResponse<BoothResponse> get(@PathVariable UUID id) {
+    return ApiResponse.ok(service.get(id));
 }
 ```
 
@@ -1109,7 +1155,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add backend/src/main/java/com/sportexpo/exhibitor/booth backend/src/test/java/com/sportexpo/exhibitor/booth/BoothServiceTest.java
+git add backend/src/main/java/com/sportexpo/exhibitor/booth backend/src/main/java/com/sportexpo/exhibitor/event/Event.java backend/src/test/java/com/sportexpo/exhibitor/booth/BoothServiceTest.java
 git commit -m "feat: add booth status filter and locks"
 ```
 
@@ -1187,6 +1233,20 @@ void rejectsSelectionWhenBoothTypeDoesNotMatchOrder() {
 }
 ```
 
+Add duplicate booth ID validation:
+
+```java
+@Test
+void rejectsSelectionWhenBoothIdsContainDuplicates() {
+    var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
+    var booth = fixture.createBooth(order.eventId(), "D" + UUID.randomUUID().toString().substring(0, 6), "9.00", "STANDARD");
+
+    assertThatThrownBy(() -> selectionService.submit(new CreateBoothSelectionRequest(
+            order.id(), order.exhibitorId(), List.of(booth.id(), booth.id())
+    ))).hasMessageContaining("Selected booths must not contain duplicates");
+}
+```
+
 - [ ] **Step 2: Write failing concurrent conflict test**
 
 ```java
@@ -1215,7 +1275,55 @@ void onlyOneConcurrentSelectionCanLockSameBooth() throws Exception {
 
     start.countDown();
     pool.shutdown();
-    assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+    assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+    assertThat(successes.get()).isEqualTo(1);
+    assertThat(failures.get()).isEqualTo(1);
+}
+```
+
+Add the deadlock-prevention regression test required by the spec. This is separate from the single-booth conflict test because it verifies stable lock ordering when two transactions request the same two booth rows in opposite order:
+
+```java
+@Test
+void concurrentSelectionsWithDifferentBoothOrderDoNotDeadlock() throws Exception {
+    var orderA = fixture.createPaidOrder("18.00", "1200.00", "STANDARD");
+    var orderB = fixture.createPaidOrder("18.00", "1200.00", "STANDARD");
+    var boothX = fixture.createBooth(orderA.eventId(), "X" + UUID.randomUUID().toString().substring(0, 6), "9.00", "STANDARD");
+    var boothY = fixture.createBooth(orderA.eventId(), "Y" + UUID.randomUUID().toString().substring(0, 6), "9.00", "STANDARD");
+
+    var pool = Executors.newFixedThreadPool(2);
+    var start = new CountDownLatch(1);
+    var successes = new AtomicInteger();
+    var failures = new AtomicInteger();
+    var errors = new CopyOnWriteArrayList<Throwable>();
+
+    pool.submit(() -> {
+        try {
+            start.await();
+            selectionService.submit(new CreateBoothSelectionRequest(orderA.id(), orderA.exhibitorId(), List.of(boothX.id(), boothY.id())));
+            successes.incrementAndGet();
+        } catch (BusinessException expectedConflict) {
+            failures.incrementAndGet();
+        } catch (Throwable error) {
+            errors.add(error);
+        }
+    });
+    pool.submit(() -> {
+        try {
+            start.await();
+            selectionService.submit(new CreateBoothSelectionRequest(orderB.id(), orderB.exhibitorId(), List.of(boothY.id(), boothX.id())));
+            successes.incrementAndGet();
+        } catch (BusinessException expectedConflict) {
+            failures.incrementAndGet();
+        } catch (Throwable error) {
+            errors.add(error);
+        }
+    });
+
+    start.countDown();
+    pool.shutdown();
+    assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+    assertThat(errors).isEmpty();
     assertThat(successes.get()).isEqualTo(1);
     assertThat(failures.get()).isEqualTo(1);
 }
@@ -1231,6 +1339,10 @@ Repository methods:
 boolean existsByOrderIdAndStatus(UUID orderId, String status);
 List<BoothSelection> findByOrderIdOrderByCreatedAtDesc(UUID orderId);
 List<BoothSelection> findByStatusAndLockExpiresAtBefore(String status, OffsetDateTime now);
+
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+@Query("select s from BoothSelection s where s.id = :id")
+Optional<BoothSelection> findByIdForUpdate(@Param("id") UUID id);
 ```
 
 `BoothLockRepository`:
@@ -1249,19 +1361,21 @@ List<BoothLock> findBySelectionId(UUID selectionId);
 3. require order.status PAID
 4. load eligibility and require AVAILABLE
 5. reject if order already has PENDING_REVIEW selection
-6. sort boothIds by UUID ascending
-7. SELECT booth rows FOR UPDATE in sorted order
-8. require all requested booths were found
-9. require every booth.eventId equals order.eventId
-10. require every booth.status AVAILABLE
-11. require every booth.boothType equals order.boothType
-12. sum booth.areaSqm with BigDecimal
-13. require sum equals order.areaSqm
-14. create BoothSelection status PENDING_REVIEW with lockStartedAt now and lockExpiresAt now + event.defaultLockMinutes
-15. create BoothLock rows status ACTIVE
-16. mark booths LOCKED
-17. mark eligibility PAUSED with pauseReason selection_pending
-18. audit BOOTH_SELECTION_SUBMIT
+6. reject if boothIds is empty
+7. reject if boothIds contains duplicates before querying
+8. sort boothIds by UUID ascending
+9. SELECT booth rows FOR UPDATE in sorted order
+10. require all requested booths were found
+11. require every booth.eventId equals order.eventId
+12. require every booth.status AVAILABLE
+13. require every booth.boothType equals order.boothType
+14. sum booth.areaSqm with BigDecimal
+15. require sum equals order.areaSqm
+16. create BoothSelection status PENDING_REVIEW with lockStartedAt now and lockExpiresAt now + event.defaultLockMinutes
+17. create BoothLock rows status ACTIVE
+18. mark booths LOCKED
+19. mark eligibility PAUSED with pauseReason selection_pending
+20. audit BOOTH_SELECTION_SUBMIT
 ```
 
 - [ ] **Step 5: Implement selection controller**
@@ -1341,13 +1455,20 @@ public BoothSelectionResponse createPendingSelection(String areaSqm, String boot
 
 public BoothSelectionResponse createExpiredPendingSelection(String areaSqm, String boothType) {
     var selection = createPendingSelection(areaSqm, boothType);
-    boothSelectionRepository.findById(selection.id()).orElseThrow()
-            .forceLockExpiresAtForTest(OffsetDateTime.now().minusMinutes(1));
+    expireLockForTest(selection.id());
     return selection;
+}
+
+private void expireLockForTest(UUID selectionId) {
+    jdbcTemplate.update(
+            "update " + schema + ".booth_selections set lock_expires_at = ? where id = ?",
+            OffsetDateTime.now().minusMinutes(1),
+            selectionId
+    );
 }
 ```
 
-Add `BoothSelectionService` and `BoothSelectionRepository` constructor dependencies to `TestBusinessFixture`. Add a package-visible test helper method `forceLockExpiresAtForTest(OffsetDateTime value)` on `BoothSelection`; this method is only for tests and should not be used by production services.
+Add `BoothSelectionService`, `JdbcTemplate`, and `@Value("${app.db.schema}") String schema` constructor/field dependencies to `TestBusinessFixture`. Keep lock-expiry test setup in test sources; do not add test-only mutator methods to production entities.
 
 Add timeout test:
 
@@ -1504,6 +1625,8 @@ git commit -m "feat: add frontend write request helper"
 - Create admin frontend pages listed in File Structure
 - Modify: `routes.tsx`
 - Modify: `AdminLayout.tsx`
+- Modify: `frontend/src/pages/admin/events/EventListPage.tsx`
+- Modify: `frontend/src/pages/admin/booths/BoothListPage.tsx`
 
 - [ ] **Step 1: Add routes and menu**
 
@@ -1532,6 +1655,8 @@ Routes:
 Menu labels:
 
 ```text
+展会管理
+展位管理
 面积档位
 价格规则
 订单管理
@@ -1540,15 +1665,31 @@ Menu labels:
 选位审核
 ```
 
-- [ ] **Step 2: Add area tier page**
+- [ ] **Step 2: Add event and booth creation entry points**
+
+Extend the existing `EventListPage` with `toolBarRender` and `ModalForm`:
+
+```text
+新建展会 -> ModalForm fields name/year -> POST /api/events -> reload ProTable
+```
+
+Extend the existing `BoothListPage` with `toolBarRender` and `ModalForm`:
+
+```text
+新建展位 -> ModalForm fields eventId/boothNo/areaSqm/boothType -> POST /api/booths -> reload ProTable
+```
+
+Both pages must keep using ProComponents (`ProTable`, `ModalForm`, `ProFormText`, `ProFormDigit`, `ProFormSelect`) and must not introduce custom table/form/modal base components.
+
+- [ ] **Step 3: Add area tier page**
 
 Use `PageContainer`, `ProTable`, and `ModalForm`. The table request calls `/api/area-tiers?eventId=${encodeURIComponent(eventId)}`. The modal has `ProFormText` for eventId, optional zoneId, `ProFormDigit` for areaSqm, and `ProFormSwitch` for enabled. Submit with `apiPost('/api/area-tiers', values)`.
 
-- [ ] **Step 3: Add price rule page**
+- [ ] **Step 4: Add price rule page**
 
 Use `PageContainer`, `ProTable`, and `ModalForm`. The modal has eventId, optional zoneId, boothType select (`STANDARD`, `CUSTOM`), unitPrice digit, enabled switch. Submit with `apiPost('/api/price-rules', values)`.
 
-- [ ] **Step 4: Add admin order page**
+- [ ] **Step 5: Add admin order page**
 
 Use `ProTable` against `/api/participation-orders`. Add action buttons:
 
@@ -1558,7 +1699,7 @@ Use `ProTable` against `/api/participation-orders`. Add action buttons:
 
 After action succeeds, call `actionRef.current?.reload()`.
 
-- [ ] **Step 5: Add contract page**
+- [ ] **Step 6: Add contract page**
 
 Use `ProTable` against `/api/contracts`. Add action button:
 
@@ -1568,7 +1709,7 @@ Use `ProTable` against `/api/contracts`. Add action button:
 
 Add `DrawerForm` or `Drawer` containing versions loaded from `/api/contracts/{contractId}/versions`.
 
-- [ ] **Step 6: Add payment confirmation page**
+- [ ] **Step 7: Add payment confirmation page**
 
 Use `ProTable` against `/api/payments?status=PENDING_FINANCE_CONFIRM`. Add actions:
 
@@ -1577,7 +1718,7 @@ Use `ProTable` against `/api/payments?status=PENDING_FINANCE_CONFIRM`. Add actio
 确认失败 -> POST /api/payments/{id}/fail
 ```
 
-- [ ] **Step 7: Add selection review page**
+- [ ] **Step 8: Add selection review page**
 
 Use `ProTable` against `/api/booth-selections?status=PENDING_REVIEW`. Add actions:
 
@@ -1587,7 +1728,7 @@ Use `ProTable` against `/api/booth-selections?status=PENDING_REVIEW`. Add action
 超时释放 -> POST /api/booth-selections/{id}/timeout-release
 ```
 
-- [ ] **Step 8: Run frontend build**
+- [ ] **Step 9: Run frontend build**
 
 Run:
 
@@ -1598,7 +1739,7 @@ cmd /c npm run build
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```powershell
 git add frontend/src/app/routes.tsx frontend/src/app/layouts/AdminLayout.tsx frontend/src/pages/admin
@@ -1674,7 +1815,7 @@ Show columns:
 eventId, areaSqm, boothType, totalAmount, status
 ```
 
-Use row action links to `/exhibitor/payments/new?orderId=${id}` and `/exhibitor/selections/new?orderId=${id}`. Disable selection link unless `status === 'PAID'`.
+Use row action links to `/exhibitor/payments/new?orderId=${id}` and `/exhibitor/selections/new?orderId=${id}`. Disable payment link unless `status === 'PENDING_PAYMENT' || status === 'PARTIALLY_PAID'`. Disable selection link unless `status === 'PAID'`.
 
 - [ ] **Step 4: Add payment submit page**
 
@@ -1782,21 +1923,22 @@ cmd /c npm run dev
 Open the frontend and verify this chain:
 
 ```text
-1. admin creates or reuses an event and booths
-2. admin creates area tier 18.00
-3. admin creates STANDARD price rule
-4. exhibitor creates order
-5. admin sales-confirms order
-6. admin marks contract offline signed
-7. exhibitor submits payment
-8. admin confirms payment
-9. exhibitor selects two 9.00 STANDARD booths
-10. admin approves selection
+1. admin creates an event from 展会管理
+2. admin creates two 9.00 STANDARD booths from 展位管理
+3. admin creates area tier 18.00
+4. admin creates STANDARD price rule
+5. exhibitor creates order
+6. admin sales-confirms order
+7. admin marks contract offline signed
+8. exhibitor submits payment
+9. admin confirms payment
+10. exhibitor selects the two 9.00 STANDARD booths
+11. admin approves selection
 ```
 
 - [ ] **Step 4: Update README**
 
-Add a "Second-round business smoke flow" section listing the same 10 steps and the demo actor IDs.
+Add a "Second-round business smoke flow" section listing the same 11 UI steps and the demo actor IDs.
 
 - [ ] **Step 5: Commit**
 
