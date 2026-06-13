@@ -18,14 +18,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class ParticipationOrderService {
-    private static final BigDecimal ZERO_AMOUNT = new BigDecimal("0.00");
+    private static final BigDecimal ZERO_AMOUNT = money(BigDecimal.ZERO);
 
     private final ParticipationOrderRepository repository;
     private final EventRepository eventRepository;
@@ -55,11 +57,14 @@ public class ParticipationOrderService {
         var areaTier = areaTierRepository.findById(request.areaTierId())
                 .filter(tier -> tier.isEnabled() && tier.getEventId().equals(request.eventId()))
                 .orElseThrow(() -> new BusinessException("Enabled area tier does not exist"));
+        if (!Objects.equals(areaTier.getZoneId(), request.zoneId())) {
+            throw new BusinessException("Area tier does not match order zone");
+        }
         var priceRule = findEnabledPriceRule(request)
                 .orElseThrow(() -> new BusinessException("Enabled price rule does not exist"));
 
         var now = OffsetDateTime.now();
-        var areaFee = areaTier.getAreaSqm().multiply(priceRule.getUnitPrice());
+        var areaFee = money(areaTier.getAreaSqm().multiply(priceRule.getUnitPrice()));
         var order = repository.save(new ParticipationOrder(
                 UUID.randomUUID(),
                 request.eventId(),
@@ -137,6 +142,10 @@ public class ParticipationOrderService {
             }
             return predicate;
         };
+    }
+
+    private static BigDecimal money(BigDecimal amount) {
+        return amount.setScale(2, RoundingMode.HALF_UP);
     }
 
     private ParticipationOrderResponse toResponse(ParticipationOrder order) {
