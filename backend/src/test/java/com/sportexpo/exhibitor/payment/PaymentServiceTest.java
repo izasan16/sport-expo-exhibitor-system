@@ -2,6 +2,7 @@ package com.sportexpo.exhibitor.payment;
 
 import com.sportexpo.exhibitor.TestBusinessFixture;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
+import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.order.ParticipationOrderService;
@@ -19,11 +20,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class PaymentServiceTest extends TestDatabaseSupport {
     @Autowired TestBusinessFixture fixture;
     @Autowired PaymentService paymentService;
+    @Autowired PaymentRepository paymentRepository;
     @Autowired ParticipationOrderService orderService;
     @Autowired SelectionEligibilityRepository eligibilityRepository;
 
@@ -76,5 +79,59 @@ class PaymentServiceTest extends TestDatabaseSupport {
 
         assertThat(errors).isEmpty();
         assertThat(orderService.get(order.id()).status()).isEqualTo(BusinessStatuses.ORDER_PAID);
+        assertThat(eligibilityRepository.findByOrderId(order.id()).orElseThrow().getStatus())
+                .isEqualTo(BusinessStatuses.ELIGIBILITY_AVAILABLE);
+        assertThat(paymentRepository.findByOrderIdAndStatus(order.id(), BusinessStatuses.PAYMENT_CONFIRMED))
+                .hasSize(2);
+    }
+
+    @Test
+    void extraPaymentDoesNotReopenPausedEligibility() {
+        var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
+        var fullPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
+        var extraPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("100.00"), "OFFLINE_TRANSFER"));
+
+        paymentService.confirm(fullPayment.id(), DemoActors.DEMO_ADMIN_ID);
+        var eligibility = eligibilityRepository.findByOrderId(order.id()).orElseThrow();
+        eligibility.markPaused(BusinessStatuses.PAUSE_SELECTION_PENDING, java.time.OffsetDateTime.now());
+        eligibilityRepository.save(eligibility);
+
+        paymentService.confirm(extraPayment.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(orderService.get(order.id()).status()).isEqualTo(BusinessStatuses.ORDER_PAID);
+        assertThat(eligibilityRepository.findByOrderId(order.id()).orElseThrow().getStatus())
+                .isEqualTo(BusinessStatuses.ELIGIBILITY_PAUSED);
+    }
+
+    @Test
+    void extraPaymentDoesNotReopenClosedEligibility() {
+        var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
+        var fullPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
+        var extraPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("100.00"), "OFFLINE_TRANSFER"));
+
+        paymentService.confirm(fullPayment.id(), DemoActors.DEMO_ADMIN_ID);
+        var eligibility = eligibilityRepository.findByOrderId(order.id()).orElseThrow();
+        eligibility.markClosed(java.time.OffsetDateTime.now());
+        eligibilityRepository.save(eligibility);
+
+        paymentService.confirm(extraPayment.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(orderService.get(order.id()).status()).isEqualTo(BusinessStatuses.ORDER_PAID);
+        assertThat(eligibilityRepository.findByOrderId(order.id()).orElseThrow().getStatus())
+                .isEqualTo(BusinessStatuses.ELIGIBILITY_CLOSED);
+    }
+
+    @Test
+    void createRejectsPaymentAmountsWithMoreThanTwoDecimalPlaces() {
+        var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
+
+        assertThatThrownBy(() -> paymentService.create(new CreatePaymentRequest(
+                order.id(), new BigDecimal("0.004"), "OFFLINE_TRANSFER")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Payment amount must have at most 2 decimal places");
+        assertThatThrownBy(() -> paymentService.create(new CreatePaymentRequest(
+                order.id(), new BigDecimal("21599.995"), "OFFLINE_TRANSFER")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Payment amount must have at most 2 decimal places");
     }
 }

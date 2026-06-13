@@ -47,6 +47,9 @@ public class PaymentService {
         if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("Payment amount must be greater than zero");
         }
+        if (request.amount().stripTrailingZeros().scale() > 2) {
+            throw new BusinessException("Payment amount must have at most 2 decimal places");
+        }
 
         var now = OffsetDateTime.now();
         var payment = paymentRepository.save(new Payment(
@@ -142,13 +145,19 @@ public class PaymentService {
                 .orElseThrow(() -> new BusinessException("Selection eligibility does not exist"));
         if (confirmedAmount.compareTo(order.getTotalAmount()) >= 0) {
             order.changeStatus(BusinessStatuses.ORDER_PAID, now, actorId);
-            eligibility.markAvailable(now);
+            if (BusinessStatuses.ELIGIBILITY_NOT_OPEN.equals(eligibility.getStatus())) {
+                eligibility.markAvailable(now);
+            }
         } else if (confirmedAmount.compareTo(ZERO_AMOUNT) > 0) {
             order.changeStatus(BusinessStatuses.ORDER_PARTIALLY_PAID, now, actorId);
-            eligibility.markNotOpen(now);
+            if (BusinessStatuses.ELIGIBILITY_NOT_OPEN.equals(eligibility.getStatus())) {
+                eligibility.markNotOpen(now);
+            }
         } else {
             order.changeStatus(BusinessStatuses.ORDER_PENDING_PAYMENT, now, actorId);
-            eligibility.markNotOpen(now);
+            if (BusinessStatuses.ELIGIBILITY_NOT_OPEN.equals(eligibility.getStatus())) {
+                eligibility.markNotOpen(now);
+            }
         }
         orderRepository.save(order);
         eligibilityRepository.save(eligibility);
