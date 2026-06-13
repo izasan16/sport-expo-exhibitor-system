@@ -1,0 +1,159 @@
+package com.sportexpo.exhibitor.order;
+
+import com.sportexpo.exhibitor.audit.AuditService;
+import com.sportexpo.exhibitor.common.BusinessException;
+import com.sportexpo.exhibitor.common.BusinessStatuses;
+import com.sportexpo.exhibitor.event.EventRepository;
+import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
+import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
+import com.sportexpo.exhibitor.pricing.AreaTier;
+import com.sportexpo.exhibitor.pricing.AreaTierRepository;
+import com.sportexpo.exhibitor.pricing.PriceRule;
+import com.sportexpo.exhibitor.pricing.PriceRuleRepository;
+import com.sportexpo.exhibitor.selection.SelectionEligibility;
+import com.sportexpo.exhibitor.selection.SelectionEligibilityRepository;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+public class ParticipationOrderService {
+    private static final BigDecimal ZERO_AMOUNT = new BigDecimal("0.00");
+
+    private final ParticipationOrderRepository repository;
+    private final EventRepository eventRepository;
+    private final AreaTierRepository areaTierRepository;
+    private final PriceRuleRepository priceRuleRepository;
+    private final SelectionEligibilityRepository eligibilityRepository;
+    private final AuditService auditService;
+
+    public ParticipationOrderService(ParticipationOrderRepository repository,
+                                     EventRepository eventRepository,
+                                     AreaTierRepository areaTierRepository,
+                                     PriceRuleRepository priceRuleRepository,
+                                     SelectionEligibilityRepository eligibilityRepository,
+                                     AuditService auditService) {
+        this.repository = repository;
+        this.eventRepository = eventRepository;
+        this.areaTierRepository = areaTierRepository;
+        this.priceRuleRepository = priceRuleRepository;
+        this.eligibilityRepository = eligibilityRepository;
+        this.auditService = auditService;
+    }
+
+    @Transactional
+    public ParticipationOrderResponse create(CreateParticipationOrderRequest request) {
+        eventRepository.findById(request.eventId())
+                .orElseThrow(() -> new BusinessException("Event does not exist"));
+        var areaTier = areaTierRepository.findById(request.areaTierId())
+                .filter(tier -> tier.isEnabled() && tier.getEventId().equals(request.eventId()))
+                .orElseThrow(() -> new BusinessException("Enabled area tier does not exist"));
+        var priceRule = findEnabledPriceRule(request)
+                .orElseThrow(() -> new BusinessException("Enabled price rule does not exist"));
+
+        var now = OffsetDateTime.now();
+        var areaFee = areaTier.getAreaSqm().multiply(priceRule.getUnitPrice());
+        var order = repository.save(new ParticipationOrder(
+                UUID.randomUUID(),
+                request.eventId(),
+                request.exhibitorId(),
+                null,
+                request.zoneId(),
+                areaTier.getId(),
+                areaTier.getAreaSqm(),
+                request.boothType(),
+                BusinessStatuses.ORDER_PENDING_SALES_CONFIRM,
+                areaFee,
+                ZERO_AMOUNT,
+                ZERO_AMOUNT,
+                ZERO_AMOUNT,
+                areaFee,
+                now,
+                now,
+                request.exhibitorId(),
+                request.exhibitorId()
+        ));
+        eligibilityRepository.save(new SelectionEligibility(
+                UUID.randomUUID(),
+                order.getEventId(),
+                order.getId(),
+                BusinessStatuses.ELIGIBILITY_NOT_OPEN,
+                null,
+                now,
+                now,
+                request.exhibitorId(),
+                request.exhibitorId()
+        ));
+        auditService.record(order.getEventId(), request.exhibitorId(), "ORDER_CREATE", "ParticipationOrder",
+                order.getId(), null, order.getStatus(), "create participation order");
+        return toResponse(order);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ParticipationOrderResponse> list(UUID eventId, UUID exhibitorId, String status) {
+        return repository.findAll(orderFilters(eventId, exhibitorId, status), Sort.by(Sort.Direction.DESC, "createdAt"))
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ParticipationOrderResponse get(UUID id) {
+        return repository.findById(id)
+                .map(this::toResponse)
+                .orElseThrow(() -> new BusinessException("Participation order does not exist"));
+    }
+
+    private Optional<PriceRule> findEnabledPriceRule(CreateParticipationOrderRequest request) {
+        if (request.zoneId() != null) {
+            var zoneRule = priceRuleRepository.findFirstByEventIdAndZoneIdAndBoothTypeAndEnabledOrderByUpdatedAtDesc(
+                    request.eventId(), request.zoneId(), request.boothType(), true);
+            if (zoneRule.isPresent()) {
+                return zoneRule;
+            }
+        }
+        return priceRuleRepository.findFirstByEventIdAndZoneIdAndBoothTypeAndEnabledOrderByUpdatedAtDesc(
+                request.eventId(), null, request.boothType(), true);
+    }
+
+    private Specification<ParticipationOrder> orderFilters(UUID eventId, UUID exhibitorId, String status) {
+        return (root, query, criteriaBuilder) -> {
+            var predicate = criteriaBuilder.conjunction();
+            if (eventId != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("eventId"), eventId));
+            }
+            if (exhibitorId != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("exhibitorId"), exhibitorId));
+            }
+            if (status != null && !status.isBlank()) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("status"), status));
+            }
+            return predicate;
+        };
+    }
+
+    private ParticipationOrderResponse toResponse(ParticipationOrder order) {
+        return new ParticipationOrderResponse(
+                order.getId(),
+                order.getEventId(),
+                order.getExhibitorId(),
+                order.getZoneId(),
+                order.getAreaTierId(),
+                order.getAreaSqm(),
+                order.getBoothType(),
+                order.getStatus(),
+                order.getAreaFee(),
+                order.getServiceFee(),
+                order.getDiscountAmount(),
+                order.getAdjustmentAmount(),
+                order.getTotalAmount()
+        );
+    }
+}
