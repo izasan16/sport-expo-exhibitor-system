@@ -39,16 +39,34 @@ export default function ContractListPage() {
   const [activeContract, setActiveContract] = useState<ContractRow>();
   const [versions, setVersions] = useState<ContractVersionRow[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
+  const versionRequestRef = useRef(0);
 
   useEffect(() => {
     if (!versionDrawerOpen || !activeContract) {
       return;
     }
 
+    const requestId = versionRequestRef.current + 1;
+    versionRequestRef.current = requestId;
+    let canceled = false;
+
+    setVersions([]);
     setLoadingVersions(true);
     apiGet<ContractVersionRow[]>(`/api/contracts/${activeContract.id}/versions`)
-      .then(setVersions)
-      .finally(() => setLoadingVersions(false));
+      .then((data) => {
+        if (!canceled && versionRequestRef.current === requestId) {
+          setVersions(data);
+        }
+      })
+      .finally(() => {
+        if (!canceled && versionRequestRef.current === requestId) {
+          setLoadingVersions(false);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
   }, [activeContract, versionDrawerOpen]);
 
   const columns: ProColumns<ContractRow>[] = [
@@ -66,6 +84,7 @@ export default function ContractListPage() {
             type="link"
             size="small"
             onClick={() => {
+              setVersions([]);
               setActiveContract(record);
               setVersionDrawerOpen(true);
             }}
@@ -106,9 +125,11 @@ export default function ContractListPage() {
         open={versionDrawerOpen}
         destroyOnClose
         onClose={() => {
+          versionRequestRef.current += 1;
           setVersionDrawerOpen(false);
           setActiveContract(undefined);
           setVersions([]);
+          setLoadingVersions(false);
         }}
       >
         <ProTable<ContractVersionRow>
