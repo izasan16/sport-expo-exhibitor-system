@@ -2,6 +2,7 @@ package com.sportexpo.exhibitor.booth;
 
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.booth.dto.CreateBoothRequest;
+import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,7 +51,19 @@ class BoothServiceTest extends TestDatabaseSupport {
         assertThat(booth.eventId()).isEqualTo(event.id());
         assertThat(booth.boothNo()).isEqualTo("A001");
         assertThat(booth.areaSqm()).isEqualByComparingTo("9.00");
-        assertThat(booth.status()).isEqualTo("AVAILABLE");
+        assertThat(booth.status()).isEqualTo(BusinessStatuses.BOOTH_AVAILABLE);
+    }
+
+    @Test
+    void listsBoothsByEventAndStatus() {
+        var event = eventService.create(new CreateEventRequest("体博会", 2026));
+        boothService.create(new CreateBoothRequest(event.id(), "A001", new BigDecimal("9.00"), "STANDARD"));
+        boothService.create(new CreateBoothRequest(event.id(), "A002", new BigDecimal("9.00"), "CUSTOM"));
+
+        var available = boothService.list(event.id(), BusinessStatuses.BOOTH_AVAILABLE);
+
+        assertThat(available).hasSize(2);
+        assertThat(available).allMatch(booth -> booth.status().equals(BusinessStatuses.BOOTH_AVAILABLE));
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.booth.dto.BoothResponse;
 import com.sportexpo.exhibitor.booth.dto.CreateBoothRequest;
 import com.sportexpo.exhibitor.common.BusinessException;
+import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.event.EventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,17 +36,33 @@ public class BoothService {
                 request.boothNo(),
                 request.areaSqm(),
                 request.boothType(),
-                "AVAILABLE",
+                BusinessStatuses.BOOTH_AVAILABLE,
                 now,
                 now
         ));
-        auditService.record(booth.getEventId(), null, "BOOTH_CREATE", "Booth", booth.getId(), null, "AVAILABLE", "create booth");
+        auditService.record(booth.getEventId(), null, "BOOTH_CREATE", "Booth", booth.getId(), null,
+                BusinessStatuses.BOOTH_AVAILABLE, "create booth");
         return toResponse(booth);
     }
 
     @Transactional(readOnly = true)
     public List<BoothResponse> list(UUID eventId) {
-        return repository.findByEventId(eventId).stream().map(this::toResponse).toList();
+        return list(eventId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BoothResponse> list(UUID eventId, String status) {
+        var booths = (status == null || status.isBlank())
+                ? repository.findByEventId(eventId)
+                : repository.findByEventIdAndStatus(eventId, status);
+        return booths.stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public BoothResponse get(UUID id) {
+        return repository.findById(id)
+                .map(this::toResponse)
+                .orElseThrow(() -> new BusinessException("Booth does not exist"));
     }
 
     private BoothResponse toResponse(Booth booth) {

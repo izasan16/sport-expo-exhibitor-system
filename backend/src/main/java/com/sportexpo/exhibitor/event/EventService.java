@@ -23,7 +23,7 @@ public class EventService {
     @Transactional
     public EventResponse create(CreateEventRequest request) {
         var now = OffsetDateTime.now();
-        var event = repository.save(new Event(UUID.randomUUID(), request.name(), request.year(), "DRAFT", now, now));
+        var event = repository.save(new Event(UUID.randomUUID(), request.name(), request.year(), "DRAFT", 1440, now, now));
         auditService.record(event.getId(), null, "EVENT_CREATE", "Event", event.getId(), null, "DRAFT", "create event");
         return toResponse(event);
     }

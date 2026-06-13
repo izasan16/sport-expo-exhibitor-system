@@ -20,6 +20,8 @@ public class Event {
     private int year;
     @Column(name = "status")
     private String status;
+    @Column(name = "default_lock_minutes")
+    private int defaultLockMinutes;
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
     @Column(name = "updated_at")
@@ -28,11 +30,13 @@ public class Event {
     protected Event() {
     }
 
-    public Event(UUID id, String name, int year, String status, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+    public Event(UUID id, String name, int year, String status, int defaultLockMinutes,
+                 OffsetDateTime createdAt, OffsetDateTime updatedAt) {
         this.id = id;
         this.name = name;
         this.year = year;
         this.status = status;
+        this.defaultLockMinutes = defaultLockMinutes;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -41,4 +45,5 @@ public class Event {
     public String getName() { return name; }
     public int getYear() { return year; }
     public String getStatus() { return status; }
+    public int getDefaultLockMinutes() { return defaultLockMinutes; }
 }
