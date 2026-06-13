@@ -9,6 +9,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -27,7 +28,7 @@ public class ContractVersion {
     private String reason;
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "content_snapshot", columnDefinition = "jsonb")
-    private String contentSnapshot;
+    private Map<String, Object> contentSnapshot;
     @Column(name = "amount")
     private BigDecimal amount;
     @Column(name = "area_sqm")
@@ -49,9 +50,9 @@ public class ContractVersion {
     }
 
     public ContractVersion(UUID id, UUID eventId, UUID contractId, int versionNo, String reason,
-                           String contentSnapshot, BigDecimal amount, BigDecimal areaSqm, String signStatus,
-                           UUID signerId, OffsetDateTime signedAt, UUID fileId, OffsetDateTime createdAt,
-                           UUID createdBy) {
+                           Map<String, Object> contentSnapshot, BigDecimal amount, BigDecimal areaSqm,
+                           String signStatus, UUID signerId, OffsetDateTime signedAt, UUID fileId,
+                           OffsetDateTime createdAt, UUID createdBy) {
         this.id = id;
         this.eventId = eventId;
         this.contractId = contractId;
@@ -73,7 +74,7 @@ public class ContractVersion {
     public UUID getContractId() { return contractId; }
     public int getVersionNo() { return versionNo; }
     public String getReason() { return reason; }
-    public String getContentSnapshot() { return contentSnapshot; }
+    public Map<String, Object> getContentSnapshot() { return contentSnapshot; }
     public BigDecimal getAmount() { return amount; }
     public BigDecimal getAreaSqm() { return areaSqm; }
     public String getSignStatus() { return signStatus; }

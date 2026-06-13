@@ -26,6 +26,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,8 +35,12 @@ import java.util.UUID;
 public class ParticipationOrderService {
     private static final BigDecimal ZERO_AMOUNT = money(BigDecimal.ZERO);
     private static final DateTimeFormatter CONTRACT_NO_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
-    private static final String SALES_CONFIRM_SNAPSHOT =
-            "{\"version\":1,\"reason\":\"sales_confirm\",\"source\":\"offline_contract\",\"signMode\":\"offline_mark\"}";
+    private static final Map<String, Object> SALES_CONFIRM_SNAPSHOT = Map.of(
+            "version", 1,
+            "reason", "sales_confirm",
+            "source", "offline_contract",
+            "signMode", "offline_mark"
+    );
 
     private final ParticipationOrderRepository repository;
     private final EventRepository eventRepository;
@@ -132,7 +137,7 @@ public class ParticipationOrderService {
 
     @Transactional
     public ParticipationOrderResponse confirmSales(UUID orderId, UUID actorId) {
-        var order = repository.findById(orderId)
+        var order = repository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new BusinessException("Participation order does not exist"));
         if (!BusinessStatuses.ORDER_PENDING_SALES_CONFIRM.equals(order.getStatus())) {
             throw new BusinessException("Order is not pending sales confirmation");
