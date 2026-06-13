@@ -1,9 +1,11 @@
 package com.sportexpo.exhibitor.selection;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
+import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
 import com.sportexpo.exhibitor.selection.dto.SelectionEligibilityResponse;
+import com.sportexpo.exhibitor.selection.dto.SubmitBoothSelectionRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,8 +30,13 @@ public class BoothSelectionController {
     }
 
     @PostMapping("/api/booth-selections")
-    public ApiResponse<BoothSelectionResponse> submit(@Valid @RequestBody CreateBoothSelectionRequest request) {
-        return ApiResponse.ok(service.submit(request));
+    public ApiResponse<BoothSelectionResponse> submit(@Valid @RequestBody SubmitBoothSelectionRequest request) {
+        var demoRequest = new CreateBoothSelectionRequest(
+                request.orderId(),
+                DemoActors.DEMO_EXHIBITOR_ID,
+                request.boothIds()
+        );
+        return ApiResponse.ok(service.submit(demoRequest));
     }
 
     @GetMapping("/api/booth-selections")

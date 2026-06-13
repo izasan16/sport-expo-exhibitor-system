@@ -51,6 +51,7 @@ public class BoothSelectionService {
 
     @Transactional
     public BoothSelectionResponse submit(CreateBoothSelectionRequest request) {
+        var sortedBoothIds = validateAndSortBoothIds(request.boothIds());
         var order = orderRepository.findByIdForUpdate(request.orderId())
                 .orElseThrow(() -> new BusinessException("Participation order does not exist"));
         if (!order.getExhibitorId().equals(request.exhibitorId())) {
@@ -68,7 +69,6 @@ public class BoothSelectionService {
             throw new BusinessException("Order already has pending booth selection");
         }
 
-        var sortedBoothIds = validateAndSortBoothIds(request.boothIds());
         var booths = boothRepository.findAllByIdInForUpdateOrderById(sortedBoothIds);
         if (booths.size() != sortedBoothIds.size()) {
             throw new BusinessException("Selected booths do not exist");
