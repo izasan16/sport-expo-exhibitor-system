@@ -26,6 +26,8 @@ import java.util.UUID;
 
 @Service
 public class BoothSelectionService {
+    private static final int MAX_REJECT_REASON_LENGTH = 500;
+
     private final ParticipationOrderRepository orderRepository;
     private final EventRepository eventRepository;
     private final SelectionEligibilityRepository eligibilityRepository;
@@ -168,12 +170,15 @@ public class BoothSelectionService {
         if (request == null || request.reason() == null || request.reason().isBlank()) {
             throw new BusinessException("Reject reason must not be blank");
         }
+        var reason = request.reason().trim();
+        if (reason.length() > MAX_REJECT_REASON_LENGTH) {
+            throw new BusinessException("Reject reason must not exceed 500 characters");
+        }
         var selection = findPendingSelectionForUpdate(selectionId);
         var locks = lockRepository.findBySelectionId(selection.getId());
         var booths = lockBoothsForLocks(locks);
 
         var now = OffsetDateTime.now();
-        var reason = request.reason().trim();
         selection.markRejected(actorId, reason, now);
         locks.forEach(lock -> lock.markRejected(now, actorId));
         booths.forEach(booth -> booth.markAvailable(now, actorId));

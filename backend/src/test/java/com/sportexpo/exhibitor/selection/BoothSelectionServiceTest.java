@@ -198,6 +198,17 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
+    void rejectsRejectReasonLongerThanReviewCommentColumnAfterTrim() {
+        var pending = fixture.createPendingSelection("9.00", "STANDARD");
+        var tooLongReason = " " + "x".repeat(501) + " ";
+
+        assertThatThrownBy(() -> selectionService.reject(
+                pending.id(), new RejectBoothSelectionRequest(tooLongReason), DemoActors.DEMO_ADMIN_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Reject reason must not exceed 500 characters");
+    }
+
+    @Test
     void timeoutReleaseReleasesBoothsAndReopensEligibility() {
         var pending = fixture.createExpiredPendingSelection("9.00", "STANDARD");
         var boothId = pending.boothIds().get(0);
