@@ -3,6 +3,10 @@ package com.sportexpo.exhibitor.order;
 import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
+import com.sportexpo.exhibitor.contract.Contract;
+import com.sportexpo.exhibitor.contract.ContractRepository;
+import com.sportexpo.exhibitor.contract.ContractVersion;
+import com.sportexpo.exhibitor.contract.ContractVersionRepository;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
@@ -20,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,12 +33,17 @@ import java.util.UUID;
 @Service
 public class ParticipationOrderService {
     private static final BigDecimal ZERO_AMOUNT = money(BigDecimal.ZERO);
+    private static final DateTimeFormatter CONTRACT_NO_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final String SALES_CONFIRM_SNAPSHOT =
+            "{\"version\":1,\"reason\":\"sales_confirm\",\"source\":\"offline_contract\",\"signMode\":\"offline_mark\"}";
 
     private final ParticipationOrderRepository repository;
     private final EventRepository eventRepository;
     private final AreaTierRepository areaTierRepository;
     private final PriceRuleRepository priceRuleRepository;
     private final SelectionEligibilityRepository eligibilityRepository;
+    private final ContractRepository contractRepository;
+    private final ContractVersionRepository contractVersionRepository;
     private final AuditService auditService;
 
     public ParticipationOrderService(ParticipationOrderRepository repository,
@@ -41,12 +51,16 @@ public class ParticipationOrderService {
                                      AreaTierRepository areaTierRepository,
                                      PriceRuleRepository priceRuleRepository,
                                      SelectionEligibilityRepository eligibilityRepository,
+                                     ContractRepository contractRepository,
+                                     ContractVersionRepository contractVersionRepository,
                                      AuditService auditService) {
         this.repository = repository;
         this.eventRepository = eventRepository;
         this.areaTierRepository = areaTierRepository;
         this.priceRuleRepository = priceRuleRepository;
         this.eligibilityRepository = eligibilityRepository;
+        this.contractRepository = contractRepository;
+        this.contractVersionRepository = contractVersionRepository;
         this.auditService = auditService;
     }
 
@@ -116,6 +130,57 @@ public class ParticipationOrderService {
                 .orElseThrow(() -> new BusinessException("Participation order does not exist"));
     }
 
+    @Transactional
+    public ParticipationOrderResponse confirmSales(UUID orderId, UUID actorId) {
+        var order = repository.findById(orderId)
+                .orElseThrow(() -> new BusinessException("Participation order does not exist"));
+        if (!BusinessStatuses.ORDER_PENDING_SALES_CONFIRM.equals(order.getStatus())) {
+            throw new BusinessException("Order is not pending sales confirmation");
+        }
+
+        var now = OffsetDateTime.now();
+        var oldOrderStatus = order.getStatus();
+        order.changeStatus(BusinessStatuses.ORDER_PENDING_CONTRACT, now, actorId);
+        repository.save(order);
+
+        var contract = contractRepository.save(new Contract(
+                UUID.randomUUID(),
+                order.getEventId(),
+                order.getId(),
+                null,
+                contractNo(order.getId(), now),
+                BusinessStatuses.CONTRACT_GENERATED,
+                now,
+                now,
+                actorId,
+                actorId
+        ));
+        var version = contractVersionRepository.save(new ContractVersion(
+                UUID.randomUUID(),
+                order.getEventId(),
+                contract.getId(),
+                1,
+                "sales_confirm",
+                SALES_CONFIRM_SNAPSHOT,
+                order.getTotalAmount(),
+                order.getAreaSqm(),
+                BusinessStatuses.CONTRACT_VERSION_UNSIGNED,
+                null,
+                null,
+                null,
+                now,
+                actorId
+        ));
+        contract.assignCurrentVersion(version.getId(), now, actorId);
+        contractRepository.save(contract);
+
+        auditService.record(order.getEventId(), actorId, "ORDER_SALES_CONFIRM", "ParticipationOrder",
+                order.getId(), oldOrderStatus, order.getStatus(), "sales confirm order");
+        auditService.record(contract.getEventId(), actorId, "CONTRACT_GENERATE", "Contract",
+                contract.getId(), null, contract.getStatus(), "generate contract");
+        return toResponse(order);
+    }
+
     private Optional<PriceRule> findEnabledPriceRule(CreateParticipationOrderRequest request) {
         if (request.zoneId() != null) {
             var zoneRule = priceRuleRepository.findFirstByEventIdAndZoneIdAndBoothTypeAndEnabledOrderByUpdatedAtDesc(
@@ -146,6 +211,10 @@ public class ParticipationOrderService {
 
     private static BigDecimal money(BigDecimal amount) {
         return amount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static String contractNo(UUID orderId, OffsetDateTime now) {
+        return "CON-" + now.format(CONTRACT_NO_TIME) + "-" + orderId.toString().substring(0, 8);
     }
 
     private ParticipationOrderResponse toResponse(ParticipationOrder order) {

@@ -1,10 +1,12 @@
 package com.sportexpo.exhibitor.order;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
+import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +28,11 @@ public class ParticipationOrderController {
     @PostMapping
     public ApiResponse<ParticipationOrderResponse> create(@Valid @RequestBody CreateParticipationOrderRequest request) {
         return ApiResponse.ok(service.create(request));
+    }
+
+    @PostMapping("/{orderId}/confirm")
+    public ApiResponse<ParticipationOrderResponse> confirm(@PathVariable UUID orderId) {
+        return ApiResponse.ok(service.confirmSales(orderId, DemoActors.DEMO_ADMIN_ID));
     }
 
     @GetMapping
