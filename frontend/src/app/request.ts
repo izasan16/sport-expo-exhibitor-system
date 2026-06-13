@@ -6,29 +6,15 @@ type ApiResponse<T> = {
   message?: string;
 };
 
-export async function apiGet<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-    },
-  });
-
-  const parseBody = async () => {
-    try {
-      return (await response.json()) as ApiResponse<T>;
-    } catch {
-      return undefined;
-    }
-  };
+async function parseApiResponse<T>(response: Response): Promise<T> {
+  const body = await parseBody<T>(response);
 
   if (!response.ok) {
-    const body = await parseBody();
     const errorMessage = body?.message || '请求失败，请稍后重试';
     message.error(errorMessage);
     throw new Error(errorMessage);
   }
 
-  const body = await parseBody();
   if (!body) {
     message.error('请求失败，请稍后重试');
     throw new Error('Request failed');
@@ -40,4 +26,40 @@ export async function apiGet<T>(url: string): Promise<T> {
   }
 
   return body.data;
+}
+
+async function parseBody<T>(response: Response): Promise<ApiResponse<T> | undefined> {
+  try {
+    return (await response.json()) as ApiResponse<T>;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function apiGet<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  return parseApiResponse<T>(response);
+}
+
+export async function apiPost<T, B = unknown>(url: string, body?: B): Promise<T> {
+  const options: RequestInit = {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body !== undefined) {
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(url, options);
+
+  return parseApiResponse<T>(response);
 }
