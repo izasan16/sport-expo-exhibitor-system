@@ -1,5 +1,6 @@
 package com.sportexpo.exhibitor.selection;
 
+import com.sportexpo.exhibitor.common.BusinessStatuses;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -71,4 +72,30 @@ public class BoothSelection {
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public UUID getCreatedBy() { return createdBy; }
     public UUID getUpdatedBy() { return updatedBy; }
+
+    public void markConfirmed(UUID reviewerUserId, OffsetDateTime now) {
+        this.status = BusinessStatuses.SELECTION_CONFIRMED;
+        this.reviewerUserId = reviewerUserId;
+        this.reviewedAt = now;
+        this.reviewComment = null;
+        this.updatedAt = now;
+        this.updatedBy = reviewerUserId;
+    }
+
+    public void markRejected(UUID reviewerUserId, String reviewComment, OffsetDateTime now) {
+        this.status = BusinessStatuses.SELECTION_REJECTED;
+        this.reviewerUserId = reviewerUserId;
+        this.reviewedAt = now;
+        this.reviewComment = reviewComment;
+        this.updatedAt = now;
+        this.updatedBy = reviewerUserId;
+    }
+
+    public void markTimeoutReleased(String reviewComment, UUID actorId, OffsetDateTime now) {
+        this.status = BusinessStatuses.SELECTION_TIMEOUT;
+        this.reviewedAt = now;
+        this.reviewComment = reviewComment;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
 }

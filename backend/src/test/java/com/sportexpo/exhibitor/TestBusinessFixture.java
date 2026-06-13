@@ -18,9 +18,15 @@ import com.sportexpo.exhibitor.pricing.AreaTierService;
 import com.sportexpo.exhibitor.pricing.PriceRuleService;
 import com.sportexpo.exhibitor.pricing.dto.CreateAreaTierRequest;
 import com.sportexpo.exhibitor.pricing.dto.CreatePriceRuleRequest;
+import com.sportexpo.exhibitor.selection.BoothSelectionService;
+import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
+import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -33,11 +39,16 @@ public class TestBusinessFixture {
     private final ContractService contractService;
     private final PaymentService paymentService;
     private final BoothService boothService;
+    private final BoothSelectionService selectionService;
+    private final JdbcTemplate jdbcTemplate;
+    private final String schema;
 
     public TestBusinessFixture(EventService eventService, AreaTierService areaTierService,
                                PriceRuleService priceRuleService, ParticipationOrderService orderService,
                                ContractRepository contractRepository, ContractService contractService,
-                               PaymentService paymentService, BoothService boothService) {
+                               PaymentService paymentService, BoothService boothService,
+                               BoothSelectionService selectionService, JdbcTemplate jdbcTemplate,
+                               @Value("${app.db.schema}") String schema) {
         this.eventService = eventService;
         this.areaTierService = areaTierService;
         this.priceRuleService = priceRuleService;
@@ -46,6 +57,9 @@ public class TestBusinessFixture {
         this.contractService = contractService;
         this.paymentService = paymentService;
         this.boothService = boothService;
+        this.selectionService = selectionService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.schema = schema;
     }
 
     public ParticipationOrderResponse createPendingSalesOrder(String areaSqm, String unitPrice, String boothType) {
@@ -107,6 +121,28 @@ public class TestBusinessFixture {
 
     public EventResponse createEvent() {
         return eventService.create(new CreateEventRequest("体博会", 2026));
+    }
+
+    public BoothSelectionResponse createPendingSelection(String areaSqm, String boothType) {
+        var order = createPaidOrder(areaSqm, "1200.00", boothType);
+        var booth = createBooth(order.eventId(), "A-" + UUID.randomUUID(), areaSqm, boothType);
+        return selectionService.submit(new CreateBoothSelectionRequest(
+                order.id(), order.exhibitorId(), List.of(booth.id())));
+    }
+
+    public BoothSelectionResponse createExpiredPendingSelection(String areaSqm, String boothType) {
+        var selection = createPendingSelection(areaSqm, boothType);
+        expireLockForTest(selection.id());
+        return selection;
+    }
+
+    public void expireLockForTest(UUID selectionId) {
+        var qualifiedSelections = schema + ".booth_selections";
+        var qualifiedLocks = schema + ".booth_locks";
+        jdbcTemplate.update("update " + qualifiedSelections + " set lock_expires_at = now() - interval '1 minute' where id = ?",
+                selectionId);
+        jdbcTemplate.update("update " + qualifiedLocks + " set lock_expires_at = now() - interval '1 minute' where selection_id = ?",
+                selectionId);
     }
 
     public ParticipationOrderResponse createPendingPaymentOrderForEvent(UUID eventId, String areaSqm, String unitPrice,

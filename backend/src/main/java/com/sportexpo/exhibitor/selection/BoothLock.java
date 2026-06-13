@@ -1,5 +1,6 @@
 package com.sportexpo.exhibitor.selection;
 
+import com.sportexpo.exhibitor.common.BusinessStatuses;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -54,4 +55,22 @@ public class BoothLock {
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public UUID getCreatedBy() { return createdBy; }
     public UUID getUpdatedBy() { return updatedBy; }
+
+    public void markConfirmed(OffsetDateTime now, UUID actorId) {
+        this.status = BusinessStatuses.LOCK_CONFIRMED;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    public void markRejected(OffsetDateTime now, UUID actorId) {
+        this.status = BusinessStatuses.LOCK_REJECTED;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    public void markTimeoutReleased(OffsetDateTime now, UUID actorId) {
+        this.status = BusinessStatuses.LOCK_TIMEOUT_RELEASED;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
 }

@@ -10,6 +10,7 @@ import com.sportexpo.exhibitor.order.ParticipationOrder;
 import com.sportexpo.exhibitor.order.ParticipationOrderRepository;
 import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
+import com.sportexpo.exhibitor.selection.dto.RejectBoothSelectionRequest;
 import com.sportexpo.exhibitor.selection.dto.SelectionEligibilityResponse;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -133,6 +134,91 @@ public class BoothSelectionService {
         return toResponse(selection, sortedBoothIds);
     }
 
+    @Transactional
+    public BoothSelectionResponse approve(UUID selectionId, UUID actorId) {
+        var selection = findPendingSelectionForUpdate(selectionId);
+        var locks = lockRepository.findBySelectionId(selection.getId());
+        var booths = lockBoothsForLocks(locks);
+        booths.forEach(booth -> {
+            if (!BusinessStatuses.BOOTH_LOCKED.equals(booth.getStatus())) {
+                throw new BusinessException("Selected booth is not locked");
+            }
+        });
+
+        var now = OffsetDateTime.now();
+        selection.markConfirmed(actorId, now);
+        locks.forEach(lock -> lock.markConfirmed(now, actorId));
+        booths.forEach(booth -> booth.markConfirmed(now, actorId));
+        var eligibility = eligibilityRepository.findByOrderId(selection.getOrderId())
+                .orElseThrow(() -> new BusinessException("Selection eligibility does not exist"));
+        eligibility.markClosed(now);
+
+        selectionRepository.save(selection);
+        lockRepository.saveAll(locks);
+        boothRepository.saveAll(booths);
+        eligibilityRepository.save(eligibility);
+        auditService.record(selection.getEventId(), actorId, "BOOTH_SELECTION_APPROVE",
+                "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
+                selection.getStatus(), "approve booth selection");
+        return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
+    }
+
+    @Transactional
+    public BoothSelectionResponse reject(UUID selectionId, RejectBoothSelectionRequest request, UUID actorId) {
+        if (request == null || request.reason() == null || request.reason().isBlank()) {
+            throw new BusinessException("Reject reason must not be blank");
+        }
+        var selection = findPendingSelectionForUpdate(selectionId);
+        var locks = lockRepository.findBySelectionId(selection.getId());
+        var booths = lockBoothsForLocks(locks);
+
+        var now = OffsetDateTime.now();
+        var reason = request.reason().trim();
+        selection.markRejected(actorId, reason, now);
+        locks.forEach(lock -> lock.markRejected(now, actorId));
+        booths.forEach(booth -> booth.markAvailable(now, actorId));
+        var eligibility = eligibilityRepository.findByOrderId(selection.getOrderId())
+                .orElseThrow(() -> new BusinessException("Selection eligibility does not exist"));
+        eligibility.markAvailable(now);
+
+        selectionRepository.save(selection);
+        lockRepository.saveAll(locks);
+        boothRepository.saveAll(booths);
+        eligibilityRepository.save(eligibility);
+        auditService.record(selection.getEventId(), actorId, "BOOTH_SELECTION_REJECT",
+                "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
+                selection.getStatus(), reason);
+        return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
+    }
+
+    @Transactional
+    public BoothSelectionResponse timeoutRelease(UUID selectionId, UUID actorId) {
+        var selection = findPendingSelectionForUpdate(selectionId);
+        var now = OffsetDateTime.now();
+        if (!now.isAfter(selection.getLockExpiresAt())) {
+            throw new BusinessException("Selection lock has not expired");
+        }
+        var locks = lockRepository.findBySelectionId(selection.getId());
+        var booths = lockBoothsForLocks(locks);
+
+        var comment = "lock timeout released";
+        selection.markTimeoutReleased(comment, actorId, now);
+        locks.forEach(lock -> lock.markTimeoutReleased(now, actorId));
+        booths.forEach(booth -> booth.markAvailable(now, actorId));
+        var eligibility = eligibilityRepository.findByOrderId(selection.getOrderId())
+                .orElseThrow(() -> new BusinessException("Selection eligibility does not exist"));
+        eligibility.markAvailable(now);
+
+        selectionRepository.save(selection);
+        lockRepository.saveAll(locks);
+        boothRepository.saveAll(booths);
+        eligibilityRepository.save(eligibility);
+        auditService.record(selection.getEventId(), actorId, "BOOTH_SELECTION_TIMEOUT_RELEASE",
+                "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
+                selection.getStatus(), comment);
+        return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
+    }
+
     @Transactional(readOnly = true)
     public SelectionEligibilityResponse getEligibility(UUID orderId) {
         return eligibilityRepository.findByOrderId(orderId)
@@ -176,6 +262,27 @@ public class BoothSelectionService {
                 throw new BusinessException("Selected booth type must match order booth type");
             }
         }
+    }
+
+    private BoothSelection findPendingSelectionForUpdate(UUID selectionId) {
+        var selection = selectionRepository.findByIdForUpdate(selectionId)
+                .orElseThrow(() -> new BusinessException("Booth selection does not exist"));
+        if (!BusinessStatuses.SELECTION_PENDING_REVIEW.equals(selection.getStatus())) {
+            throw new BusinessException("Booth selection is not pending review");
+        }
+        return selection;
+    }
+
+    private List<Booth> lockBoothsForLocks(List<BoothLock> locks) {
+        var boothIds = locks.stream()
+                .map(BoothLock::getBoothId)
+                .sorted()
+                .toList();
+        var booths = boothRepository.findAllByIdInForUpdateOrderById(boothIds);
+        if (booths.size() != boothIds.size()) {
+            throw new BusinessException("Selected booths do not exist");
+        }
+        return booths;
     }
 
     private BoothSelectionResponse toResponse(BoothSelection selection) {

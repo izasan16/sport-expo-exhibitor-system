@@ -8,6 +8,7 @@ import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
+import com.sportexpo.exhibitor.selection.dto.RejectBoothSelectionRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -153,6 +154,67 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.exhibitorId").value(DemoActors.DEMO_EXHIBITOR_ID.toString()))
                 .andExpect(jsonPath("$.data.createdBy").value(DemoActors.DEMO_EXHIBITOR_ID.toString()));
+    }
+
+    @Test
+    void approveSelectionConfirmsBoothsAndClosesEligibility() {
+        var pending = fixture.createPendingSelection("9.00", "STANDARD");
+        var boothId = pending.boothIds().get(0);
+
+        var approved = selectionService.approve(pending.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(approved.status()).isEqualTo(BusinessStatuses.SELECTION_CONFIRMED);
+        assertThat(approved.reviewerUserId()).isEqualTo(DemoActors.DEMO_ADMIN_ID);
+        assertThat(approved.reviewedAt()).isNotNull();
+        assertThat(approved.reviewComment()).isNull();
+        assertThat(lockRepository.findBySelectionId(pending.id()))
+                .hasSize(1)
+                .allSatisfy(lock -> assertThat(lock.getStatus()).isEqualTo(BusinessStatuses.LOCK_CONFIRMED));
+        assertThat(boothService.get(boothId).status()).isEqualTo(BusinessStatuses.BOOTH_CONFIRMED);
+        var eligibility = eligibilityRepository.findByOrderId(pending.orderId()).orElseThrow();
+        assertThat(eligibility.getStatus()).isEqualTo(BusinessStatuses.ELIGIBILITY_CLOSED);
+        assertThat(eligibility.getPauseReason()).isNull();
+    }
+
+    @Test
+    void rejectSelectionReleasesBoothsAndReopensEligibility() {
+        var pending = fixture.createPendingSelection("9.00", "STANDARD");
+        var boothId = pending.boothIds().get(0);
+
+        var rejected = selectionService.reject(
+                pending.id(), new RejectBoothSelectionRequest("booth not suitable"), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(rejected.status()).isEqualTo(BusinessStatuses.SELECTION_REJECTED);
+        assertThat(rejected.reviewerUserId()).isEqualTo(DemoActors.DEMO_ADMIN_ID);
+        assertThat(rejected.reviewedAt()).isNotNull();
+        assertThat(rejected.reviewComment()).isEqualTo("booth not suitable");
+        assertThat(lockRepository.findBySelectionId(pending.id()))
+                .hasSize(1)
+                .allSatisfy(lock -> assertThat(lock.getStatus()).isEqualTo(BusinessStatuses.LOCK_REJECTED));
+        assertThat(boothService.get(boothId).status()).isEqualTo(BusinessStatuses.BOOTH_AVAILABLE);
+        var eligibility = eligibilityRepository.findByOrderId(pending.orderId()).orElseThrow();
+        assertThat(eligibility.getStatus()).isEqualTo(BusinessStatuses.ELIGIBILITY_AVAILABLE);
+        assertThat(eligibility.getPauseReason()).isNull();
+    }
+
+    @Test
+    void timeoutReleaseReleasesBoothsAndReopensEligibility() {
+        var pending = fixture.createExpiredPendingSelection("9.00", "STANDARD");
+        var boothId = pending.boothIds().get(0);
+
+        var released = selectionService.timeoutRelease(pending.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(released.status()).isEqualTo(BusinessStatuses.SELECTION_TIMEOUT);
+        assertThat(released.reviewerUserId()).isNull();
+        assertThat(released.reviewedAt()).isNotNull();
+        assertThat(released.reviewComment()).isEqualTo("lock timeout released");
+        assertThat(lockRepository.findBySelectionId(pending.id()))
+                .hasSize(1)
+                .allSatisfy(lock -> assertThat(lock.getStatus()).isEqualTo(BusinessStatuses.LOCK_TIMEOUT_RELEASED));
+        assertThat(boothService.get(boothId).status()).isEqualTo(BusinessStatuses.BOOTH_AVAILABLE);
+        var eligibility = eligibilityRepository.findByOrderId(pending.orderId()).orElseThrow();
+        assertThat(eligibility.getStatus()).isEqualTo(BusinessStatuses.ELIGIBILITY_AVAILABLE);
+        assertThat(eligibility.getPauseReason()).isNull();
     }
 
     @Test
