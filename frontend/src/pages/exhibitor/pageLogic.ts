@@ -27,7 +27,7 @@ export function buildLegacyOrderTarget(target: LegacyOrderTarget, orderId: strin
   return `/exhibitor/orders/${orderId}`;
 }
 
-export type ExhibitorLoadErrorPage = 'home' | 'detail' | 'payment' | 'orderCreate';
+export type ExhibitorLoadErrorPage = 'home' | 'detail' | 'payment' | 'orderCreate' | 'orders' | 'notifications';
 
 export function getExhibitorLoadErrorCopy(page: ExhibitorLoadErrorPage) {
   const titleByPage: Record<ExhibitorLoadErrorPage, string> = {
@@ -35,6 +35,8 @@ export function getExhibitorLoadErrorCopy(page: ExhibitorLoadErrorPage) {
     detail: '订单数据加载失败',
     payment: '付款数据加载失败',
     orderCreate: '参展选项加载失败',
+    orders: '订单数据加载失败',
+    notifications: '通知数据加载失败',
   };
 
   return {
@@ -101,7 +103,34 @@ export function compareAreaToOrder(selectedAreas: Array<string | number>, orderA
 }
 
 export function buildBoothSelectionBody(orderId: string, boothIds: string[], remark = '') {
-  return { orderId, boothIds, remark };
+  return { orderId, boothIds, exhibitorRemark: remark };
+}
+
+export type NotificationReadFilter = 'all' | 'unread';
+
+export function filterNotificationsByReadState<T extends { readAt?: string | null }>(
+  notifications: T[],
+  filter: NotificationReadFilter,
+) {
+  return filter === 'unread'
+    ? notifications.filter((notification) => !notification.readAt)
+    : notifications;
+}
+
+export function getResponsiveStepsDirection(isMobile: boolean): 'horizontal' | 'vertical' {
+  return isMobile ? 'vertical' : 'horizontal';
+}
+
+export function getResponsiveCardSplit(isMobile: boolean): 'vertical' | undefined {
+  return isMobile ? undefined : 'vertical';
+}
+
+export function getPaymentFormLayout(isMobile: boolean): 'horizontal' | 'vertical' {
+  return isMobile ? 'vertical' : 'horizontal';
+}
+
+export function getPaymentOrderDescriptionColumns(isMobile: boolean) {
+  return isMobile ? 1 : 2;
 }
 
 export function filterBoothsForOrderType<T extends { boothType: string }>(

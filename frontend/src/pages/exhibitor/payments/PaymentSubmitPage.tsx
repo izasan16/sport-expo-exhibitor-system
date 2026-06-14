@@ -10,7 +10,13 @@ import { apiGet, apiPost } from '../../../app/request';
 import { useIsMobile } from '../../../app/responsive';
 import { getOrderStatusMeta, getPaymentStatusMeta, StatusTag } from '../../../app/status';
 import { formatMobileAmount, formatMobileText, formatMobileTime } from '../mobileViewModels';
-import { getExhibitorLoadErrorCopy, isOrderPayable } from '../pageLogic';
+import {
+  getExhibitorLoadErrorCopy,
+  getPaymentFormLayout,
+  getPaymentOrderDescriptionColumns,
+  getResponsiveCardSplit,
+  isOrderPayable,
+} from '../pageLogic';
 
 type PaymentValues = {
   amount: number;
@@ -122,6 +128,9 @@ export default function PaymentSubmitPage() {
     { label: '现金', value: 'OFFLINE_CASH' },
     { label: '支票', value: 'OFFLINE_CHECK' },
   ];
+  const cardSplit = getResponsiveCardSplit(isMobile);
+  const paymentFormLayout = getPaymentFormLayout(isMobile);
+  const orderDescriptionColumns = getPaymentOrderDescriptionColumns(isMobile);
 
   if (!orderId) {
     return (
@@ -211,9 +220,9 @@ export default function PaymentSubmitPage() {
   return (
     <PageContainer title="提交付款">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <ProCard split="vertical">
+        <ProCard split={cardSplit}>
           <ProCard title="订单信息">
-            <ProDescriptions<ParticipationOrder> column={2} dataSource={order} columns={orderColumns} />
+            <ProDescriptions<ParticipationOrder> column={orderDescriptionColumns} dataSource={order} columns={orderColumns} />
           </ProCard>
           <ProCard>
             <Statistic title="待提交订单金额" value={formatMobileAmount(order.totalAmount)} />
@@ -222,7 +231,7 @@ export default function PaymentSubmitPage() {
 
         <ProCard title="付款信息">
           <ProForm<PaymentValues>
-            layout="horizontal"
+            layout={paymentFormLayout}
             initialValues={{ method: 'OFFLINE_TRANSFER' }}
             submitter={{ searchConfig: { submitText: '提交付款' } }}
             onFinish={async (values) => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBoothSelectionBody,
+  filterNotificationsByReadState,
   buildLegacyOrderTarget,
   buildAreaTierOptions,
   buildOrderCreateBody,
@@ -8,8 +9,12 @@ import {
   compareAreaToOrder,
   filterBoothsForOrderType,
   getExhibitorLoadErrorCopy,
+  getPaymentFormLayout,
+  getPaymentOrderDescriptionColumns,
   getOrderNextAction,
   getOrderStepIndex,
+  getResponsiveCardSplit,
+  getResponsiveStepsDirection,
   isOrderPayable,
   isOrderSelectable,
   pickLatestActiveOrder,
@@ -67,11 +72,11 @@ describe('exhibitor page logic', () => {
     });
   });
 
-  it('builds the public booth selection submit body with remark and without exhibitorId', () => {
+  it('builds the public booth selection submit body with exhibitorRemark and without exhibitorId', () => {
     expect(buildBoothSelectionBody('order-1', ['booth-2', 'booth-1'], '靠近主通道')).toEqual({
       orderId: 'order-1',
       boothIds: ['booth-2', 'booth-1'],
-      remark: '靠近主通道',
+      exhibitorRemark: '靠近主通道',
     });
   });
 
@@ -88,6 +93,14 @@ describe('exhibitor page logic', () => {
     });
     expect(getExhibitorLoadErrorCopy('payment')).toMatchObject({
       title: '付款数据加载失败',
+      actionText: '重新加载',
+    });
+    expect(getExhibitorLoadErrorCopy('orders')).toMatchObject({
+      title: '订单数据加载失败',
+      actionText: '重新加载',
+    });
+    expect(getExhibitorLoadErrorCopy('notifications')).toMatchObject({
+      title: '通知数据加载失败',
       actionText: '重新加载',
     });
   });
@@ -116,6 +129,31 @@ describe('exhibitor page logic', () => {
       { id: 'booth-1', boothType: 'STANDARD' },
       { id: 'booth-3', boothType: 'STANDARD' },
     ]);
+  });
+
+  it('filters notification records by read state', () => {
+    const notifications = [
+      { id: 'read', readAt: '2026-06-14T09:00:00+08:00' },
+      { id: 'unread-null', readAt: null },
+      { id: 'unread-missing' },
+    ];
+
+    expect(filterNotificationsByReadState(notifications, 'all')).toEqual(notifications);
+    expect(filterNotificationsByReadState(notifications, 'unread')).toEqual([
+      { id: 'unread-null', readAt: null },
+      { id: 'unread-missing' },
+    ]);
+  });
+
+  it('chooses compact mobile layout settings for exhibitor pages', () => {
+    expect(getResponsiveStepsDirection(true)).toBe('vertical');
+    expect(getResponsiveStepsDirection(false)).toBe('horizontal');
+    expect(getResponsiveCardSplit(true)).toBeUndefined();
+    expect(getResponsiveCardSplit(false)).toBe('vertical');
+    expect(getPaymentFormLayout(true)).toBe('vertical');
+    expect(getPaymentFormLayout(false)).toBe('horizontal');
+    expect(getPaymentOrderDescriptionColumns(true)).toBe(1);
+    expect(getPaymentOrderDescriptionColumns(false)).toBe(2);
   });
 
   it('sorts booths by booth number for the simplified map', () => {

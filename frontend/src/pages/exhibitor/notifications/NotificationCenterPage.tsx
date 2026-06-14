@@ -1,9 +1,10 @@
 import { PageContainer, ProCard } from '@ant-design/pro-components';
-import { Button, Empty, List, message, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
+import { Button, Empty, List, message, Result, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
 import { apiGet, apiPost } from '../../../app/request';
 import { formatMobileText, formatMobileTime, formatNotificationType } from '../mobileViewModels';
+import { filterNotificationsByReadState, getExhibitorLoadErrorCopy } from '../pageLogic';
 
 type NotificationRecord = {
   id: string;
@@ -24,18 +25,25 @@ export default function NotificationCenterPage() {
   const [markingId, setMarkingId] = useState<string>();
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadSignal, setReloadSignal] = useState(0);
 
   useEffect(() => {
     let alive = true;
 
     async function loadNotifications() {
       setLoading(true);
+      setLoadError(false);
       try {
         const data = await apiGet<NotificationRecord[]>(
           `/api/notifications?recipientId=${DEMO_EXHIBITOR_ID}`,
         );
         if (!alive) return;
         setNotifications(data);
+      } catch {
+        if (!alive) return;
+        setNotifications([]);
+        setLoadError(true);
       } finally {
         if (alive) setLoading(false);
       }
@@ -45,16 +53,28 @@ export default function NotificationCenterPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [reloadSignal]);
 
   const filteredNotifications = useMemo(
-    () => (
-      filter === 'unread'
-        ? notifications.filter((notification) => !notification.readAt)
-        : notifications
-    ),
+    () => filterNotificationsByReadState(notifications, filter),
     [filter, notifications],
   );
+
+  if (!loading && loadError) {
+    const copy = getExhibitorLoadErrorCopy('notifications');
+    return (
+      <PageContainer title="通知中心">
+        <ProCard>
+          <Result
+            status="error"
+            title={copy.title}
+            subTitle={copy.subTitle}
+            extra={<Button type="primary" onClick={() => setReloadSignal((current) => current + 1)}>{copy.actionText}</Button>}
+          />
+        </ProCard>
+      </PageContainer>
+    );
+  }
 
   async function markRead(notification: NotificationRecord) {
     if (notification.readAt) return;

@@ -1,6 +1,6 @@
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Button, Card, Empty, List, message, Skeleton, Space, Typography } from 'antd';
+import { Button, Card, Empty, List, message, Result, Skeleton, Space, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
@@ -12,7 +12,7 @@ import { useIsMobile } from '../../../app/responsive';
 import { getOrderStatusMeta, StatusTag } from '../../../app/status';
 import { useEvents } from '../../../app/useEvents';
 import { formatMobileAmount, formatMobileText, formatMobileTime } from '../mobileViewModels';
-import { getOrderNextAction } from '../pageLogic';
+import { getExhibitorLoadErrorCopy, getOrderNextAction } from '../pageLogic';
 
 export default function MyOrdersPage() {
   const navigate = useNavigate();
@@ -22,6 +22,8 @@ export default function MyOrdersPage() {
   const isMobile = useIsMobile();
   const [orders, setOrders] = useState<ParticipationOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadSignal, setReloadSignal] = useState(0);
 
   useEffect(() => {
     const state = location.state as { message?: string } | null;
@@ -36,10 +38,15 @@ export default function MyOrdersPage() {
 
     async function loadOrders() {
       setLoading(true);
+      setLoadError(false);
       try {
         const data = await apiGet<ParticipationOrder[]>(`/api/participation-orders?exhibitorId=${DEMO_EXHIBITOR_ID}`);
         if (!alive) return;
         setOrders(data);
+      } catch {
+        if (!alive) return;
+        setOrders([]);
+        setLoadError(true);
       } finally {
         if (alive) setLoading(false);
       }
@@ -49,7 +56,7 @@ export default function MyOrdersPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [reloadSignal]);
 
   const columns: ProColumns<ParticipationOrder>[] = [
     {
@@ -99,6 +106,22 @@ export default function MyOrdersPage() {
       },
     },
   ];
+
+  if (!loading && loadError) {
+    const copy = getExhibitorLoadErrorCopy('orders');
+    return (
+      <PageContainer title="我的订单">
+        <Card>
+          <Result
+            status="error"
+            title={copy.title}
+            subTitle={copy.subTitle}
+            extra={<Button type="primary" onClick={() => setReloadSignal((current) => current + 1)}>{copy.actionText}</Button>}
+          />
+        </Card>
+      </PageContainer>
+    );
+  }
 
   if (isMobile) {
     return (

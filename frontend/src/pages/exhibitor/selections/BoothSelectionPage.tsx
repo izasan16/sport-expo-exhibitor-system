@@ -32,7 +32,7 @@ export default function BoothSelectionPage() {
   const [booths, setBooths] = useState<Booth[]>([]);
   const [eligibility, setEligibility] = useState<SelectionEligibility>();
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
-  const [remark, setRemark] = useState('');
+  const [exhibitorRemark, setExhibitorRemark] = useState('');
   const [loading, setLoading] = useState(Boolean(orderId));
   const [loadFailed, setLoadFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -140,7 +140,7 @@ export default function BoothSelectionPage() {
         try {
           const selection = await apiPost<SelectionResponse>(
             '/api/booth-selections',
-            buildBoothSelectionBody(order.id, boothIds, remark),
+            buildBoothSelectionBody(order.id, boothIds, exhibitorRemark),
           );
           message.success(`选位 ${selection.id} 已提交，状态：${selection.status}`);
           navigate(`/exhibitor/orders/${order.id}`);
@@ -241,8 +241,8 @@ export default function BoothSelectionPage() {
         ) : null}
 
         <Input.TextArea
-          value={remark}
-          onChange={(event) => setRemark(event.target.value)}
+          value={exhibitorRemark}
+          onChange={(event) => setExhibitorRemark(event.target.value)}
           placeholder="备注"
           autoSize={{ minRows: 2, maxRows: 4 }}
           maxLength={200}

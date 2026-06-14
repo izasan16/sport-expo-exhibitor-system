@@ -8,10 +8,18 @@ import type { BoothSelection, PaymentRecord, ParticipationOrder, SelectionEligib
 import { formatArea, formatShortId } from '../../app/formatters';
 import { loadSelectionEligibility } from '../../app/apiLoaders';
 import { apiGet } from '../../app/request';
+import { useIsMobile } from '../../app/responsive';
 import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
 import { useEvents } from '../../app/useEvents';
 import { buildHomeFlowSteps, formatMobileAmount, formatMobileText, formatMobileTime } from './mobileViewModels';
-import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, pickLatestActiveOrder } from './pageLogic';
+import {
+  getExhibitorLoadErrorCopy,
+  getOrderNextAction,
+  getOrderStepIndex,
+  getResponsiveCardSplit,
+  getResponsiveStepsDirection,
+  pickLatestActiveOrder,
+} from './pageLogic';
 
 function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right: T) {
   return (Date.parse(right.createdAt ?? '') || 0) - (Date.parse(left.createdAt ?? '') || 0);
@@ -20,6 +28,7 @@ function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right
 export default function HomePage() {
   const navigate = useNavigate();
   const { events } = useEvents();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<ParticipationOrder[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -31,6 +40,8 @@ export default function HomePage() {
   const latestSelection = selections[0];
   const orderStatusMeta = activeOrder?.status ? getOrderStatusMeta(activeOrder.status) : { label: '未填写', color: 'default' };
   const activeOrderEvent = activeOrder?.eventId ? formatEventDisplay(activeOrder.eventId, events) : '未填写';
+  const cardSplit = getResponsiveCardSplit(isMobile);
+  const stepsDirection = getResponsiveStepsDirection(isMobile);
   const nextAction = getOrderNextAction({
     order: activeOrder,
     eligibilityStatus: eligibility?.status,
@@ -108,6 +119,7 @@ export default function HomePage() {
           <ProCard title="参展流程">
             <Steps
               current={0}
+              direction={stepsDirection}
               items={buildHomeFlowSteps()}
             />
           </ProCard>
@@ -124,7 +136,7 @@ export default function HomePage() {
   return (
     <PageContainer title="首页">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <ProCard split="vertical">
+        <ProCard split={cardSplit}>
           <ProCard title={`订单 ${formatShortId(activeOrder.id)}`}>
             <Space direction="vertical" size={12}>
               <StatusTag meta={orderStatusMeta} />
@@ -142,10 +154,11 @@ export default function HomePage() {
         <ProCard title="参展进度">
           <Steps
             current={getOrderStepIndex(activeOrder.status)}
+            direction={stepsDirection}
             items={buildHomeFlowSteps()}
           />
         </ProCard>
-        <ProCard split="vertical">
+        <ProCard split={cardSplit}>
           <ProCard title="最近付款">
             <ProList<PaymentRecord>
               rowKey="id"
