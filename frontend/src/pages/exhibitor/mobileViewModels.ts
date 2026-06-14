@@ -1,4 +1,5 @@
 import { formatArea, formatFriendlyTime, formatMoney } from '../../app/formatters';
+export { formatShortId } from '../../app/formatters';
 
 export type NotificationType =
   | 'ORDER_SALES_CONFIRMED'
@@ -88,6 +89,22 @@ function addTimelineEvent(events: MobileTimelineEvent[], key: string, title: str
   });
 }
 
+function addTimelineEventWithFallback(
+  events: MobileTimelineEvent[],
+  key: string,
+  completedTitle: string,
+  fallbackTitle: string,
+  completedAt?: string | null,
+  fallbackAt?: string | null,
+) {
+  if (completedAt) {
+    addTimelineEvent(events, key, completedTitle, completedAt);
+    return;
+  }
+
+  addTimelineEvent(events, key, fallbackTitle, fallbackAt);
+}
+
 export function buildHomeFlowSteps() {
   return [...homeFlowSteps];
 }
@@ -105,14 +122,14 @@ export function buildSelectedBoothSummary(booths: SelectedBoothSource[]): Select
   };
 }
 
-export function addSelectedBooth(booths: SelectedBoothSource[], booth: SelectedBoothSource) {
+export function summarizeWithAddedBooth(booths: SelectedBoothSource[], booth: SelectedBoothSource) {
   if (booths.some((item) => item.id === booth.id)) {
     return buildSelectedBoothSummary(booths);
   }
   return buildSelectedBoothSummary([...booths, booth]);
 }
 
-export function removeSelectedBooth(booths: SelectedBoothSource[], boothId: string) {
+export function summarizeWithRemovedBooth(booths: SelectedBoothSource[], boothId: string) {
   return buildSelectedBoothSummary(booths.filter((booth) => booth.id !== boothId));
 }
 
@@ -126,17 +143,38 @@ export function buildMobileTimelineEvents(input: MobileTimelineInput) {
 
   input.payments?.forEach((payment) => {
     addTimelineEvent(events, `payment-${payment.id}-created`, '付款已提交', payment.createdAt);
-    addTimelineEvent(events, `payment-${payment.id}-confirmed`, '付款确认', payment.confirmedAt ?? payment.updatedAt);
+    addTimelineEventWithFallback(
+      events,
+      `payment-${payment.id}-confirmed`,
+      '付款确认',
+      '付款记录更新',
+      payment.confirmedAt,
+      payment.updatedAt,
+    );
   });
 
   input.selections?.forEach((selection) => {
     addTimelineEvent(events, `selection-${selection.id}-created`, '选位已提交', selection.createdAt);
-    addTimelineEvent(events, `selection-${selection.id}-reviewed`, '选位审核', selection.reviewedAt ?? selection.updatedAt);
+    addTimelineEventWithFallback(
+      events,
+      `selection-${selection.id}-reviewed`,
+      '选位审核',
+      '选位记录更新',
+      selection.reviewedAt,
+      selection.updatedAt,
+    );
   });
 
   input.contracts?.forEach((contract) => {
     addTimelineEvent(events, `contract-${contract.id}-created`, '合同已生成', contract.createdAt);
-    addTimelineEvent(events, `contract-${contract.id}-signed`, '合同签署', contract.signedAt ?? contract.updatedAt);
+    addTimelineEventWithFallback(
+      events,
+      `contract-${contract.id}-signed`,
+      '合同签署',
+      '合同记录更新',
+      contract.signedAt,
+      contract.updatedAt,
+    );
   });
 
   return events.sort((left, right) => Date.parse(left.happenedAt) - Date.parse(right.happenedAt));
@@ -144,10 +182,6 @@ export function buildMobileTimelineEvents(input: MobileTimelineInput) {
 
 export function formatNotificationType(type: NotificationType | string) {
   return notificationTypeLabels[type as NotificationType] ?? type;
-}
-
-export function formatShortId(id?: string | null) {
-  return id ? id.slice(0, 8) : '-';
 }
 
 export function formatMobileText(value?: string | null) {

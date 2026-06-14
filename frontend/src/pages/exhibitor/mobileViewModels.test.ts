@@ -9,7 +9,8 @@ import {
   formatMobileTime,
   formatNotificationType,
   formatShortId,
-  removeSelectedBooth,
+  summarizeWithAddedBooth,
+  summarizeWithRemovedBooth,
 } from './mobileViewModels';
 
 describe('exhibitor mobile view models', () => {
@@ -24,12 +25,26 @@ describe('exhibitor mobile view models', () => {
     ]);
   });
 
-  it('removes a selected booth and recalculates selected area', () => {
+  it('summarizes selected booths after adding or removing a booth', () => {
     const selectedBooths = [
       { id: 'booth-1', boothNo: 'A001', areaSqm: '9.00' },
       { id: 'booth-2', boothNo: 'A002', areaSqm: '18.50' },
       { id: 'booth-3', boothNo: 'A003', areaSqm: 12 },
     ];
+
+    expect(summarizeWithAddedBooth(selectedBooths, { id: 'booth-4', boothNo: 'A004', areaSqm: '6.25' })).toMatchObject({
+      boothIds: ['booth-1', 'booth-2', 'booth-3', 'booth-4'],
+      selectedCount: 4,
+      selectedAreaSqm: 45.75,
+      selectedAreaDisplay: '45.75 ㎡',
+    });
+
+    expect(summarizeWithAddedBooth(selectedBooths, selectedBooths[0])).toMatchObject({
+      boothIds: ['booth-1', 'booth-2', 'booth-3'],
+      selectedCount: 3,
+      selectedAreaSqm: 39.5,
+      selectedAreaDisplay: '39.50 ㎡',
+    });
 
     expect(buildSelectedBoothSummary(selectedBooths)).toMatchObject({
       boothIds: ['booth-1', 'booth-2', 'booth-3'],
@@ -38,7 +53,7 @@ describe('exhibitor mobile view models', () => {
       selectedAreaDisplay: '39.50 ㎡',
     });
 
-    expect(removeSelectedBooth(selectedBooths, 'booth-2')).toMatchObject({
+    expect(summarizeWithRemovedBooth(selectedBooths, 'booth-2')).toMatchObject({
       boothIds: ['booth-1', 'booth-3'],
       selectedCount: 2,
       selectedAreaSqm: 21,
@@ -81,9 +96,21 @@ describe('exhibitor mobile view models', () => {
 
     expect(events).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: 'payment-payment-1-confirmed', happenedAt: '2026-06-14T10:30:00+08:00' }),
-        expect.objectContaining({ key: 'selection-selection-1-reviewed', happenedAt: '2026-06-14T11:45:00+08:00' }),
-        expect.objectContaining({ key: 'contract-contract-1-signed', happenedAt: '2026-06-14T12:15:00+08:00' }),
+        expect.objectContaining({
+          key: 'payment-payment-1-confirmed',
+          title: '付款记录更新',
+          happenedAt: '2026-06-14T10:30:00+08:00',
+        }),
+        expect.objectContaining({
+          key: 'selection-selection-1-reviewed',
+          title: '选位记录更新',
+          happenedAt: '2026-06-14T11:45:00+08:00',
+        }),
+        expect.objectContaining({
+          key: 'contract-contract-1-signed',
+          title: '合同记录更新',
+          happenedAt: '2026-06-14T12:15:00+08:00',
+        }),
       ]),
     );
   });
