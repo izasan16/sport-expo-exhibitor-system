@@ -1,78 +1,89 @@
-# 展商端移动优先改造设计
+# 展商端移动优先与全流程体验整改设计
 
 ## 背景
 
-展商端的真实使用场景更接近移动办公：展会现场、出差途中、收到销售或财务通知后即时处理。当前系统仍在 `App.tsx` 全局包裹 `MobileUnsupported`，手机访问会看到“请在电脑端访问展商系统”，这会直接阻断展商的核心流程。
+展商端的真实使用场景更接近移动办公：展会现场、出差途中、收到销售或财务通知后即时处理。当前系统仍在 `App.tsx` 全局包裹 `MobileUnsupported`，手机访问会看到“请在电脑端访问展商系统”，这会直接阻断展商核心流程。
 
-后台端仍以销售、财务、运营人员的高频批量操作为主，应继续保留 Ant Design + ProComponents 的桌面工作台形态。本轮只改造展商端，不把后台改成移动端。
+本轮按用户体验反馈一次性整改，不把已识别问题拆到后续分期。后台端仍以销售、财务、运营人员的高频批量操作为主，继续保留 Ant Design + ProComponents 桌面工作台形态；展商端改为移动优先并兼容桌面。
 
 ## 目标
 
-- 展商端在 375px 至 768px 宽度可完整完成：查看首页、创建订单、查看订单、提交付款、选择展位、查看选位结果。
-- 移除手机端阻断提示，保留后台桌面体验。
-- 展商端移动布局优先，桌面端兼容显示。
-- 继续遵守 Ant Design + ProComponents 约束，不自造基础表格、表单、弹窗组件。
+- 展商端在 375px 至 768px 宽度可完整完成：查看首页、创建订单、查看订单、提交付款、选择展位、查看通知。
+- 首页和订单详情明确告诉展商当前进度、下一步和等待对象。
+- 所有可选择的业务对象使用下拉、列表或卡片选择；不能要求用户手敲 ID。
+- 展会、展商、面积档位、付款方式、状态都显示业务文案，不能把 UUID 或枚举值作为主要信息。
+- 后台工作台、订单确认、财务确认、选位审核的日常操作要可批量、可追溯、可通知。
+- 自动释放超时锁位，避免展位长期假锁定。
 
-## 非目标
+## 本轮完整整改范围
 
-- 不引入 `antd-mobile`，本轮仍使用现有 Ant Design 技术栈做响应式 H5。
-- 不拆成 `frontend-mobile` 独立工程。
-- 不做批量审核、通知系统、自动超时释放、选位审核小地图。
-- 不新增登录、真实展商资料、真实联系人体系；展商身份仍使用当前 demo actor。
+- 移除手机端阻断提示。
+- 展商首页增加参展流程引导。
+- 展商订单列表改为移动端卡片列表。
+- 展商订单详情移动端改为折叠分组，并增加操作时间线、等待说明和付款进度。
+- 展商下单、付款、选位页面改为移动友好表单和列表。
+- 付款方式改为中文业务项：银行转账、现金、支票。
+- 选位页展示已选展位列表，支持取消；提交选位可填写备注。
+- 后台 dashboard 改用聚合接口，并显示最后更新时间。
+- 订单列表支持批量销售确认。
+- 财务确认失败必须填写失败原因，最多 500 字，并入库。
+- 付款确认页展示展会、展商、订单、金额、方式、状态。
+- 选位审核页展示已选展位清单、展商备注；驳回原因带字数统计；可填写推荐展位。
+- 新增基础站内通知对象和展商通知页。
+- 新增锁位超时释放定时任务。
 
-## 设计方案
+## 技术约束
 
-采用“方案 A：单前端响应式移动优先”。
+- 前端继续使用 React + TypeScript + Ant Design + ProComponents。
+- 本轮不引入 `antd-mobile`，不拆独立 `frontend-mobile` 工程。
+- 后端继续使用 Spring Boot + PostgreSQL + Redis 依赖准备。
+- 数据库仍由应用 schema initializer 管理，不引入 Flyway/Liquibase。
+- 可以直接扩展 `schema-foundation.sql`，因为当前项目允许调整 schema baseline。
 
-展商端页面根据 viewport 切换展示密度：
+## 前端设计
 
-- 移动端使用 `List`、`Card`、`Checkbox`、`Collapse`、纵向 `ProForm`、block 按钮。
-- 桌面端可保留 `ProTable`、`Tabs`、横向统计卡，但不得在移动端产生横向滚动。
-- 后台端继续使用 `ProTable` 和桌面工作台，不受本轮影响。
+### 响应式基础
 
-## 文件边界
+新增 `frontend/src/app/responsive.ts`：
 
-- `frontend/src/app/App.tsx`：移除全局 `MobileUnsupported` 包裹。
-- `frontend/src/app/MobileUnsupported.tsx`：删除或停止使用。
-- `frontend/src/app/responsive.ts`：新增 `useIsMobile` 和响应式辅助常量。
-- `frontend/src/pages/exhibitor/mobileComponents.tsx`：新增展商端共享移动卡片组件和展示 helpers。
-- `frontend/src/pages/exhibitor/HomePage.tsx`：空状态增加参展流程；移动端改为卡片/纵向布局。
-- `frontend/src/pages/exhibitor/orders/MyOrdersPage.tsx`：移动端用订单卡片列表，桌面端保留表格。
-- `frontend/src/pages/exhibitor/orders/ExhibitorOrderDetailPage.tsx`：移动端用 Collapse 分组，补操作时间线和等待说明。
-- `frontend/src/pages/exhibitor/orders/OrderCreatePage.tsx`：移动端表单改为 vertical，按钮 block。
-- `frontend/src/pages/exhibitor/payments/PaymentSubmitPage.tsx`：付款方式显示中文业务项，移动端付款记录用列表。
-- `frontend/src/pages/exhibitor/selections/BoothSelectionPage.tsx`：移动端展位选择用 List + Checkbox，补已选展位列表和取消按钮；桌面端保留表格选择。
-- `frontend/src/pages/admin/payments/PaymentConfirmPage.tsx`：确认失败改为带原因的表单，原因作为本轮前端输入；若后端尚不接收原因，则先随请求 body 提交，后端忽略不影响兼容。
+- `MOBILE_BREAKPOINT = 768`
+- `isMobileWidth(width)`
+- `useIsMobile()`
 
-## 用户体验规则
+展商端页面使用 `useIsMobile()` 切换展示密度。后台端不因该 hook 改布局。
 
 ### 展商首页
 
-无订单时显示：
+空状态显示：
 
 - “您还没有参展订单”
 - 主按钮“我要参展”
-- 折叠或卡片式“参展流程”：下单、销售确认、合同、付款、选位、审核、完成
+- 使用 Ant Design `Steps` 展示参展流程：提交订单、销售确认、合同确认、付款确认、选择展位、审核完成
 
 有订单时显示：
 
-- 展会名称为第一视觉信号
-- 金额、面积、状态、下一步按钮
-- 最近付款和最近选位使用短列表，不使用宽表格
+- 展会名称作为主标题
+- 订单短号、面积、金额、状态
+- 当前等待说明，例如“订单已提交，正在等待销售确认”
+- 下一步 block 按钮
+- 最近付款、最近选位使用短列表
 
-### 订单列表
+### 展商订单列表
 
-移动端订单卡片显示：
+移动端使用 `List + Card`，每张卡片显示：
 
 - 展会名称
 - 状态 Tag
 - 金额、面积、展位类型
-- 订单短号作为次要信息
-- 主要下一步按钮 block 展示
+- 订单短号
+- 下一步按钮
+- 查看详情按钮
 
-### 订单详情
+桌面端可保留 `ProTable`。
 
-移动端使用 Collapse：
+### 展商订单详情
+
+移动端使用 `Collapse`：
 
 - 基本信息
 - 合同信息
@@ -80,65 +91,248 @@
 - 选位记录
 - 操作时间线
 
-状态说明必须告诉展商“现在等谁处理”和“下一步是什么”。例如待审核选位显示“选位申请已提交，管理员审核通过后展位将确认”。
+详情页顶部显示：
 
-### 付款
+- 展会名称
+- 状态
+- 当前等待说明
+- 付款进度：已确认金额、应付金额、剩余金额、百分比进度条
 
-付款方式显示中文：
+操作时间线包括：订单创建、合同生成/生效、付款提交/确认、选位提交/审核。本轮不新增独立 timeline 表，前端使用订单、合同、付款、选位记录已有的 `created_at` / `updated_at` 近似生成时间线；其中创建类事件使用 `created_at`，状态变化类事件使用对应记录的 `updated_at`、`confirmed_at`、`reviewed_at` 或 `signed_at`。时间线必须标注为“业务进度”，不作为精确审计日志替代，精确审计仍以 `audit_logs` 为准。
+
+### 展商付款
+
+移动端表单使用 `vertical` 布局，提交按钮 block。
+
+付款方式枚举值保持现有后端口径，不改历史字段名：
 
 - `OFFLINE_TRANSFER`：银行转账
 - `OFFLINE_CASH`：现金
 - `OFFLINE_CHECK`：支票
 
-提交成功后仍返回订单详情页。
+前端不得引入 `OFFLINE_BANK`。所有页面、测试和文案统一把 `OFFLINE_TRANSFER` 显示为“银行转账”。
 
-### 选位
+已有付款记录移动端使用卡片列表，展示金额、方式、状态、提交时间、失败原因。
 
-移动端不用 ProTable 作为主交互：
+### 展商选位
 
-- 使用 `List` + `Checkbox` 展示可选展位
-- 显示订单面积、已选面积、已选展位数
-- 显示已选展位列表，每项可点击“取消”
-- 面积不足/超出时显示明确提示
-- 提交按钮固定在内容末尾，移动端 block
+移动端不用 `ProTable` 作为主交互，改为：
 
-桌面端可继续使用表格选择。
+- `List + Checkbox` 展示可选展位
+- 面积统计：订单面积、已选面积、已选数量
+- 已选展位列表：展位号、面积、类型、取消按钮；点击取消时必须同步取消该展位在可选列表中的勾选状态，并立即重算面积
+- 面积不足/超出提示
+- 备注输入框
+- 提交按钮 block
 
-## 数据与接口
+桌面端可以保留 `ProTable`，但桌面与移动端必须共用同一组选中状态和面积校验函数。页面通过 `useIsMobile()` 在 `List + Checkbox` 与 `ProTable` 之间切换展示层，不分裂成两套业务逻辑。
 
-本轮优先使用现有接口：
+### 展商通知
 
-- `/api/participation-orders`
-- `/api/participation-orders/{id}`
-- `/api/payments`
-- `/api/booth-selections`
-- `/api/selection-eligibilities`
-- `/api/events`
-- `/api/area-tiers`
-- `/api/booths`
+新增通知入口和通知页，展示站内通知：
 
-不新增后端聚合接口。Dashboard 聚合和展商 dashboard 聚合接口列为后续优化。
+- 标题
+- 内容
+- 类型
+- 是否已读
+- 创建时间
+
+本轮不做短信/邮件真实发送，但通知数据必须入库并可查询。
+
+通知类型和触发时机：
+
+| 类型 | 触发场景 | 接收人 | 标题 |
+| --- | --- | --- | --- |
+| `ORDER_SALES_CONFIRMED` | 销售确认订单并生成合同 | 展商 | 订单已确认 |
+| `CONTRACT_SIGNED` | 后台标记线下合同已签署/生效 | 展商 | 合同已确认 |
+| `PAYMENT_CONFIRMED` | 财务确认付款成功 | 展商 | 付款已确认 |
+| `PAYMENT_FAILED` | 财务确认付款失败并填写原因 | 展商 | 付款确认失败 |
+| `SELECTION_SUBMITTED` | 展商提交选位申请 | 管理员/销售工作台 | 有新的选位申请 |
+| `SELECTION_APPROVED` | 管理员/销售审核通过选位 | 展商 | 展位已确认 |
+| `SELECTION_REJECTED` | 管理员/销售驳回选位并填写原因 | 展商 | 选位申请被驳回 |
+| `SELECTION_TIMEOUT_RELEASED` | 锁位超时定时任务释放展位 | 展商 | 选位已超时释放 |
+
+通知页展示这些类型的中文标签，并支持按未读/全部切换。`notifications` 表必须增加 `(recipient_id, created_at desc)` 索引。通知保留策略为 90 天，清理任务可复用后端定时任务框架；本轮至少要在代码中集中定义保留天数常量和清理方法入口，避免后续散落实现。
+
+## 后台设计
+
+### 工作台聚合
+
+新增 `/api/admin/dashboard`：
+
+- 待销售确认订单数量和前 5 条
+- 待财务确认付款数量和前 5 条
+- 待审核选位数量和前 5 条
+- 今日新增订单数量
+- 服务端统计时间
+
+工作台操作成功后刷新聚合数据，并显示最后更新时间。
+
+工作台进入页面、从其它后台页面返回、执行单笔/批量订单确认、付款确认/失败、选位审核/驳回/超时释放后，都必须重新请求 `/api/admin/dashboard`。刷新时显示 `Spin` 或按钮 loading，刷新完成后用服务端 `generatedAt` 显示“最后更新时间”。
+
+### 销售确认
+
+订单列表支持：
+
+- 单笔销售确认
+- 多选待销售确认订单
+- 批量销售确认
+
+确认成功后提示订单已进入合同/付款流程，并提供查看全部订单的入口。
+
+批量确认失败处理：
+
+- 前端只允许勾选待销售确认订单发起批量确认。
+- 后端仍需逐条校验，响应返回 `successCount`、`failureCount` 和 `failures[]`。
+- 当前端收到 `failureCount > 0` 时，用 `Alert` 展示“部分订单确认失败”，并在结果区域列出失败订单短号/ID 与失败原因。
+- 成功的订单立即从待确认视图移出或刷新为新状态；失败的订单保留在列表中，便于业务员继续处理。
+- 批量确认按钮在请求中置为 loading，完成后清空选中项。
+
+### 财务确认
+
+付款确认页展示展会、展商、订单、金额、付款方式、状态、提交时间。
+
+确认失败必须填写原因，最多 500 字。失败原因入库并在付款记录中展示。
+
+### 选位审核
+
+选位审核页展示：
+
+- 展会
+- 展商
+- 订单短号
+- 已选展位号列表
+- 总面积
+- 展商备注
+- 锁定到期时间
+
+驳回选位时：
+
+- 驳回原因必填，最多 500 字，显示字数统计
+- 推荐展位可选填写
+- 展商订单详情可看到驳回原因和推荐展位
+
+审核通过、驳回、超时释放都会创建站内通知。
+
+假锁定风险控制：锁位超时释放定时任务每 10 分钟运行一次，因此已过期但尚未释放的假锁定最长约 10 分钟。选位提交和审核仍必须以数据库行级锁和展位状态为准，不能只相信前端展示。
+
+## 后端与数据设计
+
+### 新增 notifications
+
+字段：
+
+- `id`
+- `event_id`
+- `recipient_type`
+- `recipient_id`
+- `title`
+- `content`
+- `type`
+- `read_at`
+- `created_at`
+
+索引与保留策略：
+
+- 必须创建 `idx_notifications_recipient`，字段为 `(recipient_id, created_at desc)`。
+- 通知默认保留 90 天。
+- 后端保留一个可由定时任务调用的清理方法，清理 `created_at < now() - 90 days` 且已读的通知。
+
+接口：
+
+- `GET /api/notifications?recipientId=...`
+- `POST /api/notifications/{id}/read`
+
+### 扩展 payments
+
+新增：
+
+- `failure_reason`
+
+付款失败接口接收：
+
+```json
+{ "reason": "户名不符" }
+```
+
+### 扩展 booth_selections
+
+新增：
+
+- `exhibitor_remark`
+- `recommended_booths`
+
+提交选位可带 `remark`。驳回可带 `reason` 和 `recommendedBooths`。
+
+### 新增 dashboard 聚合接口
+
+`GET /api/admin/dashboard` 返回聚合 DTO，不让前端拉全量订单再计算。
+
+### 新增批量销售确认接口
+
+`POST /api/participation-orders/batch-confirm`
+
+请求：
+
+```json
+{ "orderIds": ["..."] }
+```
+
+响应返回成功数量、失败数量和失败原因列表。
+
+### 自动超时释放
+
+后端定时任务每 10 分钟扫描：
+
+- `booth_selection.status = PENDING_REVIEW`
+- `lock_expires_at < now()`
+
+对命中的申请执行与人工超时释放一致的事务逻辑：
+
+- 选位申请置为 `TIMEOUT`
+- 展位释放为 `AVAILABLE`
+- 锁记录置为 `EXPIRED`
+- 选位资格恢复为 `AVAILABLE`
+- 写审计日志
+- 写站内通知
 
 ## 测试策略
 
-- 单元测试：
-  - `useIsMobile` 相关纯函数或断点 helper。
-  - 订单卡片展示模型。
-  - 付款方式中文展示。
-  - 已选展位列表取消逻辑。
-- 构建验证：
-  - `npm test -- display pageLogic responsive mobile`
-  - `npm run build`
-- 后端回归：
-  - `mvn test`，使用外部 PostgreSQL 测试 schema。
-- 视觉验证：
-  - 375px 宽度打开 `/exhibitor`、`/exhibitor/orders`、`/exhibitor/orders/new`、付款页、选位页。
-  - 不出现“请在电脑端访问展商系统”。
-  - 不出现横向滚动作为核心操作路径。
+### 前端
 
-## 风险与后续
+- 响应式 helper 测试。
+- 移动订单卡片 view model 测试。
+- 付款方式中文标签测试。
+- 已选展位取消列表测试。
+- 通知列表展示模型测试。
+- `npm run build` 必须通过。
 
-- 当前没有真实展商名称 API，只能继续显示“演示展商”或短 ID 兜底。
-- 当前没有展区字典 API，分区字段仍不能完整下拉化。
-- 如果展位数量达到几百个，移动端展位列表需要增加搜索、筛选、分页或虚拟列表；本轮先保证基础可用。
-- 独立 H5 工程与 `antd-mobile` 更适合生产最终态，但应在核心业务闭环稳定后单独立项。
+### 后端
+
+- dashboard 聚合接口测试。
+- 批量销售确认测试。
+- 付款失败原因入库测试。
+- 选位备注、驳回原因、推荐展位测试。
+- 通知创建和查询测试。
+- 自动超时释放任务测试。
+- `mvn test` 必须通过。
+
+### 浏览器验证
+
+375px 宽度验证：
+
+- `/exhibitor` 不出现“请在电脑端访问展商系统”
+- `/exhibitor` 有参展流程
+- `/exhibitor/orders` 是卡片列表
+- `/exhibitor/orders/new` 是纵向表单
+- `/exhibitor/orders/{orderId}` 是折叠分组并有付款进度
+- `/exhibitor/orders/{orderId}/payment` 显示中文付款方式
+- `/exhibitor/orders/{orderId}/selection` 是列表复选框并有已选展位列表
+- `/exhibitor/notifications` 可查看通知
+
+桌面宽度验证：
+
+- 后台工作台仍是桌面工作台
+- 订单批量确认可用
+- 付款失败原因表单可用
+- 选位驳回字数统计和推荐展位输入可用
