@@ -15,6 +15,11 @@ const ContractListPage = lazy(() => import('../pages/admin/contracts/ContractLis
 const PaymentConfirmPage = lazy(() => import('../pages/admin/payments/PaymentConfirmPage'));
 const SelectionReviewPage = lazy(() => import('../pages/admin/selections/SelectionReviewPage'));
 const ExhibitorHomePage = lazy(() => import('../pages/exhibitor/HomePage'));
+const OrderCreatePage = lazy(() => import('../pages/exhibitor/orders/OrderCreatePage'));
+const MyOrdersPage = lazy(() => import('../pages/exhibitor/orders/MyOrdersPage'));
+const PaymentSubmitPage = lazy(() => import('../pages/exhibitor/payments/PaymentSubmitPage'));
+const BoothSelectionPage = lazy(() => import('../pages/exhibitor/selections/BoothSelectionPage'));
+const SelectionResultPage = lazy(() => import('../pages/exhibitor/selections/SelectionResultPage'));
 
 function lazyPage(node: JSX.Element) {
   return <Suspense fallback={<Spin fullscreen />}>{node}</Suspense>;
@@ -40,6 +45,13 @@ export const routes: RouteObject[] = [
   {
     path: '/exhibitor',
     element: <ExhibitorLayout />,
-    children: [{ index: true, element: lazyPage(<ExhibitorHomePage />) }],
+    children: [
+      { index: true, element: lazyPage(<ExhibitorHomePage />) },
+      { path: 'orders/new', element: lazyPage(<OrderCreatePage />) },
+      { path: 'orders', element: lazyPage(<MyOrdersPage />) },
+      { path: 'payments/new', element: lazyPage(<PaymentSubmitPage />) },
+      { path: 'selections/new', element: lazyPage(<BoothSelectionPage />) },
+      { path: 'selections', element: lazyPage(<SelectionResultPage />) },
+    ],
   },
 ];
