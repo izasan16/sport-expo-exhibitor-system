@@ -1,14 +1,15 @@
 import { CopyOutlined } from '@ant-design/icons';
 import { PageContainer, ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Empty, message, Result, Skeleton, Space, Statistic, Steps, Tabs, Tooltip, Typography } from 'antd';
+import { Button, Collapse, Empty, List, message, Result, Skeleton, Space, Statistic, Steps, Tabs, Timeline, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadSelectionEligibility } from '../../../app/apiLoaders';
-import { formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay, type AreaTierLookupSource } from '../../../app/display';
+import { formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay, formatPaymentMethod, type AreaTierLookupSource } from '../../../app/display';
 import type { BoothSelection, ContractRecord, ParticipationOrder, PaymentRecord, SelectionEligibility } from '../../../app/domain';
-import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
+import { formatArea, formatShortId } from '../../../app/formatters';
 import { apiGet } from '../../../app/request';
+import { useIsMobile } from '../../../app/responsive';
 import {
   getContractStatusMeta,
   getEligibilityStatusMeta,
@@ -18,10 +19,11 @@ import {
   StatusTag,
 } from '../../../app/status';
 import { useEvents } from '../../../app/useEvents';
+import { buildHomeFlowSteps, buildMobileTimelineEvents, formatMobileAmount, formatMobileOptional, formatMobileText, formatMobileTime } from '../mobileViewModels';
 import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, isOrderPayable } from '../pageLogic';
 
-function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
-  return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right: T) {
+  return (Date.parse(right.createdAt ?? '') || 0) - (Date.parse(left.createdAt ?? '') || 0);
 }
 
 export default function ExhibitorOrderDetailPage() {
@@ -36,6 +38,7 @@ export default function ExhibitorOrderDetailPage() {
   const [areaTiers, setAreaTiers] = useState<AreaTierLookupSource[]>([]);
   const [loadError, setLoadError] = useState(false);
   const { events } = useEvents();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     let alive = true;
@@ -61,7 +64,9 @@ export default function ExhibitorOrderDetailPage() {
           apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${orderId}`),
           loadSelectionEligibility(orderId),
         ]);
-        const loadedAreaTiers = await apiGet<AreaTierLookupSource[]>(`/api/area-tiers?eventId=${encodeURIComponent(loadedOrder.eventId)}`);
+        const loadedAreaTiers = loadedOrder.eventId
+          ? await apiGet<AreaTierLookupSource[]>(`/api/area-tiers?eventId=${encodeURIComponent(loadedOrder.eventId)}`)
+          : [];
 
         if (!alive) return;
         setOrder(loadedOrder);
@@ -97,24 +102,28 @@ export default function ExhibitorOrderDetailPage() {
     latestSelectionStatus: latestSelection?.status,
   });
   const canChooseBooth = order?.status === 'PAID' && eligibility?.status === 'AVAILABLE';
+  const timelineEvents = useMemo(
+    () => buildMobileTimelineEvents({ order, payments, selections, contracts }),
+    [contracts, order, payments, selections],
+  );
 
   const basicColumns = useMemo<ProDescriptionsItemProps<ParticipationOrder>[]>(
     () => [
       { title: '订单 ID', dataIndex: 'id', copyable: true, ellipsis: true },
-      { title: '展会', dataIndex: 'eventId', render: (_, record) => formatEventDisplay(record.eventId, events) },
-      { title: '展商', dataIndex: 'exhibitorId', render: (_, record) => formatExhibitorDisplay(record.exhibitorId) },
+      { title: '展会', dataIndex: 'eventId', render: (_, record) => (record.eventId ? formatEventDisplay(record.eventId, events) : '未填写') },
+      { title: '展商', dataIndex: 'exhibitorId', render: (_, record) => (record.exhibitorId ? formatExhibitorDisplay(record.exhibitorId) : '未填写') },
       { title: '展区/分区', dataIndex: 'zoneId', renderText: (value) => value || '不限分区' },
-      { title: '面积档位', dataIndex: 'areaTierId', render: (_, record) => formatAreaTierDisplay(record.areaTierId, areaTiers) },
-      { title: '展位类型', dataIndex: 'boothType' },
+      { title: '面积档位', dataIndex: 'areaTierId', render: (_, record) => (record.areaTierId ? formatAreaTierDisplay(record.areaTierId, areaTiers) : '未填写') },
+      { title: '展位类型', dataIndex: 'boothType', render: (_, record) => formatMobileText(record.boothType) },
       { title: '面积', dataIndex: 'areaSqm', render: (_, record) => formatArea(record.areaSqm) },
-      { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={getOrderStatusMeta(record.status)} /> },
-      { title: '面积费', dataIndex: 'areaFee', render: (_, record) => formatMoney(record.areaFee) },
-      { title: '服务费', dataIndex: 'serviceFee', render: (_, record) => formatMoney(record.serviceFee) },
-      { title: '优惠金额', dataIndex: 'discountAmount', render: (_, record) => formatMoney(record.discountAmount) },
-      { title: '调整金额', dataIndex: 'adjustmentAmount', render: (_, record) => formatMoney(record.adjustmentAmount) },
-      { title: '总金额', dataIndex: 'totalAmount', render: (_, record) => formatMoney(record.totalAmount) },
-      { title: '创建时间', dataIndex: 'createdAt', render: (_, record) => formatFriendlyTime(record.createdAt) },
-      { title: '更新时间', dataIndex: 'updatedAt', render: (_, record) => formatFriendlyTime(record.updatedAt) },
+      { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={record.status ? getOrderStatusMeta(record.status) : { label: '未填写', color: 'default' }} /> },
+      { title: '面积费', dataIndex: 'areaFee', render: (_, record) => formatMobileAmount(record.areaFee) },
+      { title: '服务费', dataIndex: 'serviceFee', render: (_, record) => formatMobileAmount(record.serviceFee) },
+      { title: '优惠金额', dataIndex: 'discountAmount', render: (_, record) => formatMobileAmount(record.discountAmount) },
+      { title: '调整金额', dataIndex: 'adjustmentAmount', render: (_, record) => formatMobileAmount(record.adjustmentAmount) },
+      { title: '总金额', dataIndex: 'totalAmount', render: (_, record) => formatMobileAmount(record.totalAmount) },
+      { title: '创建时间', dataIndex: 'createdAt', render: (_, record) => formatMobileTime(record.createdAt) },
+      { title: '更新时间', dataIndex: 'updatedAt', render: (_, record) => formatMobileTime(record.updatedAt) },
     ],
     [areaTiers, events],
   );
@@ -129,23 +138,23 @@ export default function ExhibitorOrderDetailPage() {
     {
       title: '金额',
       dataIndex: 'amount',
-      render: (_, record) => formatMoney(record.amount),
+      render: (_, record) => formatMobileAmount(record.amount),
     },
-    { title: '方式', dataIndex: 'method' },
+    { title: '方式', dataIndex: 'method', render: (_, record) => formatPaymentMethod(record.method) },
     {
       title: '状态',
       dataIndex: 'status',
-      render: (_, record) => <StatusTag meta={getPaymentStatusMeta(record.status)} />,
+      render: (_, record) => <StatusTag meta={record.status ? getPaymentStatusMeta(record.status) : { label: '未填写', color: 'default' }} />,
     },
     {
       title: '提交时间',
       dataIndex: 'createdAt',
-      render: (_, record) => formatFriendlyTime(record.createdAt),
+      render: (_, record) => formatMobileTime(record.createdAt),
     },
     {
       title: '确认时间',
       dataIndex: 'confirmedAt',
-      render: (_, record) => formatFriendlyTime(record.confirmedAt),
+      render: (_, record) => formatMobileTime(record.confirmedAt),
     },
   ];
 
@@ -159,7 +168,7 @@ export default function ExhibitorOrderDetailPage() {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (_, record) => <StatusTag meta={getSelectionStatusMeta(record.status)} />,
+      render: (_, record) => <StatusTag meta={record.status ? getSelectionStatusMeta(record.status) : { label: '未填写', color: 'default' }} />,
     },
     {
       title: '面积',
@@ -174,12 +183,12 @@ export default function ExhibitorOrderDetailPage() {
     {
       title: '提交时间',
       dataIndex: 'createdAt',
-      render: (_, record) => formatFriendlyTime(record.createdAt),
+      render: (_, record) => formatMobileTime(record.createdAt),
     },
     {
       title: '审核时间',
       dataIndex: 'reviewedAt',
-      render: (_, record) => formatFriendlyTime(record.reviewedAt),
+      render: (_, record) => formatMobileTime(record.reviewedAt),
     },
   ];
 
@@ -226,6 +235,159 @@ export default function ExhibitorOrderDetailPage() {
     );
   }
 
+  const orderStatusMeta = order.status ? getOrderStatusMeta(order.status) : { label: '未填写', color: 'default' };
+  const eventDisplay = order.eventId ? formatEventDisplay(order.eventId, events) : '未填写';
+  const exhibitorDisplay = order.exhibitorId ? formatExhibitorDisplay(order.exhibitorId) : '未填写';
+
+  if (isMobile) {
+    return (
+      <PageContainer
+        title={`订单 ${formatShortId(order.id)}`}
+        extra={[
+          <Tooltip key="next" title={nextAction.reason}>
+            <Button type="primary" disabled={nextAction.disabled} onClick={() => navigate(nextAction.to)}>
+              {nextAction.label}
+            </Button>
+          </Tooltip>,
+        ]}
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <ProCard>
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <StatusTag meta={orderStatusMeta} />
+              <Typography.Text>{eventDisplay}</Typography.Text>
+              <Typography.Text type="secondary">
+                {formatArea(order.areaSqm)} · {formatMobileText(order.boothType)} · {formatMobileAmount(order.totalAmount)}
+              </Typography.Text>
+            </Space>
+          </ProCard>
+
+          <ProCard title="参展进度">
+            <Steps current={getOrderStepIndex(order.status)} direction="vertical" items={buildHomeFlowSteps()} />
+          </ProCard>
+
+          <Collapse
+            defaultActiveKey={['basic', 'timeline']}
+            items={[
+              {
+                key: 'basic',
+                label: '基本信息',
+                children: (
+                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                    <Typography.Text>订单 ID：{formatMobileText(order.id)}</Typography.Text>
+                    <Typography.Text>展会：{eventDisplay}</Typography.Text>
+                    <Typography.Text>展商：{exhibitorDisplay}</Typography.Text>
+                    <Typography.Text>展区/分区：{order.zoneId ? formatShortId(order.zoneId) : '不限分区'}</Typography.Text>
+                    <Typography.Text>面积档位：{order.areaTierId ? formatAreaTierDisplay(order.areaTierId, areaTiers) : '未填写'}</Typography.Text>
+                    <Typography.Text>展位类型：{formatMobileText(order.boothType)}</Typography.Text>
+                    <Typography.Text>面积：{formatArea(order.areaSqm)}</Typography.Text>
+                    <Typography.Text>总金额：{formatMobileAmount(order.totalAmount)}</Typography.Text>
+                    <Typography.Text type="secondary">创建时间：{formatMobileTime(order.createdAt)}</Typography.Text>
+                    <Typography.Text type="secondary">更新时间：{formatMobileTime(order.updatedAt)}</Typography.Text>
+                  </Space>
+                ),
+              },
+              {
+                key: 'contracts',
+                label: '合同信息',
+                children: contracts.length ? (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    {contracts.map((contract) => (
+                      <ProCard
+                        key={contract.id}
+                        title={formatMobileText(contract.contractNo)}
+                        extra={<StatusTag meta={contract.status ? getContractStatusMeta(contract.status) : { label: '未填写', color: 'default' }} />}
+                      >
+                        <Space direction="vertical" size={6}>
+                          <Typography.Text>合同 ID：{formatMobileText(contract.id)}</Typography.Text>
+                          <Typography.Text>当前版本：{formatMobileOptional(contract.currentVersionId)}</Typography.Text>
+                          <Typography.Text type="secondary">创建时间：{formatMobileTime(contract.createdAt)}</Typography.Text>
+                          <Typography.Text type="secondary">更新时间：{formatMobileTime(contract.updatedAt)}</Typography.Text>
+                        </Space>
+                      </ProCard>
+                    ))}
+                  </Space>
+                ) : (
+                  <Empty description="暂无" />
+                ),
+              },
+              {
+                key: 'payments',
+                label: '付款记录',
+                children: payments.length ? (
+                  <List<PaymentRecord>
+                    dataSource={payments}
+                    renderItem={(payment) => {
+                      const failureReason = (payment as PaymentRecord & { failureReason?: string | null }).failureReason;
+                      return (
+                        <List.Item style={{ paddingInline: 0 }}>
+                          <ProCard title={`付款 ${formatShortId(payment.id)}`}>
+                            <Space direction="vertical" size={6}>
+                              <Typography.Text>金额：{formatMobileAmount(payment.amount)}</Typography.Text>
+                              <Typography.Text>方式：{formatPaymentMethod(payment.method)}</Typography.Text>
+                              <StatusTag meta={payment.status ? getPaymentStatusMeta(payment.status) : { label: '未填写', color: 'default' }} />
+                              <Typography.Text type="secondary">提交时间：{formatMobileTime(payment.createdAt)}</Typography.Text>
+                              <Typography.Text type="secondary">确认时间：{formatMobileTime(payment.confirmedAt)}</Typography.Text>
+                              {payment.status === 'CONFIRM_FAILED' ? (
+                                <Typography.Text type="danger">
+                                  失败原因：{failureReason?.trim() ? failureReason : '暂无失败原因'}
+                                </Typography.Text>
+                              ) : null}
+                            </Space>
+                          </ProCard>
+                        </List.Item>
+                      );
+                    }}
+                  />
+                ) : (
+                  <Empty description="暂无" />
+                ),
+              },
+              {
+                key: 'selections',
+                label: '选位记录',
+                children: selections.length ? (
+                  <List<BoothSelection>
+                    dataSource={selections}
+                    renderItem={(selection) => (
+                      <List.Item style={{ paddingInline: 0 }}>
+                        <ProCard title={`选位 ${formatShortId(selection.id)}`}>
+                          <Space direction="vertical" size={6}>
+                            <StatusTag meta={selection.status ? getSelectionStatusMeta(selection.status) : { label: '未填写', color: 'default' }} />
+                            <Typography.Text>面积：{formatArea(selection.totalAreaSqm)}</Typography.Text>
+                            <Typography.Text>展位数：{selection.boothIds?.length ?? 0} 个</Typography.Text>
+                            <Typography.Text type="secondary">提交时间：{formatMobileTime(selection.createdAt)}</Typography.Text>
+                            <Typography.Text type="secondary">审核时间：{formatMobileTime(selection.reviewedAt)}</Typography.Text>
+                          </Space>
+                        </ProCard>
+                      </List.Item>
+                    )}
+                  />
+                ) : (
+                  <Empty description="暂无" />
+                ),
+              },
+              {
+                key: 'timeline',
+                label: '业务进度',
+                children: timelineEvents.length ? (
+                  <Timeline
+                    items={timelineEvents.map((event) => ({
+                      key: event.key,
+                      children: `${event.title}：${event.timeDisplay}`,
+                    }))}
+                  />
+                ) : (
+                  <Empty description="暂无" />
+                ),
+              },
+            ]}
+          />
+        </Space>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer
       title={`订单 ${formatShortId(order.id)}`}
@@ -251,31 +413,24 @@ export default function ExhibitorOrderDetailPage() {
           <ProCard>
             <Space direction="vertical" size={8}>
               <Typography.Text type="secondary">订单状态</Typography.Text>
-              <StatusTag meta={getOrderStatusMeta(order.status)} />
+              <StatusTag meta={orderStatusMeta} />
             </Space>
           </ProCard>
           <ProCard>
             <Statistic title="面积" value={formatArea(order.areaSqm)} />
           </ProCard>
           <ProCard>
-            <Statistic title="展位类型" value={order.boothType} />
+            <Statistic title="展位类型" value={formatMobileText(order.boothType)} />
           </ProCard>
           <ProCard>
-            <Statistic title="订单金额" value={formatMoney(order.totalAmount)} />
+            <Statistic title="订单金额" value={formatMobileAmount(order.totalAmount)} />
           </ProCard>
         </ProCard>
 
         <ProCard title="参展进度">
           <Steps
             current={getOrderStepIndex(order.status)}
-            items={[
-              { title: '下单' },
-              { title: '销售确认' },
-              { title: '合同' },
-              { title: '付款' },
-              { title: '选位' },
-              { title: '完成' },
-            ]}
+            items={buildHomeFlowSteps()}
           />
         </ProCard>
 
@@ -295,14 +450,14 @@ export default function ExhibitorOrderDetailPage() {
                     {contracts.map((contract) => (
                       <ProCard
                         key={contract.id}
-                        title={contract.contractNo}
-                        extra={<StatusTag meta={getContractStatusMeta(contract.status)} />}
+                        title={formatMobileText(contract.contractNo)}
+                        extra={<StatusTag meta={contract.status ? getContractStatusMeta(contract.status) : { label: '未填写', color: 'default' }} />}
                       >
                         <Space direction="vertical" size={8}>
-                          <Typography.Text type="secondary">合同 ID：{contract.id}</Typography.Text>
-                          <Typography.Text>当前版本：{contract.currentVersionId ?? '-'}</Typography.Text>
-                          <Typography.Text>创建时间：{formatFriendlyTime(contract.createdAt)}</Typography.Text>
-                          <Typography.Text>更新时间：{formatFriendlyTime(contract.updatedAt)}</Typography.Text>
+                          <Typography.Text type="secondary">合同 ID：{formatMobileText(contract.id)}</Typography.Text>
+                          <Typography.Text>当前版本：{formatMobileOptional(contract.currentVersionId)}</Typography.Text>
+                          <Typography.Text>创建时间：{formatMobileTime(contract.createdAt)}</Typography.Text>
+                          <Typography.Text>更新时间：{formatMobileTime(contract.updatedAt)}</Typography.Text>
                         </Space>
                       </ProCard>
                     ))}

@@ -1,12 +1,15 @@
 import { PageContainer, ProCard, ProDescriptions, ProForm, ProFormDigit, ProFormSelect, ProTable } from '@ant-design/pro-components';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, message, Result, Skeleton, Space, Statistic } from 'antd';
+import { Button, Empty, List, message, Result, Skeleton, Space, Statistic, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { formatPaymentMethod } from '../../../app/display';
 import type { ParticipationOrder, PaymentRecord } from '../../../app/domain';
-import { formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
+import { formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
+import { useIsMobile } from '../../../app/responsive';
 import { getOrderStatusMeta, getPaymentStatusMeta, StatusTag } from '../../../app/status';
+import { formatMobileAmount, formatMobileText, formatMobileTime } from '../mobileViewModels';
 import { getExhibitorLoadErrorCopy, isOrderPayable } from '../pageLogic';
 
 type PaymentValues = {
@@ -19,8 +22,12 @@ type PaymentResponse = {
   status: string;
 };
 
-function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
-  return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+type PaymentRecordWithFailure = PaymentRecord & {
+  failureReason?: string | null;
+};
+
+function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right: T) {
+  return (Date.parse(right.createdAt ?? '') || 0) - (Date.parse(left.createdAt ?? '') || 0);
 }
 
 function hasAtMostTwoDecimals(value: unknown) {
@@ -32,9 +39,10 @@ export default function PaymentSubmitPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const orderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(Boolean(orderId));
   const [order, setOrder] = useState<ParticipationOrder>();
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [payments, setPayments] = useState<PaymentRecordWithFailure[]>([]);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
@@ -53,7 +61,7 @@ export default function PaymentSubmitPage() {
       try {
         const [loadedOrder, loadedPayments] = await Promise.all([
           apiGet<ParticipationOrder>(`/api/participation-orders/${orderId}`),
-          apiGet<PaymentRecord[]>(`/api/payments?orderId=${orderId}`),
+          apiGet<PaymentRecordWithFailure[]>(`/api/payments?orderId=${orderId}`),
         ]);
 
         if (!alive) return;
@@ -78,14 +86,14 @@ export default function PaymentSubmitPage() {
   const orderColumns = useMemo<ProDescriptionsItemProps<ParticipationOrder>[]>(
     () => [
       { title: '订单', dataIndex: 'id', render: (_, record) => `订单 ${formatShortId(record.id)}` },
-      { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={getOrderStatusMeta(record.status)} /> },
-      { title: '展位类型', dataIndex: 'boothType' },
-      { title: '总金额', dataIndex: 'totalAmount', render: (_, record) => formatMoney(record.totalAmount) },
+      { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={record.status ? getOrderStatusMeta(record.status) : { label: '未填写', color: 'default' }} /> },
+      { title: '展位类型', dataIndex: 'boothType', render: (_, record) => formatMobileText(record.boothType) },
+      { title: '总金额', dataIndex: 'totalAmount', render: (_, record) => formatMobileAmount(record.totalAmount) },
     ],
     [],
   );
 
-  const paymentColumns: ProColumns<PaymentRecord>[] = [
+  const paymentColumns: ProColumns<PaymentRecordWithFailure>[] = [
     {
       title: '付款',
       dataIndex: 'id',
@@ -95,19 +103,24 @@ export default function PaymentSubmitPage() {
     {
       title: '金额',
       dataIndex: 'amount',
-      render: (_, record) => formatMoney(record.amount),
+      render: (_, record) => formatMobileAmount(record.amount),
     },
-    { title: '方式', dataIndex: 'method' },
+    { title: '方式', dataIndex: 'method', render: (_, record) => formatPaymentMethod(record.method) },
     {
       title: '状态',
       dataIndex: 'status',
-      render: (_, record) => <StatusTag meta={getPaymentStatusMeta(record.status)} />,
+      render: (_, record) => <StatusTag meta={record.status ? getPaymentStatusMeta(record.status) : { label: '未填写', color: 'default' }} />,
     },
     {
       title: '提交时间',
       dataIndex: 'createdAt',
-      render: (_, record) => formatFriendlyTime(record.createdAt),
+      render: (_, record) => formatMobileTime(record.createdAt),
     },
+  ];
+  const paymentMethodOptions = [
+    { label: '银行转账', value: 'OFFLINE_TRANSFER' },
+    { label: '现金', value: 'OFFLINE_CASH' },
+    { label: '支票', value: 'OFFLINE_CHECK' },
   ];
 
   if (!orderId) {
@@ -203,7 +216,7 @@ export default function PaymentSubmitPage() {
             <ProDescriptions<ParticipationOrder> column={2} dataSource={order} columns={orderColumns} />
           </ProCard>
           <ProCard>
-            <Statistic title="待提交订单金额" value={formatMoney(order.totalAmount)} />
+            <Statistic title="待提交订单金额" value={formatMobileAmount(order.totalAmount)} />
           </ProCard>
         </ProCard>
 
@@ -245,21 +258,45 @@ export default function PaymentSubmitPage() {
               label="付款方式"
               initialValue="OFFLINE_TRANSFER"
               rules={[{ required: true, message: '请选择付款方式' }]}
-              options={[{ label: 'OFFLINE_TRANSFER', value: 'OFFLINE_TRANSFER' }]}
+              options={paymentMethodOptions}
             />
           </ProForm>
         </ProCard>
 
         <ProCard title="已有付款记录">
-          <ProTable<PaymentRecord>
-            rowKey="id"
-            search={false}
-            options={false}
-            pagination={false}
-            columns={paymentColumns}
-            dataSource={payments}
-            locale={{ emptyText: '暂无付款记录' }}
-          />
+          {isMobile ? (
+            <List<PaymentRecordWithFailure>
+              dataSource={payments}
+              locale={{ emptyText: <Empty description="暂无付款记录" /> }}
+              renderItem={(payment) => (
+                <List.Item style={{ paddingInline: 0 }}>
+                  <ProCard title={`付款 ${formatShortId(payment.id)}`}>
+                    <Space direction="vertical" size={6}>
+                      <Typography.Text>金额：{formatMobileAmount(payment.amount)}</Typography.Text>
+                      <Typography.Text>方式：{formatPaymentMethod(payment.method)}</Typography.Text>
+                      <StatusTag meta={payment.status ? getPaymentStatusMeta(payment.status) : { label: '未填写', color: 'default' }} />
+                      <Typography.Text type="secondary">提交时间：{formatMobileTime(payment.createdAt)}</Typography.Text>
+                      {payment.status === 'CONFIRM_FAILED' ? (
+                        <Typography.Text type="danger">
+                          失败原因：{payment.failureReason?.trim() ? payment.failureReason : '暂无失败原因'}
+                        </Typography.Text>
+                      ) : null}
+                    </Space>
+                  </ProCard>
+                </List.Item>
+              )}
+            />
+          ) : (
+            <ProTable<PaymentRecordWithFailure>
+              rowKey="id"
+              search={false}
+              options={false}
+              pagination={false}
+              columns={paymentColumns}
+              dataSource={payments}
+              locale={{ emptyText: '暂无付款记录' }}
+            />
+          )}
         </ProCard>
       </Space>
     </PageContainer>

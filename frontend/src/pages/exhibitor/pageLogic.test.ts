@@ -67,10 +67,11 @@ describe('exhibitor page logic', () => {
     });
   });
 
-  it('builds the public booth selection submit body without exhibitorId', () => {
-    expect(buildBoothSelectionBody('order-1', ['booth-2', 'booth-1'])).toEqual({
+  it('builds the public booth selection submit body with remark and without exhibitorId', () => {
+    expect(buildBoothSelectionBody('order-1', ['booth-2', 'booth-1'], '靠近主通道')).toEqual({
       orderId: 'order-1',
       boothIds: ['booth-2', 'booth-1'],
+      remark: '靠近主通道',
     });
   });
 

@@ -8,6 +8,7 @@ export default function ExhibitorLayout() {
     { key: '/exhibitor', label: '首页' },
     { key: '/exhibitor/orders/new', label: '我要参展' },
     { key: '/exhibitor/orders', label: '我的订单' },
+    { key: '/exhibitor/notifications', label: '通知中心' },
   ];
   const selectedKey =
     menuItems

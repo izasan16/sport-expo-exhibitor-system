@@ -4,6 +4,7 @@ import { Button, Empty, message, Result, Skeleton, Space } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost } from '../../../app/request';
+import { useIsMobile } from '../../../app/responsive';
 import { buildAreaTierOptions, buildOrderCreateBody, getExhibitorLoadErrorCopy, type BoothType } from '../pageLogic';
 
 type OrderCreateValues = {
@@ -36,6 +37,7 @@ type CreatedOrder = {
 
 export default function OrderCreatePage() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const formRef = useRef<ProFormInstance<OrderCreateValues>>();
   const [loading, setLoading] = useState(true);
   const [loadingTiers, setLoadingTiers] = useState(false);
@@ -150,9 +152,16 @@ export default function OrderCreatePage() {
     <PageContainer title="我要下单">
       <ProForm<OrderCreateValues>
         formRef={formRef}
-        layout="horizontal"
+        layout={isMobile ? 'vertical' : 'horizontal'}
         initialValues={{ eventId: selectedEventId, boothType: 'STANDARD' }}
-        submitter={{ searchConfig: { submitText: '提交订单' } }}
+        submitter={{
+          searchConfig: { submitText: '提交订单' },
+          render: (_, doms) => (
+            isMobile
+              ? [<Button key="submit" type="primary" htmlType="submit" block>提交订单</Button>]
+              : doms
+          ),
+        }}
         onFinish={async (values) => {
           const selectedTier = areaTiers.find((tier) => tier.id === values.areaTierId);
           const created = await apiPost<CreatedOrder>('/api/participation-orders', buildOrderCreateBody({

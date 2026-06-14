@@ -3,19 +3,23 @@ import { Button, Empty, Result, Skeleton, Space, Statistic, Steps, Typography } 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../app/demoActors';
+import { formatEventDisplay } from '../../app/display';
 import type { BoothSelection, PaymentRecord, ParticipationOrder, SelectionEligibility } from '../../app/domain';
-import { formatArea, formatMoney, formatShortId } from '../../app/formatters';
+import { formatArea, formatShortId } from '../../app/formatters';
 import { loadSelectionEligibility } from '../../app/apiLoaders';
 import { apiGet } from '../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
+import { useEvents } from '../../app/useEvents';
+import { buildHomeFlowSteps, formatMobileAmount, formatMobileText, formatMobileTime } from './mobileViewModels';
 import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, pickLatestActiveOrder } from './pageLogic';
 
-function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
-  return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right: T) {
+  return (Date.parse(right.createdAt ?? '') || 0) - (Date.parse(left.createdAt ?? '') || 0);
 }
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { events } = useEvents();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<ParticipationOrder[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -25,6 +29,8 @@ export default function HomePage() {
 
   const activeOrder = pickLatestActiveOrder(orders);
   const latestSelection = selections[0];
+  const orderStatusMeta = activeOrder?.status ? getOrderStatusMeta(activeOrder.status) : { label: '未填写', color: 'default' };
+  const activeOrderEvent = activeOrder?.eventId ? formatEventDisplay(activeOrder.eventId, events) : '未填写';
   const nextAction = getOrderNextAction({
     order: activeOrder,
     eligibilityStatus: eligibility?.status,
@@ -98,11 +104,19 @@ export default function HomePage() {
   if (!activeOrder) {
     return (
       <PageContainer title="首页">
-        <ProCard>
-          <Empty description="您还没有参展订单">
-            <Button type="primary" onClick={() => navigate('/exhibitor/orders/new')}>我要参展</Button>
-          </Empty>
-        </ProCard>
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <ProCard title="参展流程">
+            <Steps
+              current={0}
+              items={buildHomeFlowSteps()}
+            />
+          </ProCard>
+          <ProCard>
+            <Empty description="您还没有参展订单">
+              <Button type="primary" onClick={() => navigate('/exhibitor/orders/new')}>我要参展</Button>
+            </Empty>
+          </ProCard>
+        </Space>
       </PageContainer>
     );
   }
@@ -113,28 +127,22 @@ export default function HomePage() {
         <ProCard split="vertical">
           <ProCard title={`订单 ${formatShortId(activeOrder.id)}`}>
             <Space direction="vertical" size={12}>
-              <StatusTag meta={getOrderStatusMeta(activeOrder.status)} />
-              <Typography.Text>面积 {formatArea(activeOrder.areaSqm)} · {activeOrder.boothType}</Typography.Text>
+              <StatusTag meta={orderStatusMeta} />
+              <Typography.Text>展会 {formatMobileText(activeOrderEvent)}</Typography.Text>
+              <Typography.Text>面积 {formatArea(activeOrder.areaSqm)} · {formatMobileText(activeOrder.boothType)}</Typography.Text>
               <Button type="primary" disabled={nextAction.disabled} onClick={() => navigate(nextAction.to)}>
                 {nextAction.label}
               </Button>
             </Space>
           </ProCard>
           <ProCard>
-            <Statistic title="订单金额" value={formatMoney(activeOrder.totalAmount)} />
+            <Statistic title="订单金额" value={formatMobileAmount(activeOrder.totalAmount)} />
           </ProCard>
         </ProCard>
         <ProCard title="参展进度">
           <Steps
             current={getOrderStepIndex(activeOrder.status)}
-            items={[
-              { title: '下单' },
-              { title: '销售确认' },
-              { title: '合同' },
-              { title: '付款' },
-              { title: '选位' },
-              { title: '完成' },
-            ]}
+            items={buildHomeFlowSteps()}
           />
         </ProCard>
         <ProCard split="vertical">
@@ -144,8 +152,15 @@ export default function HomePage() {
               dataSource={payments.slice(0, 3)}
               locale={{ emptyText: '暂无付款记录' }}
               metas={{
-                title: { render: (_, record) => formatMoney(record.amount) },
-                description: { render: (_, record) => <StatusTag meta={getPaymentStatusMeta(record.status)} /> },
+                title: { render: (_, record) => formatMobileAmount(record.amount) },
+                description: {
+                  render: (_, record) => (
+                    <Space>
+                      <StatusTag meta={record.status ? getPaymentStatusMeta(record.status) : { label: '未填写', color: 'default' }} />
+                      <Typography.Text type="secondary">{formatMobileTime(record.createdAt)}</Typography.Text>
+                    </Space>
+                  ),
+                },
               }}
             />
           </ProCard>
@@ -156,7 +171,14 @@ export default function HomePage() {
               locale={{ emptyText: '暂无选位记录' }}
               metas={{
                 title: { render: (_, record) => `选位 ${formatShortId(record.id)}` },
-                description: { render: (_, record) => <StatusTag meta={getSelectionStatusMeta(record.status)} /> },
+                description: {
+                  render: (_, record) => (
+                    <Space>
+                      <StatusTag meta={record.status ? getSelectionStatusMeta(record.status) : { label: '未填写', color: 'default' }} />
+                      <Typography.Text type="secondary">{formatMobileTime(record.createdAt)}</Typography.Text>
+                    </Space>
+                  ),
+                },
               }}
             />
           </ProCard>

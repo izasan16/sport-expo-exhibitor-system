@@ -24,6 +24,7 @@ const ExhibitorOrderDetailPage = lazy(
 );
 const PaymentSubmitPage = lazy(() => import('../pages/exhibitor/payments/PaymentSubmitPage'));
 const BoothSelectionPage = lazy(() => import('../pages/exhibitor/selections/BoothSelectionPage'));
+const NotificationCenterPage = lazy(() => import('../pages/exhibitor/notifications/NotificationCenterPage'));
 
 function lazyPage(node: JSX.Element) {
   return <Suspense fallback={<Spin fullscreen />}>{node}</Suspense>;
@@ -58,6 +59,7 @@ export const routes: RouteObject[] = [
       { path: 'orders/:orderId', element: lazyPage(<ExhibitorOrderDetailPage />) },
       { path: 'orders/:orderId/payment', element: lazyPage(<PaymentSubmitPage />) },
       { path: 'orders/:orderId/selection', element: lazyPage(<BoothSelectionPage />) },
+      { path: 'notifications', element: lazyPage(<NotificationCenterPage />) },
       { path: 'payments/new', element: <RedirectWithOrderId target="payment" /> },
       { path: 'selections/new', element: <RedirectWithOrderId target="selection" /> },
       { path: 'selections', element: <RedirectWithOrderId target="detail" /> },

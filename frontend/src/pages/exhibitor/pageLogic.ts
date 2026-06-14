@@ -100,8 +100,8 @@ export function compareAreaToOrder(selectedAreas: Array<string | number>, orderA
   };
 }
 
-export function buildBoothSelectionBody(orderId: string, boothIds: string[]) {
-  return { orderId, boothIds };
+export function buildBoothSelectionBody(orderId: string, boothIds: string[], remark = '') {
+  return { orderId, boothIds, remark };
 }
 
 export function filterBoothsForOrderType<T extends { boothType: string }>(
