@@ -58,5 +58,23 @@ export function compareAreaToOrder(selectedAreas: Array<string | number>, orderA
 }
 
 export function buildBoothSelectionBody(orderId: string, boothIds: string[]) {
-  return { orderId, exhibitorId: DEMO_EXHIBITOR_ID, boothIds };
+  return { orderId, boothIds };
+}
+
+export function filterBoothsForOrderType<T extends { boothType: string }>(
+  booths: T[],
+  order: { boothType: string },
+): T[] {
+  return booths.filter((booth) => booth.boothType === order.boothType);
+}
+
+export type BoothSelectionSubmitState = {
+  loading: boolean;
+  hasOrder: boolean;
+  areaMatches: boolean;
+  selectedCount: number;
+};
+
+export function canSubmitBoothSelection(state: BoothSelectionSubmitState) {
+  return !state.loading && state.hasOrder && state.areaMatches && state.selectedCount > 0;
 }

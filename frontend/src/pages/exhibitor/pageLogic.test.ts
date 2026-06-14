@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBoothSelectionBody,
   buildOrderCreateBody,
+  canSubmitBoothSelection,
   compareAreaToOrder,
+  filterBoothsForOrderType,
   isOrderPayable,
   isOrderSelectable,
 } from './pageLogic';
@@ -55,11 +57,31 @@ describe('exhibitor page logic', () => {
     });
   });
 
-  it('includes exhibitorId in booth selection submit body', () => {
+  it('builds the public booth selection submit body without exhibitorId', () => {
     expect(buildBoothSelectionBody('order-1', ['booth-2', 'booth-1'])).toEqual({
       orderId: 'order-1',
-      exhibitorId: DEMO_EXHIBITOR_ID,
       boothIds: ['booth-2', 'booth-1'],
     });
+  });
+
+  it('filters available booths to the matched order booth type', () => {
+    const booths = [
+      { id: 'booth-1', boothType: 'STANDARD' },
+      { id: 'booth-2', boothType: 'CUSTOM' },
+      { id: 'booth-3', boothType: 'STANDARD' },
+    ];
+
+    expect(filterBoothsForOrderType(booths, { boothType: 'STANDARD' })).toEqual([
+      { id: 'booth-1', boothType: 'STANDARD' },
+      { id: 'booth-3', boothType: 'STANDARD' },
+    ]);
+  });
+
+  it('prevents booth selection submit while loading or otherwise invalid', () => {
+    expect(canSubmitBoothSelection({ loading: true, hasOrder: true, areaMatches: true, selectedCount: 1 })).toBe(false);
+    expect(canSubmitBoothSelection({ loading: false, hasOrder: false, areaMatches: true, selectedCount: 1 })).toBe(false);
+    expect(canSubmitBoothSelection({ loading: false, hasOrder: true, areaMatches: false, selectedCount: 1 })).toBe(false);
+    expect(canSubmitBoothSelection({ loading: false, hasOrder: true, areaMatches: true, selectedCount: 0 })).toBe(false);
+    expect(canSubmitBoothSelection({ loading: false, hasOrder: true, areaMatches: true, selectedCount: 1 })).toBe(true);
   });
 });

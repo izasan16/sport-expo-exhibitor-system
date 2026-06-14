@@ -5,7 +5,12 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
 import { apiGet, apiPost } from '../../../app/request';
-import { buildBoothSelectionBody, compareAreaToOrder } from '../pageLogic';
+import {
+  buildBoothSelectionBody,
+  canSubmitBoothSelection,
+  compareAreaToOrder,
+  filterBoothsForOrderType,
+} from '../pageLogic';
 
 type OrderRow = {
   id: string;
@@ -51,6 +56,12 @@ export default function BoothSelectionPage() {
     [order?.areaSqm, selectedBooths],
   );
   const showAreaAlert = order && selectedRowKeys.length > 0 && !areaComparison.matches;
+  const canSubmit = canSubmitBoothSelection({
+    loading,
+    hasOrder: Boolean(order),
+    areaMatches: areaComparison.matches,
+    selectedCount: selectedRowKeys.length,
+  });
 
   const columns: ProColumns<BoothRow>[] = [
     { title: '展位号', dataIndex: 'boothNo' },
@@ -60,6 +71,9 @@ export default function BoothSelectionPage() {
   ];
 
   async function loadOrderAndBooths(values: LoadValues) {
+    setOrder(undefined);
+    setBooths([]);
+    setSelectedRowKeys([]);
     setLoading(true);
     try {
       const orders = await apiGet<OrderRow[]>(`/api/participation-orders?exhibitorId=${DEMO_EXHIBITOR_ID}`);
@@ -76,7 +90,7 @@ export default function BoothSelectionPage() {
         `/api/booths?eventId=${encodeURIComponent(matchedOrder.eventId)}&status=AVAILABLE`,
       );
       setOrder(matchedOrder);
-      setBooths(availableBooths);
+      setBooths(filterBoothsForOrderType(availableBooths, matchedOrder));
       setSelectedRowKeys([]);
       return true;
     } finally {
@@ -85,7 +99,7 @@ export default function BoothSelectionPage() {
   }
 
   async function submitSelection() {
-    if (!order || !areaComparison.matches) {
+    if (!order || !canSubmit) {
       return;
     }
 
@@ -142,7 +156,7 @@ export default function BoothSelectionPage() {
             <Button
               key="submit"
               type="primary"
-              disabled={!order || !areaComparison.matches || selectedRowKeys.length === 0}
+              disabled={!canSubmit}
               loading={submitting}
               onClick={submitSelection}
             >
