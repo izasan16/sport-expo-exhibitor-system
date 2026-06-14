@@ -10,6 +10,7 @@ import {
   isOrderPayable,
   isOrderSelectable,
   pickLatestActiveOrder,
+  sortBoothsForMap,
 } from './pageLogic';
 import type { ParticipationOrder } from '../../app/domain';
 import { DEMO_EXHIBITOR_ID } from '../../app/demoActors';
@@ -80,6 +81,16 @@ describe('exhibitor page logic', () => {
     expect(filterBoothsForOrderType(booths, { boothType: 'STANDARD' })).toEqual([
       { id: 'booth-1', boothType: 'STANDARD' },
       { id: 'booth-3', boothType: 'STANDARD' },
+    ]);
+  });
+
+  it('sorts booths by booth number for the simplified map', () => {
+    expect(sortBoothsForMap([
+      { id: '2', boothNo: 'A010' },
+      { id: '1', boothNo: 'A002' },
+    ])).toEqual([
+      { id: '1', boothNo: 'A002' },
+      { id: '2', boothNo: 'A010' },
     ]);
   });
 

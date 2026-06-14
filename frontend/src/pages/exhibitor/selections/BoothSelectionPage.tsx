@@ -1,53 +1,74 @@
-import { PageContainer, ProForm, ProFormText, ProTable } from '@ant-design/pro-components';
+import { PageContainer, ProTable } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Alert, Button, message, Space, Statistic } from 'antd';
-import { useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
+import { Alert, Button, message, Modal, Result, Skeleton, Space, Statistic } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import type { Key } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import type { Booth, ParticipationOrder } from '../../../app/domain';
+import { formatArea } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import {
   buildBoothSelectionBody,
   canSubmitBoothSelection,
   compareAreaToOrder,
   filterBoothsForOrderType,
+  sortBoothsForMap,
 } from '../pageLogic';
-
-type OrderRow = {
-  id: string;
-  eventId: string;
-  areaSqm: number | string;
-  boothType: string;
-  status: string;
-};
-
-type BoothRow = {
-  id: string;
-  eventId: string;
-  boothNo: string;
-  areaSqm: number | string;
-  boothType: string;
-  status: string;
-};
 
 type SelectionResponse = {
   id: string;
   status: string;
 };
 
-type LoadValues = {
-  orderId: string;
-};
-
 export default function BoothSelectionPage() {
   const { orderId: orderIdParam } = useParams();
   const [searchParams] = useSearchParams();
-  const initialOrderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
-  const [order, setOrder] = useState<OrderRow>();
-  const [booths, setBooths] = useState<BoothRow[]>([]);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const orderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
+  const [order, setOrder] = useState<ParticipationOrder>();
+  const [booths, setBooths] = useState<Booth[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [loading, setLoading] = useState(Boolean(orderId));
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    let alive = true;
+
+    async function loadOrderAndBooths() {
+      if (!orderId) {
+        setOrder(undefined);
+        setBooths([]);
+        setSelectedRowKeys([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setOrder(undefined);
+      setBooths([]);
+      setSelectedRowKeys([]);
+
+      try {
+        const loadedOrder = await apiGet<ParticipationOrder>(`/api/participation-orders/${encodeURIComponent(orderId)}`);
+        const availableBooths = await apiGet<Booth[]>(
+          `/api/booths?eventId=${encodeURIComponent(loadedOrder.eventId)}&status=AVAILABLE`,
+        );
+
+        if (!alive) return;
+        setOrder(loadedOrder);
+        setBooths(filterBoothsForOrderType(availableBooths, loadedOrder));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    loadOrderAndBooths();
+    return () => {
+      alive = false;
+    };
+  }, [orderId]);
+
+  const sortedBooths = useMemo(() => sortBoothsForMap(booths), [booths]);
   const selectedBooths = useMemo(
     () => booths.filter((booth) => selectedRowKeys.includes(booth.id)),
     [booths, selectedRowKeys],
@@ -64,70 +85,85 @@ export default function BoothSelectionPage() {
     selectedCount: selectedRowKeys.length,
   });
 
-  const columns: ProColumns<BoothRow>[] = [
+  const columns: ProColumns<Booth>[] = [
     { title: '展位号', dataIndex: 'boothNo' },
-    { title: '面积', dataIndex: 'areaSqm', valueType: 'digit' },
+    { title: '面积', dataIndex: 'areaSqm', render: (_, record) => formatArea(record.areaSqm) },
     { title: '展位类型', dataIndex: 'boothType' },
     { title: '状态', dataIndex: 'status' },
   ];
 
-  async function loadOrderAndBooths(values: LoadValues) {
-    setOrder(undefined);
-    setBooths([]);
-    setSelectedRowKeys([]);
-    setLoading(true);
-    try {
-      const orders = await apiGet<OrderRow[]>(`/api/participation-orders?exhibitorId=${DEMO_EXHIBITOR_ID}`);
-      const matchedOrder = orders.find((item) => item.id === values.orderId);
-      if (!matchedOrder) {
-        message.error('未找到当前展商的订单');
-        setOrder(undefined);
-        setBooths([]);
-        setSelectedRowKeys([]);
-        return false;
-      }
-
-      const availableBooths = await apiGet<BoothRow[]>(
-        `/api/booths?eventId=${encodeURIComponent(matchedOrder.eventId)}&status=AVAILABLE`,
-      );
-      setOrder(matchedOrder);
-      setBooths(filterBoothsForOrderType(availableBooths, matchedOrder));
-      setSelectedRowKeys([]);
-      return true;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function submitSelection() {
+  function submitSelection() {
     if (!order || !canSubmit) {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const selection = await apiPost<SelectionResponse>(
-        '/api/booth-selections',
-        buildBoothSelectionBody(order.id, selectedRowKeys.map(String)),
-      );
-      message.success(`选位 ${selection.id} 已提交，状态：${selection.status}`);
-    } finally {
-      setSubmitting(false);
-    }
+    const boothIds = selectedRowKeys.map(String);
+    Modal.confirm({
+      title: '确认提交选位',
+      content: `将提交 ${boothIds.length} 个展位，合计 ${areaComparison.selectedFixed} ㎡。提交后将进入审核流程。`,
+      okText: '确认提交',
+      cancelText: '再看看',
+      onOk: async () => {
+        setSubmitting(true);
+        try {
+          const selection = await apiPost<SelectionResponse>(
+            '/api/booth-selections',
+            buildBoothSelectionBody(order.id, boothIds),
+          );
+          message.success(`选位 ${selection.id} 已提交，状态：${selection.status}`);
+          navigate(`/exhibitor/orders/${order.id}`);
+        } finally {
+          setSubmitting(false);
+        }
+      },
+    });
+  }
+
+  if (!orderId) {
+    return (
+      <PageContainer title="选择展位">
+        <Result
+          status="warning"
+          title="缺少订单 ID"
+          subTitle="请从订单详情页进入展位选择。"
+          extra={
+            <Button type="primary" onClick={() => navigate('/exhibitor/orders')}>
+              返回我的订单
+            </Button>
+          }
+        />
+      </PageContainer>
+    );
+  }
+
+  if (loading) {
+    return (
+      <PageContainer title="选择展位">
+        <Skeleton active paragraph={{ rows: 8 }} />
+      </PageContainer>
+    );
+  }
+
+  if (!order) {
+    return (
+      <PageContainer title="选择展位">
+        <Result
+          status="404"
+          title="未找到订单"
+          subTitle="请返回订单列表后重新选择。"
+          extra={
+            <Button type="primary" onClick={() => navigate('/exhibitor/orders')}>
+              返回我的订单
+            </Button>
+          }
+        />
+      </PageContainer>
+    );
   }
 
   return (
     <PageContainer title="选择展位">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <ProForm<LoadValues>
-          layout="horizontal"
-          initialValues={{ orderId: initialOrderId }}
-          submitter={{ searchConfig: { submitText: '加载可选展位' } }}
-          onFinish={loadOrderAndBooths}
-        >
-          <ProFormText name="orderId" label="订单 ID" rules={[{ required: true, message: '请输入订单 ID' }]} />
-        </ProForm>
-
         <Space size={32} wrap>
           <Statistic title="订单面积" value={areaComparison.orderDisplay} precision={2} suffix="㎡" />
           <Statistic title="已选面积" value={areaComparison.selectedDisplay} precision={2} suffix="㎡" />
@@ -143,12 +179,36 @@ export default function BoothSelectionPage() {
           />
         ) : null}
 
-        <ProTable<BoothRow>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8 }}>
+          {sortBoothsForMap(booths).map((booth) => {
+            const selected = selectedRowKeys.includes(booth.id);
+            return (
+              <Button
+                key={booth.id}
+                title={`${booth.boothNo} / ${formatArea(booth.areaSqm)}`}
+                type={selected ? 'primary' : 'default'}
+                onClick={() => {
+                  setSelectedRowKeys((current) =>
+                    current.includes(booth.id)
+                      ? current.filter((key) => key !== booth.id)
+                      : [...current, booth.id],
+                  );
+                }}
+                style={{ minHeight: 72, whiteSpace: 'normal', overflow: 'hidden' }}
+              >
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booth.boothNo}</div>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatArea(booth.areaSqm)}</div>
+              </Button>
+            );
+          })}
+        </div>
+
+        <ProTable<Booth>
           rowKey="id"
           search={false}
           loading={loading}
           columns={columns}
-          dataSource={booths}
+          dataSource={sortedBooths}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,

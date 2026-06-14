@@ -69,6 +69,10 @@ export function filterBoothsForOrderType<T extends { boothType: string }>(
   return booths.filter((booth) => booth.boothType === order.boothType);
 }
 
+export function sortBoothsForMap<T extends { boothNo: string }>(booths: T[]) {
+  return [...booths].sort((left, right) => left.boothNo.localeCompare(right.boothNo, 'zh-CN', { numeric: true }));
+}
+
 export type BoothSelectionSubmitState = {
   loading: boolean;
   hasOrder: boolean;
