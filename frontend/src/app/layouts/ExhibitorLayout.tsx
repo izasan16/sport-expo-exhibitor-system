@@ -5,12 +5,9 @@ export default function ExhibitorLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const menuItems = [
-    { key: '/exhibitor', label: '展商首页' },
-    { key: '/exhibitor/orders/new', label: '我要下单' },
+    { key: '/exhibitor', label: '首页' },
+    { key: '/exhibitor/orders/new', label: '我要参展' },
     { key: '/exhibitor/orders', label: '我的订单' },
-    { key: '/exhibitor/payments/new', label: '提交付款' },
-    { key: '/exhibitor/selections/new', label: '选择展位' },
-    { key: '/exhibitor/selections', label: '选位结果' },
   ];
   const selectedKey =
     menuItems
