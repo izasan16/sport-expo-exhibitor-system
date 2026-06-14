@@ -1,4 +1,5 @@
 import { DEMO_EXHIBITOR_ID } from '../../app/demoActors';
+import type { EligibilityStatus, OrderStatus, ParticipationOrder, SelectionStatus } from '../../app/domain';
 
 export type BoothType = 'STANDARD' | 'CUSTOM';
 
@@ -77,4 +78,47 @@ export type BoothSelectionSubmitState = {
 
 export function canSubmitBoothSelection(state: BoothSelectionSubmitState) {
   return !state.loading && state.hasOrder && state.areaMatches && state.selectedCount > 0;
+}
+
+export function getOrderStepIndex(status: OrderStatus | string) {
+  if (status === 'PENDING_SALES_CONFIRM') return 1;
+  if (status === 'PENDING_CONTRACT') return 2;
+  if (status === 'PENDING_PAYMENT' || status === 'PARTIALLY_PAID') return 3;
+  if (status === 'PAID') return 4;
+  if (status === 'COMPLETED') return 5;
+  return 0;
+}
+
+export function pickLatestActiveOrder(orders: ParticipationOrder[]) {
+  const byCreatedDesc = [...orders].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  return byCreatedDesc.find((order) => order.status !== 'COMPLETED') ?? byCreatedDesc[0];
+}
+
+export type OrderNextActionInput = {
+  order?: ParticipationOrder;
+  eligibilityStatus?: EligibilityStatus;
+  latestSelectionStatus?: SelectionStatus;
+};
+
+export function getOrderNextAction(input: OrderNextActionInput) {
+  const { order, eligibilityStatus, latestSelectionStatus } = input;
+  if (!order) {
+    return { label: '创建参展订单', to: '/exhibitor/orders/new', disabled: false, reason: '' };
+  }
+  if (order.status === 'PENDING_SALES_CONFIRM') {
+    return { label: '等待销售确认', to: `/exhibitor/orders/${order.id}`, disabled: true, reason: '销售确认后才能继续' };
+  }
+  if (isOrderPayable(order.status)) {
+    return { label: '提交付款', to: `/exhibitor/orders/${order.id}/payment`, disabled: false, reason: '' };
+  }
+  if (order.status === 'PAID' && eligibilityStatus === 'AVAILABLE') {
+    return { label: '选择展位', to: `/exhibitor/orders/${order.id}/selection`, disabled: false, reason: '' };
+  }
+  if (latestSelectionStatus === 'PENDING_REVIEW') {
+    return { label: '等待管理员审核', to: `/exhibitor/orders/${order.id}`, disabled: true, reason: '选位申请正在审核' };
+  }
+  if (latestSelectionStatus === 'CONFIRMED') {
+    return { label: '查看选位结果', to: `/exhibitor/orders/${order.id}`, disabled: false, reason: '' };
+  }
+  return { label: '查看订单', to: `/exhibitor/orders/${order.id}`, disabled: false, reason: '' };
 }
