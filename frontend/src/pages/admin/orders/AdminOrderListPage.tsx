@@ -3,10 +3,13 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, message, Modal, Space } from 'antd';
 import { useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
+import { buildValueEnum, formatEventDisplay, formatExhibitorDisplay } from '../../../app/display';
 import type { ParticipationOrder } from '../../../app/domain';
 import { formatArea, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import { getOrderStatusMeta, StatusTag } from '../../../app/status';
+import { useEvents } from '../../../app/useEvents';
 
 function buildQuery(params: Record<string, unknown>) {
   const searchParams = new URLSearchParams();
@@ -25,6 +28,12 @@ export default function AdminOrderListPage() {
   const [searchParams] = useSearchParams();
   const statusHint = searchParams.get('status') ?? undefined;
   const actionRef = useRef<ActionType>();
+  const { events, eventValueEnum } = useEvents();
+  const exhibitorValueEnum = buildValueEnum([{ label: '演示展商', value: DEMO_EXHIBITOR_ID }]);
+  const statusValueEnum = Object.fromEntries(
+    ['PENDING_SALES_CONFIRM', 'PENDING_CONTRACT', 'PENDING_PAYMENT', 'PARTIALLY_PAID', 'PAID', 'COMPLETED']
+      .map((status) => [status, { text: getOrderStatusMeta(status).label }]),
+  );
 
   const columns: ProColumns<ParticipationOrder>[] = [
     {
@@ -34,11 +43,25 @@ export default function AdminOrderListPage() {
       hideInSearch: true,
       render: (_, record) => formatShortId(record.id),
     },
-    { title: '展会 ID', dataIndex: 'eventId', ellipsis: true },
-    { title: '展商 ID', dataIndex: 'exhibitorId', ellipsis: true },
+    {
+      title: '展会',
+      dataIndex: 'eventId',
+      valueType: 'select',
+      valueEnum: eventValueEnum,
+      render: (_, record) => formatEventDisplay(record.eventId, events),
+    },
+    {
+      title: '展商',
+      dataIndex: 'exhibitorId',
+      valueType: 'select',
+      valueEnum: exhibitorValueEnum,
+      render: (_, record) => formatExhibitorDisplay(record.exhibitorId),
+    },
     {
       title: '状态',
       dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: statusValueEnum,
       render: (_, record) => <StatusTag meta={getOrderStatusMeta(record.status)} />,
     },
     { title: '展位类型', dataIndex: 'boothType', hideInSearch: true },

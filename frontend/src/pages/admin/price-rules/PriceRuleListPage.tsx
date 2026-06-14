@@ -11,7 +11,9 @@ import {
 import type { ActionType } from '@ant-design/pro-components';
 import { Button, message } from 'antd';
 import { useRef } from 'react';
+import { formatEventDisplay } from '../../../app/display';
 import { apiGet, apiPost } from '../../../app/request';
+import { useEvents } from '../../../app/useEvents';
 
 type PriceRuleRow = {
   id: string;
@@ -28,17 +30,24 @@ function removeEmptyValues<T extends Record<string, unknown>>(values: T): T {
 
 export default function PriceRuleListPage() {
   const actionRef = useRef<ActionType>();
+  const { events, eventOptions, eventValueEnum } = useEvents();
 
   return (
     <PageContainer title="价格规则">
       <ProTable<PriceRuleRow>
         actionRef={actionRef}
         rowKey="id"
-        locale={{ emptyText: '请输入展会 ID 查询；若无结果，请配置不同展位类型的每平方米价格' }}
+        locale={{ emptyText: '请选择展会查询；若无结果，请配置不同展位类型的每平方米价格' }}
         search={{ labelWidth: 'auto' }}
         columns={[
-          { title: '展会 ID', dataIndex: 'eventId', hideInTable: true },
-          { title: '分区 ID', dataIndex: 'zoneId', hideInSearch: true },
+          {
+            title: '展会',
+            dataIndex: 'eventId',
+            valueType: 'select',
+            valueEnum: eventValueEnum,
+            render: (_, record) => formatEventDisplay(record.eventId, events),
+          },
+          { title: '分区', dataIndex: 'zoneId', hideInSearch: true, renderText: (value) => value || '不限分区' },
           { title: '展位类型', dataIndex: 'boothType', hideInSearch: true },
           { title: '单价', dataIndex: 'unitPrice', valueType: 'money', hideInSearch: true },
           { title: '启用', dataIndex: 'enabled', valueType: 'switch', hideInSearch: true },
@@ -70,8 +79,8 @@ export default function PriceRuleListPage() {
               return true;
             }}
           >
-            <ProFormText name="eventId" label="展会 ID" rules={[{ required: true, message: '请输入展会 ID' }]} />
-            <ProFormText name="zoneId" label="分区 ID" />
+            <ProFormSelect name="eventId" label="展会" options={eventOptions} rules={[{ required: true, message: '请选择展会' }]} />
+            <ProFormText name="zoneId" label="分区（可选）" placeholder="不限定分区可留空" />
             <ProFormSelect
               name="boothType"
               label="展位类型"

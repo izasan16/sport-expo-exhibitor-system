@@ -228,31 +228,8 @@ export default function BoothSelectionPage() {
           />
         ) : null}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8 }}>
-          {sortedBooths.map((booth) => {
-            const selected = selectedRowKeys.includes(booth.id);
-            return (
-              <Button
-                key={booth.id}
-                title={`${booth.boothNo} / ${formatArea(booth.areaSqm)}`}
-                type={selected ? 'primary' : 'default'}
-                onClick={() => {
-                  setSelectedRowKeys((current) =>
-                    current.includes(booth.id)
-                      ? current.filter((key) => key !== booth.id)
-                      : [...current, booth.id],
-                  );
-                }}
-                style={{ minHeight: 72, whiteSpace: 'normal', overflow: 'hidden' }}
-              >
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booth.boothNo}</div>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatArea(booth.areaSqm)}</div>
-              </Button>
-            );
-          })}
-        </div>
-
         <ProTable<Booth>
+          headerTitle="可选展位"
           rowKey="id"
           search={false}
           loading={loading}

@@ -1,5 +1,5 @@
 import { PageContainer, ProCard, ProList } from '@ant-design/pro-components';
-import { Button, Empty, Skeleton, Space, Statistic, Steps, Typography } from 'antd';
+import { Button, Empty, Result, Skeleton, Space, Statistic, Steps, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../app/demoActors';
@@ -8,7 +8,7 @@ import { formatArea, formatMoney, formatShortId } from '../../app/formatters';
 import { loadSelectionEligibility } from '../../app/apiLoaders';
 import { apiGet } from '../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
-import { getOrderNextAction, getOrderStepIndex, pickLatestActiveOrder } from './pageLogic';
+import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, pickLatestActiveOrder } from './pageLogic';
 
 function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
   return Date.parse(right.createdAt) - Date.parse(left.createdAt);
@@ -21,6 +21,7 @@ export default function HomePage() {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [selections, setSelections] = useState<BoothSelection[]>([]);
   const [eligibility, setEligibility] = useState<SelectionEligibility>();
+  const [loadError, setLoadError] = useState(false);
 
   const activeOrder = pickLatestActiveOrder(orders);
   const latestSelection = selections[0];
@@ -34,6 +35,7 @@ export default function HomePage() {
     let alive = true;
     async function load() {
       setLoading(true);
+      setLoadError(false);
       try {
         const loadedOrders = await apiGet<ParticipationOrder[]>(`/api/participation-orders?exhibitorId=${DEMO_EXHIBITOR_ID}`);
         if (!alive) return;
@@ -54,6 +56,13 @@ export default function HomePage() {
         setPayments([...loadedPayments].sort(byCreatedAtDesc));
         setSelections([...loadedSelections].sort(byCreatedAtDesc));
         setEligibility(loadedEligibility);
+      } catch {
+        if (!alive) return;
+        setOrders([]);
+        setPayments([]);
+        setSelections([]);
+        setEligibility(undefined);
+        setLoadError(true);
       } finally {
         if (alive) setLoading(false);
       }
@@ -66,6 +75,22 @@ export default function HomePage() {
     return (
       <PageContainer title="首页">
         <Skeleton active paragraph={{ rows: 8 }} />
+      </PageContainer>
+    );
+  }
+
+  if (loadError) {
+    const copy = getExhibitorLoadErrorCopy('home');
+    return (
+      <PageContainer title="首页">
+        <ProCard>
+          <Result
+            status="error"
+            title={copy.title}
+            subTitle={copy.subTitle}
+            extra={<Button type="primary" onClick={() => window.location.reload()}>{copy.actionText}</Button>}
+          />
+        </ProCard>
       </PageContainer>
     );
   }

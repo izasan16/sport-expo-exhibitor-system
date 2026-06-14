@@ -4,16 +4,19 @@ import { Button, message, Space } from 'antd';
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
+import { formatEventDisplay } from '../../../app/display';
 import type { ParticipationOrder } from '../../../app/domain';
 import { formatArea, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet } from '../../../app/request';
 import { getOrderStatusMeta, StatusTag } from '../../../app/status';
+import { useEvents } from '../../../app/useEvents';
 import { getOrderNextAction } from '../pageLogic';
 
 export default function MyOrdersPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const messageShownRef = useRef(false);
+  const { events } = useEvents();
 
   useEffect(() => {
     const state = location.state as { message?: string } | null;
@@ -30,7 +33,7 @@ export default function MyOrdersPage() {
       ellipsis: true,
       render: (_, record) => formatShortId(record.id),
     },
-    { title: '展会 ID', dataIndex: 'eventId', ellipsis: true },
+    { title: '展会', dataIndex: 'eventId', render: (_, record) => formatEventDisplay(record.eventId, events) },
     {
       title: '面积',
       dataIndex: 'areaSqm',

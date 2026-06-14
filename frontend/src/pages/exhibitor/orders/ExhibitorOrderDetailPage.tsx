@@ -1,10 +1,11 @@
 import { CopyOutlined } from '@ant-design/icons';
 import { PageContainer, ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Empty, message, Skeleton, Space, Statistic, Steps, Tabs, Tooltip, Typography } from 'antd';
+import { Button, Empty, message, Result, Skeleton, Space, Statistic, Steps, Tabs, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadSelectionEligibility } from '../../../app/apiLoaders';
+import { formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay, type AreaTierLookupSource } from '../../../app/display';
 import type { BoothSelection, ContractRecord, ParticipationOrder, PaymentRecord, SelectionEligibility } from '../../../app/domain';
 import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet } from '../../../app/request';
@@ -16,7 +17,8 @@ import {
   getSelectionStatusMeta,
   StatusTag,
 } from '../../../app/status';
-import { getOrderNextAction, getOrderStepIndex, isOrderPayable } from '../pageLogic';
+import { useEvents } from '../../../app/useEvents';
+import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, isOrderPayable } from '../pageLogic';
 
 function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
   return Date.parse(right.createdAt) - Date.parse(left.createdAt);
@@ -31,6 +33,9 @@ export default function ExhibitorOrderDetailPage() {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [selections, setSelections] = useState<BoothSelection[]>([]);
   const [eligibility, setEligibility] = useState<SelectionEligibility>();
+  const [areaTiers, setAreaTiers] = useState<AreaTierLookupSource[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const { events } = useEvents();
 
   useEffect(() => {
     let alive = true;
@@ -47,6 +52,7 @@ export default function ExhibitorOrderDetailPage() {
       }
 
       setLoading(true);
+      setLoadError(false);
       try {
         const [loadedOrder, loadedContracts, loadedPayments, loadedSelections, loadedEligibility] = await Promise.all([
           apiGet<ParticipationOrder>(`/api/participation-orders/${orderId}`),
@@ -55,6 +61,7 @@ export default function ExhibitorOrderDetailPage() {
           apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${orderId}`),
           loadSelectionEligibility(orderId),
         ]);
+        const loadedAreaTiers = await apiGet<AreaTierLookupSource[]>(`/api/area-tiers?eventId=${encodeURIComponent(loadedOrder.eventId)}`);
 
         if (!alive) return;
         setOrder(loadedOrder);
@@ -62,6 +69,16 @@ export default function ExhibitorOrderDetailPage() {
         setPayments([...loadedPayments].sort(byCreatedAtDesc));
         setSelections([...loadedSelections].sort(byCreatedAtDesc));
         setEligibility(loadedEligibility);
+        setAreaTiers(loadedAreaTiers);
+      } catch {
+        if (!alive) return;
+        setOrder(undefined);
+        setContracts([]);
+        setPayments([]);
+        setSelections([]);
+        setEligibility(undefined);
+        setAreaTiers([]);
+        setLoadError(true);
       } finally {
         if (alive) setLoading(false);
       }
@@ -84,10 +101,10 @@ export default function ExhibitorOrderDetailPage() {
   const basicColumns = useMemo<ProDescriptionsItemProps<ParticipationOrder>[]>(
     () => [
       { title: '订单 ID', dataIndex: 'id', copyable: true, ellipsis: true },
-      { title: '展会 ID', dataIndex: 'eventId', ellipsis: true },
-      { title: '展商 ID', dataIndex: 'exhibitorId', ellipsis: true },
-      { title: '展区 ID', dataIndex: 'zoneId', renderText: (value) => value || '-' },
-      { title: '面积档位', dataIndex: 'areaTierId', ellipsis: true },
+      { title: '展会', dataIndex: 'eventId', render: (_, record) => formatEventDisplay(record.eventId, events) },
+      { title: '展商', dataIndex: 'exhibitorId', render: (_, record) => formatExhibitorDisplay(record.exhibitorId) },
+      { title: '展区/分区', dataIndex: 'zoneId', renderText: (value) => value || '不限分区' },
+      { title: '面积档位', dataIndex: 'areaTierId', render: (_, record) => formatAreaTierDisplay(record.areaTierId, areaTiers) },
       { title: '展位类型', dataIndex: 'boothType' },
       { title: '面积', dataIndex: 'areaSqm', render: (_, record) => formatArea(record.areaSqm) },
       { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={getOrderStatusMeta(record.status)} /> },
@@ -99,7 +116,7 @@ export default function ExhibitorOrderDetailPage() {
       { title: '创建时间', dataIndex: 'createdAt', render: (_, record) => formatFriendlyTime(record.createdAt) },
       { title: '更新时间', dataIndex: 'updatedAt', render: (_, record) => formatFriendlyTime(record.updatedAt) },
     ],
-    [],
+    [areaTiers, events],
   );
 
   const paymentColumns: ProColumns<PaymentRecord>[] = [
@@ -170,6 +187,27 @@ export default function ExhibitorOrderDetailPage() {
     return (
       <PageContainer title="订单详情">
         <Skeleton active paragraph={{ rows: 10 }} />
+      </PageContainer>
+    );
+  }
+
+  if (loadError) {
+    const copy = getExhibitorLoadErrorCopy('detail');
+    return (
+      <PageContainer title="订单详情">
+        <ProCard>
+          <Result
+            status="error"
+            title={copy.title}
+            subTitle={copy.subTitle}
+            extra={
+              <Space>
+                <Button onClick={() => navigate('/exhibitor/orders')}>返回我的订单</Button>
+                <Button type="primary" onClick={() => window.location.reload()}>{copy.actionText}</Button>
+              </Space>
+            }
+          />
+        </ProCard>
       </PageContainer>
     );
   }

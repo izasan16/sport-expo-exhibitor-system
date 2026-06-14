@@ -2,9 +2,11 @@ import { ModalForm, PageContainer, ProFormText, ProTable } from '@ant-design/pro
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, message, Modal, Space } from 'antd';
 import { useRef, useState } from 'react';
+import { formatEventDisplay, formatExhibitorDisplay } from '../../../app/display';
 import { formatArea, formatFriendlyTime, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import { getSelectionStatusMeta, StatusTag } from '../../../app/status';
+import { useEvents } from '../../../app/useEvents';
 
 type SelectionRow = {
   id: string;
@@ -27,10 +29,12 @@ export default function SelectionReviewPage() {
   const actionRef = useRef<ActionType>();
   const [loadingId, setLoadingId] = useState<string>();
   const [rejectLoadingId, setRejectLoadingId] = useState<string>();
+  const { events } = useEvents();
 
   const columns: ProColumns<SelectionRow>[] = [
+    { title: '展会', dataIndex: 'eventId', render: (_, record) => formatEventDisplay(record.eventId, events) },
     { title: '订单', dataIndex: 'orderId', ellipsis: true, render: (_, record) => formatShortId(record.orderId) },
-    { title: '展商', dataIndex: 'exhibitorId', ellipsis: true, render: (_, record) => formatShortId(record.exhibitorId) },
+    { title: '展商', dataIndex: 'exhibitorId', ellipsis: true, render: (_, record) => formatExhibitorDisplay(record.exhibitorId) },
     {
       title: '状态',
       dataIndex: 'status',

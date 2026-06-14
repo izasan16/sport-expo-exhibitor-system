@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBoothSelectionBody,
+  buildLegacyOrderTarget,
+  buildAreaTierOptions,
   buildOrderCreateBody,
   canSubmitBoothSelection,
   compareAreaToOrder,
   filterBoothsForOrderType,
+  getExhibitorLoadErrorCopy,
   getOrderNextAction,
   getOrderStepIndex,
   isOrderPayable,
@@ -69,6 +72,36 @@ describe('exhibitor page logic', () => {
       orderId: 'order-1',
       boothIds: ['booth-2', 'booth-1'],
     });
+  });
+
+  it('keeps legacy order routes compatible with the productized order pages', () => {
+    expect(buildLegacyOrderTarget('payment', 'order-1')).toBe('/exhibitor/orders/order-1/payment');
+    expect(buildLegacyOrderTarget('selection', 'order-1')).toBe('/exhibitor/orders/order-1/selection');
+    expect(buildLegacyOrderTarget('detail', 'order-1')).toBe('/exhibitor/orders/order-1');
+  });
+
+  it('returns explicit load failure copy instead of empty-state copy', () => {
+    expect(getExhibitorLoadErrorCopy('home')).toMatchObject({
+      title: '首页数据加载失败',
+      actionText: '重新加载',
+    });
+    expect(getExhibitorLoadErrorCopy('payment')).toMatchObject({
+      title: '付款数据加载失败',
+      actionText: '重新加载',
+    });
+  });
+
+  it('builds enabled area tier options for the selected event', () => {
+    const options = buildAreaTierOptions(
+      [
+        { id: 'tier-1', eventId: 'event-1', areaSqm: '18.00', enabled: true },
+        { id: 'tier-2', eventId: 'event-1', areaSqm: '36.00', enabled: false },
+        { id: 'tier-3', eventId: 'event-2', areaSqm: '9.00', enabled: true },
+      ],
+      'event-1',
+    );
+
+    expect(options).toEqual([{ label: '18.00 ㎡', value: 'tier-1' }]);
   });
 
   it('filters available booths to the matched order booth type', () => {

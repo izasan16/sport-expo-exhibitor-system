@@ -3,7 +3,9 @@ import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, Pro
 import type { ActionType } from '@ant-design/pro-components';
 import { Button, message } from 'antd';
 import { useRef } from 'react';
+import { formatEventDisplay } from '../../../app/display';
 import { apiGet, apiPost } from '../../../app/request';
+import { useEvents } from '../../../app/useEvents';
 
 type BoothRow = {
   id: string;
@@ -16,16 +18,23 @@ type BoothRow = {
 
 export default function BoothListPage() {
   const actionRef = useRef<ActionType>();
+  const { events, eventOptions, eventValueEnum } = useEvents();
 
   return (
     <PageContainer title="展位管理">
       <ProTable<BoothRow>
         actionRef={actionRef}
         rowKey="id"
-        locale={{ emptyText: '请输入展会 ID 查询；若无结果，请先创建展位' }}
+        locale={{ emptyText: '请选择展会查询；若无结果，请先创建展位' }}
         search={{ labelWidth: 'auto' }}
         columns={[
-          { title: '展会 ID', dataIndex: 'eventId', hideInTable: true },
+          {
+            title: '展会',
+            dataIndex: 'eventId',
+            valueType: 'select',
+            valueEnum: eventValueEnum,
+            render: (_, record) => formatEventDisplay(record.eventId, events),
+          },
           { title: '展位号', dataIndex: 'boothNo' },
           { title: '面积', dataIndex: 'areaSqm', valueType: 'digit' },
           { title: '类型', dataIndex: 'boothType' },
@@ -57,7 +66,7 @@ export default function BoothListPage() {
               return true;
             }}
           >
-            <ProFormText name="eventId" label="展会 ID" rules={[{ required: true, message: '请输入展会 ID' }]} />
+            <ProFormSelect name="eventId" label="展会" options={eventOptions} rules={[{ required: true, message: '请选择展会' }]} />
             <ProFormText name="boothNo" label="展位号" rules={[{ required: true, message: '请输入展位号' }]} />
             <ProFormDigit name="areaSqm" label="面积" min={0.01} rules={[{ required: true, message: '请输入面积' }]} />
             <ProFormSelect

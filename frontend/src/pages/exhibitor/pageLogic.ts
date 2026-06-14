@@ -2,6 +2,7 @@ import { DEMO_EXHIBITOR_ID } from '../../app/demoActors';
 import type { EligibilityStatus, OrderStatus, ParticipationOrder, SelectionStatus } from '../../app/domain';
 
 export type BoothType = 'STANDARD' | 'CUSTOM';
+export type LegacyOrderTarget = 'payment' | 'selection' | 'detail';
 
 export type OrderCreateValues = {
   eventId: string;
@@ -18,6 +19,47 @@ export function buildOrderCreateBody(values: OrderCreateValues) {
     areaTierId: values.areaTierId,
     boothType: values.boothType,
   };
+}
+
+export function buildLegacyOrderTarget(target: LegacyOrderTarget, orderId: string) {
+  if (target === 'payment') return `/exhibitor/orders/${orderId}/payment`;
+  if (target === 'selection') return `/exhibitor/orders/${orderId}/selection`;
+  return `/exhibitor/orders/${orderId}`;
+}
+
+export type ExhibitorLoadErrorPage = 'home' | 'detail' | 'payment' | 'orderCreate';
+
+export function getExhibitorLoadErrorCopy(page: ExhibitorLoadErrorPage) {
+  const titleByPage: Record<ExhibitorLoadErrorPage, string> = {
+    home: '首页数据加载失败',
+    detail: '订单数据加载失败',
+    payment: '付款数据加载失败',
+    orderCreate: '参展选项加载失败',
+  };
+
+  return {
+    title: titleByPage[page],
+    subTitle: '请检查网络或稍后重试。若多次失败，请联系主办方运营人员。',
+    actionText: '重新加载',
+  };
+}
+
+export type AreaTierOptionSource = {
+  id: string;
+  eventId: string;
+  areaSqm: number | string;
+  enabled: boolean;
+};
+
+export function buildAreaTierOptions(areaTiers: AreaTierOptionSource[], eventId?: string) {
+  if (!eventId) return [];
+  return areaTiers
+    .filter((tier) => tier.eventId === eventId && tier.enabled)
+    .sort((left, right) => toNumber(left.areaSqm) - toNumber(right.areaSqm))
+    .map((tier) => ({
+      label: `${toNumber(tier.areaSqm).toFixed(2)} ㎡`,
+      value: tier.id,
+    }));
 }
 
 export function isOrderPayable(status: string) {

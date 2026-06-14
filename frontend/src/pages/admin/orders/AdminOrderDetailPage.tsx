@@ -3,6 +3,7 @@ import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-compo
 import { Alert, Button, Empty, message, Modal, Result, Skeleton, Space, Statistic, Tabs, Timeline, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay, type AreaTierLookupSource } from '../../../app/display';
 import type { BoothSelection, ContractRecord, ParticipationOrder, PaymentRecord } from '../../../app/domain';
 import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
@@ -13,6 +14,7 @@ import {
   getSelectionStatusMeta,
   StatusTag,
 } from '../../../app/status';
+import { useEvents } from '../../../app/useEvents';
 
 function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
   return Date.parse(right.createdAt) - Date.parse(left.createdAt);
@@ -39,6 +41,8 @@ export default function AdminOrderDetailPage() {
   const [contracts, setContracts] = useState<ContractRecord[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [selections, setSelections] = useState<BoothSelection[]>([]);
+  const [areaTiers, setAreaTiers] = useState<AreaTierLookupSource[]>([]);
+  const { events } = useEvents();
 
   const loadOrderDetail = useCallback(async () => {
     const requestId = requestSeq.current + 1;
@@ -49,6 +53,7 @@ export default function AdminOrderDetailPage() {
       setContracts([]);
       setPayments([]);
       setSelections([]);
+      setAreaTiers([]);
       setRelatedLoadFailed(false);
       setLoading(false);
       return;
@@ -63,20 +68,23 @@ export default function AdminOrderDetailPage() {
 
       setOrder(loadedOrder);
 
-      const [contractsResult, paymentsResult, selectionsResult] = await Promise.allSettled([
+      const [contractsResult, paymentsResult, selectionsResult, areaTiersResult] = await Promise.allSettled([
         apiGet<ContractRecord[]>(`/api/contracts?orderId=${encodedOrderId}`),
         apiGet<PaymentRecord[]>(`/api/payments?orderId=${encodedOrderId}`),
         apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${encodedOrderId}`),
+        apiGet<AreaTierLookupSource[]>(`/api/area-tiers?eventId=${encodeURIComponent(loadedOrder.eventId)}`),
       ] as const);
       if (requestSeq.current !== requestId) return;
 
       setContracts(contractsResult.status === 'fulfilled' ? [...contractsResult.value].sort(byCreatedAtDesc) : []);
       setPayments(paymentsResult.status === 'fulfilled' ? [...paymentsResult.value].sort(byCreatedAtDesc) : []);
       setSelections(selectionsResult.status === 'fulfilled' ? [...selectionsResult.value].sort(byCreatedAtDesc) : []);
+      setAreaTiers(areaTiersResult.status === 'fulfilled' ? areaTiersResult.value : []);
       setRelatedLoadFailed(
         contractsResult.status === 'rejected' ||
           paymentsResult.status === 'rejected' ||
-          selectionsResult.status === 'rejected',
+          selectionsResult.status === 'rejected' ||
+          areaTiersResult.status === 'rejected',
       );
     } catch {
       if (requestSeq.current !== requestId) return;
@@ -84,6 +92,7 @@ export default function AdminOrderDetailPage() {
       setContracts([]);
       setPayments([]);
       setSelections([]);
+      setAreaTiers([]);
       setRelatedLoadFailed(false);
     } finally {
       if (requestSeq.current === requestId) setLoading(false);
@@ -100,10 +109,10 @@ export default function AdminOrderDetailPage() {
   const basicColumns = useMemo<ProDescriptionsItemProps<ParticipationOrder>[]>(
     () => [
       { title: '订单 ID', dataIndex: 'id', copyable: true, ellipsis: true },
-      { title: '展会 ID', dataIndex: 'eventId', ellipsis: true },
-      { title: '展商 ID', dataIndex: 'exhibitorId', ellipsis: true },
-      { title: '展区 ID', dataIndex: 'zoneId', renderText: (value) => value || '-' },
-      { title: '面积档位', dataIndex: 'areaTierId', ellipsis: true },
+      { title: '展会', dataIndex: 'eventId', render: (_, record) => formatEventDisplay(record.eventId, events) },
+      { title: '展商', dataIndex: 'exhibitorId', render: (_, record) => formatExhibitorDisplay(record.exhibitorId) },
+      { title: '展区/分区', dataIndex: 'zoneId', renderText: (value) => value || '不限分区' },
+      { title: '面积档位', dataIndex: 'areaTierId', render: (_, record) => formatAreaTierDisplay(record.areaTierId, areaTiers) },
       { title: '展位类型', dataIndex: 'boothType' },
       { title: '面积', dataIndex: 'areaSqm', render: (_, record) => formatArea(record.areaSqm) },
       { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={getOrderStatusMeta(record.status)} /> },
@@ -115,7 +124,7 @@ export default function AdminOrderDetailPage() {
       { title: '创建时间', dataIndex: 'createdAt', render: (_, record) => formatFriendlyTime(record.createdAt) },
       { title: '更新时间', dataIndex: 'updatedAt', render: (_, record) => formatFriendlyTime(record.updatedAt) },
     ],
-    [],
+    [areaTiers, events],
   );
 
   const contractColumns: ProColumns<ContractRecord>[] = [

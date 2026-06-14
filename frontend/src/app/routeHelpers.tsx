@@ -1,6 +1,7 @@
 import { Navigate, useSearchParams } from 'react-router-dom';
+import { buildLegacyOrderTarget, type LegacyOrderTarget } from '../pages/exhibitor/pageLogic';
 
-export function RedirectWithOrderId({ target }: { target: 'payment' | 'selection' | 'detail' }) {
+export function RedirectWithOrderId({ target }: { target: LegacyOrderTarget }) {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
 
@@ -8,11 +9,5 @@ export function RedirectWithOrderId({ target }: { target: 'payment' | 'selection
     return <Navigate to="/exhibitor/orders" replace state={{ message: '请先选择订单' }} />;
   }
 
-  if (target === 'payment') {
-    return <Navigate to={`/exhibitor/orders/${orderId}/payment`} replace />;
-  }
-  if (target === 'selection') {
-    return <Navigate to={`/exhibitor/orders/${orderId}/selection`} replace />;
-  }
-  return <Navigate to={`/exhibitor/orders/${orderId}`} replace />;
+  return <Navigate to={buildLegacyOrderTarget(target, orderId)} replace />;
 }

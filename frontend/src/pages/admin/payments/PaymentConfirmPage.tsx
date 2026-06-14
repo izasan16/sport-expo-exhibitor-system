@@ -2,9 +2,11 @@ import { PageContainer, ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, message, Modal, Space } from 'antd';
 import { useRef, useState } from 'react';
+import { formatEventDisplay } from '../../../app/display';
 import { formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import { getPaymentStatusMeta, StatusTag } from '../../../app/status';
+import { useEvents } from '../../../app/useEvents';
 
 type PaymentRow = {
   id: string;
@@ -21,10 +23,11 @@ type PaymentRow = {
 export default function PaymentConfirmPage() {
   const actionRef = useRef<ActionType>();
   const [loadingId, setLoadingId] = useState<string>();
+  const { events } = useEvents();
 
   const columns: ProColumns<PaymentRow>[] = [
     { title: '订单', dataIndex: 'orderId', ellipsis: true, render: (_, record) => formatShortId(record.orderId) },
-    { title: '展会', dataIndex: 'eventId', ellipsis: true, render: (_, record) => formatShortId(record.eventId) },
+    { title: '展会', dataIndex: 'eventId', ellipsis: true, render: (_, record) => formatEventDisplay(record.eventId, events) },
     { title: '金额', dataIndex: 'amount', render: (_, record) => formatMoney(record.amount) },
     { title: '方式', dataIndex: 'method' },
     {

@@ -7,7 +7,7 @@ import type { ParticipationOrder, PaymentRecord } from '../../../app/domain';
 import { formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, StatusTag } from '../../../app/status';
-import { isOrderPayable } from '../pageLogic';
+import { getExhibitorLoadErrorCopy, isOrderPayable } from '../pageLogic';
 
 type PaymentValues = {
   amount: number;
@@ -35,6 +35,7 @@ export default function PaymentSubmitPage() {
   const [loading, setLoading] = useState(Boolean(orderId));
   const [order, setOrder] = useState<ParticipationOrder>();
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -48,6 +49,7 @@ export default function PaymentSubmitPage() {
       }
 
       setLoading(true);
+      setLoadError(false);
       try {
         const [loadedOrder, loadedPayments] = await Promise.all([
           apiGet<ParticipationOrder>(`/api/participation-orders/${orderId}`),
@@ -57,6 +59,11 @@ export default function PaymentSubmitPage() {
         if (!alive) return;
         setOrder(loadedOrder);
         setPayments([...loadedPayments].sort(byCreatedAtDesc));
+      } catch {
+        if (!alive) return;
+        setOrder(undefined);
+        setPayments([]);
+        setLoadError(true);
       } finally {
         if (alive) setLoading(false);
       }
@@ -126,6 +133,27 @@ export default function PaymentSubmitPage() {
     return (
       <PageContainer title="提交付款">
         <Skeleton active paragraph={{ rows: 8 }} />
+      </PageContainer>
+    );
+  }
+
+  if (loadError) {
+    const copy = getExhibitorLoadErrorCopy('payment');
+    return (
+      <PageContainer title="提交付款">
+        <ProCard>
+          <Result
+            status="error"
+            title={copy.title}
+            subTitle={copy.subTitle}
+            extra={
+              <Space>
+                <Button onClick={() => navigate('/exhibitor/orders')}>返回我的订单</Button>
+                <Button type="primary" onClick={() => window.location.reload()}>{copy.actionText}</Button>
+              </Space>
+            }
+          />
+        </ProCard>
       </PageContainer>
     );
   }
