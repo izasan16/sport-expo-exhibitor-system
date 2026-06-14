@@ -79,6 +79,25 @@ cd frontend
 npm run build
 ```
 
+## Productized UI routes
+
+Exhibitor:
+
+- `/exhibitor` - home dashboard and next action
+- `/exhibitor/orders/new` - create participation order
+- `/exhibitor/orders` - order list
+- `/exhibitor/orders/{orderId}` - order detail
+- `/exhibitor/orders/{orderId}/payment` - submit payment for one order
+- `/exhibitor/orders/{orderId}/selection` - select booths for one order
+
+Admin:
+
+- `/admin/dashboard` - pending work dashboard
+- `/admin/orders` - order review list
+- `/admin/orders/{orderId}` - order detail
+- `/admin/payments` - payment confirmation
+- `/admin/selections` - booth selection review
+
 ## Second-round business smoke flow
 
 Demo actor IDs used before real authentication lands:
