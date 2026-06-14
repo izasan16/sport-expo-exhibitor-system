@@ -617,7 +617,7 @@ git commit -m "feat: add shared product ui language"
 - Modify: `frontend/src/app/layouts/AdminLayout.tsx`
 - Modify: `frontend/src/app/layouts/ExhibitorLayout.tsx`
 
-- [ ] **Step 1: Create `MobileUnsupported.tsx`**
+- [x] **Step 1: Create `MobileUnsupported.tsx`**
 
 ```tsx
 import { Result } from 'antd';
@@ -650,7 +650,7 @@ export default function MobileUnsupported({ children }: { children: React.ReactN
 }
 ```
 
-- [ ] **Step 2: Wrap the app with desktop guard**
+- [x] **Step 2: Wrap the app with desktop guard**
 
 In `App.tsx`, change the component to:
 
@@ -670,7 +670,7 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 3: Create route redirect helper**
+- [x] **Step 3: Create route redirect helper**
 
 Create `routeHelpers.ts`:
 
@@ -695,7 +695,7 @@ export function RedirectWithOrderId({ target }: { target: 'payment' | 'selection
 }
 ```
 
-- [ ] **Step 4: Update routes**
+- [x] **Step 4: Update routes**
 
 In `routes.tsx`:
 
@@ -740,7 +740,7 @@ Change exhibitor routes:
 { path: 'selections', element: <RedirectWithOrderId target="detail" /> },
 ```
 
-- [ ] **Step 5: Update admin layout menu grouping**
+- [x] **Step 5: Update admin layout menu grouping**
 
 Replace `route.routes` in `AdminLayout.tsx` with:
 
@@ -778,7 +778,7 @@ menuItemRender={(item, dom) => (
 )}
 ```
 
-- [ ] **Step 6: Update exhibitor layout menu**
+- [x] **Step 6: Update exhibitor layout menu**
 
 Replace `menuItems` with:
 
@@ -790,7 +790,7 @@ const menuItems = [
 ];
 ```
 
-- [ ] **Step 7: Run frontend build**
+- [x] **Step 7: Run frontend build**
 
 Run:
 
@@ -801,7 +801,7 @@ cmd /c npm run build
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add frontend/src/app
