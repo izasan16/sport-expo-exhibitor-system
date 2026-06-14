@@ -816,7 +816,7 @@ git commit -m "feat: restructure product navigation"
 - Modify: `frontend/src/pages/exhibitor/HomePage.tsx`
 - Modify: `frontend/src/pages/exhibitor/orders/MyOrdersPage.tsx`
 
-- [ ] **Step 1: Replace exhibitor home**
+- [x] **Step 1: Replace exhibitor home**
 
 Implement `HomePage.tsx` with:
 
@@ -967,7 +967,7 @@ Performance note for this V1:
 The home page intentionally loads the exhibitor order list first to choose the latest active order, then loads only that order's related data. Do not load related payments/selections/eligibility for all orders. If an exhibitor has many orders, the next iteration should replace this with a backend dashboard aggregation endpoint.
 ```
 
-- [ ] **Step 2: Productize My Orders**
+- [x] **Step 2: Productize My Orders**
 
 In `MyOrdersPage.tsx`:
 
@@ -1004,7 +1004,7 @@ render: (_, record) => {
 
 This list-level action intentionally calls `getOrderNextAction({ order: record })` without eligibility or latest selection details. The list should stay fast and show a generic next action; the order detail page is responsible for precise selection eligibility and selection history decisions.
 
-- [ ] **Step 3: Run frontend build**
+- [x] **Step 3: Run frontend build**
 
 Run:
 
@@ -1015,7 +1015,7 @@ cmd /c npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add frontend/src/pages/exhibitor/HomePage.tsx frontend/src/pages/exhibitor/orders/MyOrdersPage.tsx
