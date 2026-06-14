@@ -25,7 +25,7 @@ export default function AreaTierListPage() {
       <ProTable<AreaTierRow>
         actionRef={actionRef}
         rowKey="id"
-        locale={{ emptyText: '配置展商可购买的标准面积档位' }}
+        locale={{ emptyText: '请输入展会 ID 查询；若无结果，请配置展商可购买的标准面积档位' }}
         search={{ labelWidth: 'auto' }}
         columns={[
           { title: '展会 ID', dataIndex: 'eventId', hideInTable: true },

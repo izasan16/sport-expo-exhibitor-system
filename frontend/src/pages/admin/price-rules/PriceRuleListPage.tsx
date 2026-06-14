@@ -34,7 +34,7 @@ export default function PriceRuleListPage() {
       <ProTable<PriceRuleRow>
         actionRef={actionRef}
         rowKey="id"
-        locale={{ emptyText: '配置不同展位类型的每平方米价格' }}
+        locale={{ emptyText: '请输入展会 ID 查询；若无结果，请配置不同展位类型的每平方米价格' }}
         search={{ labelWidth: 'auto' }}
         columns={[
           { title: '展会 ID', dataIndex: 'eventId', hideInTable: true },
