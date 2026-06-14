@@ -41,4 +41,9 @@ public class ParticipationOrderController {
                                                               @RequestParam(required = false) String status) {
         return ApiResponse.ok(service.list(eventId, exhibitorId, status));
     }
+
+    @GetMapping("/{orderId}")
+    public ApiResponse<ParticipationOrderResponse> get(@PathVariable UUID orderId) {
+        return ApiResponse.ok(service.get(orderId));
+    }
 }

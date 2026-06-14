@@ -236,7 +236,9 @@ public class ParticipationOrderService {
                 order.getServiceFee(),
                 order.getDiscountAmount(),
                 order.getAdjustmentAmount(),
-                order.getTotalAmount()
+                order.getTotalAmount(),
+                order.getCreatedAt(),
+                order.getUpdatedAt()
         );
     }
 }

@@ -69,6 +69,23 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     }
 
     @Test
+    void returnsOrderDetailWithCreatedAndUpdatedTimes() {
+        var event = eventService.create(new CreateEventRequest("体博会", 2026));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+
+        var created = orderService.create(new CreateParticipationOrderRequest(
+                event.id(), DemoActors.DEMO_EXHIBITOR_ID, null, tier.id(), "STANDARD"
+        ));
+
+        var detail = orderService.get(created.id());
+
+        assertThat(detail.id()).isEqualTo(created.id());
+        assertThat(detail.createdAt()).isNotNull();
+        assertThat(detail.updatedAt()).isNotNull();
+    }
+
+    @Test
     void rejectsAreaTierZoneMismatch() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
         var zoneId = createZone(event.id());

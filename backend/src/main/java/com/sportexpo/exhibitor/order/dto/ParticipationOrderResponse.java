@@ -1,6 +1,7 @@
 package com.sportexpo.exhibitor.order.dto;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record ParticipationOrderResponse(
@@ -16,6 +17,8 @@ public record ParticipationOrderResponse(
         BigDecimal serviceFee,
         BigDecimal discountAmount,
         BigDecimal adjustmentAmount,
-        BigDecimal totalAmount
+        BigDecimal totalAmount,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
 ) {
 }
