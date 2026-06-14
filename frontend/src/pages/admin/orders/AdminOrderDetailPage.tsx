@@ -1,7 +1,7 @@
 import { PageContainer, ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Empty, message, Modal, Result, Skeleton, Space, Statistic, Tabs, Timeline, Typography } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Empty, message, Modal, Result, Skeleton, Space, Statistic, Tabs, Timeline, Typography } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { BoothSelection, ContractRecord, ParticipationOrder, PaymentRecord } from '../../../app/domain';
 import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
@@ -32,48 +32,69 @@ function addTimelineEntry(entries: TimelineEntry[], time: string | null | undefi
 export default function AdminOrderDetailPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const requestSeq = useRef(0);
   const [loading, setLoading] = useState(true);
+  const [relatedLoadFailed, setRelatedLoadFailed] = useState(false);
   const [order, setOrder] = useState<ParticipationOrder>();
   const [contracts, setContracts] = useState<ContractRecord[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [selections, setSelections] = useState<BoothSelection[]>([]);
 
   const loadOrderDetail = useCallback(async () => {
+    const requestId = requestSeq.current + 1;
+    requestSeq.current = requestId;
+
     if (!orderId) {
       setOrder(undefined);
       setContracts([]);
       setPayments([]);
       setSelections([]);
+      setRelatedLoadFailed(false);
       setLoading(false);
       return;
     }
 
     const encodedOrderId = encodeURIComponent(orderId);
     setLoading(true);
+    setRelatedLoadFailed(false);
     try {
-      const [loadedOrder, loadedContracts, loadedPayments, loadedSelections] = await Promise.all([
-        apiGet<ParticipationOrder>(`/api/participation-orders/${encodedOrderId}`),
+      const loadedOrder = await apiGet<ParticipationOrder>(`/api/participation-orders/${encodedOrderId}`);
+      if (requestSeq.current !== requestId) return;
+
+      setOrder(loadedOrder);
+
+      const [contractsResult, paymentsResult, selectionsResult] = await Promise.allSettled([
         apiGet<ContractRecord[]>(`/api/contracts?orderId=${encodedOrderId}`),
         apiGet<PaymentRecord[]>(`/api/payments?orderId=${encodedOrderId}`),
         apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${encodedOrderId}`),
-      ]);
+      ] as const);
+      if (requestSeq.current !== requestId) return;
 
-      setOrder(loadedOrder);
-      setContracts([...loadedContracts].sort(byCreatedAtDesc));
-      setPayments([...loadedPayments].sort(byCreatedAtDesc));
-      setSelections([...loadedSelections].sort(byCreatedAtDesc));
+      setContracts(contractsResult.status === 'fulfilled' ? [...contractsResult.value].sort(byCreatedAtDesc) : []);
+      setPayments(paymentsResult.status === 'fulfilled' ? [...paymentsResult.value].sort(byCreatedAtDesc) : []);
+      setSelections(selectionsResult.status === 'fulfilled' ? [...selectionsResult.value].sort(byCreatedAtDesc) : []);
+      setRelatedLoadFailed(
+        contractsResult.status === 'rejected' ||
+          paymentsResult.status === 'rejected' ||
+          selectionsResult.status === 'rejected',
+      );
     } catch {
+      if (requestSeq.current !== requestId) return;
       setOrder(undefined);
       setContracts([]);
       setPayments([]);
       setSelections([]);
+      setRelatedLoadFailed(false);
     } finally {
-      setLoading(false);
+      if (requestSeq.current === requestId) setLoading(false);
     }
   }, [orderId]);
 
   useEffect(() => {
     loadOrderDetail();
+    return () => {
+      requestSeq.current += 1;
+    };
   }, [loadOrderDetail]);
 
   const basicColumns = useMemo<ProDescriptionsItemProps<ParticipationOrder>[]>(
@@ -240,6 +261,8 @@ export default function AdminOrderDetailPage() {
       }
     >
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {relatedLoadFailed ? <Alert showIcon type="warning" message="部分关联信息加载失败，请稍后重试" /> : null}
+
         <ProCard split="vertical">
           <ProCard>
             <Space direction="vertical" size={8}>

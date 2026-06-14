@@ -1,6 +1,6 @@
 import { PageContainer, ProCard, ProList } from '@ant-design/pro-components';
-import { Button, Col, Row, Skeleton, Space, Statistic, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { Alert, Button, Col, Row, Skeleton, Space, Statistic, Typography } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { BoothSelection, ParticipationOrder, PaymentRecord } from '../../app/domain';
 import { formatArea, formatMoney, formatShortId } from '../../app/formatters';
@@ -14,40 +14,51 @@ function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const requestSeq = useRef(0);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [pendingOrders, setPendingOrders] = useState<ParticipationOrder[]>([]);
   const [allOrders, setAllOrders] = useState<ParticipationOrder[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PaymentRecord[]>([]);
   const [pendingSelections, setPendingSelections] = useState<BoothSelection[]>([]);
 
-  useEffect(() => {
-    let alive = true;
+  const loadDashboard = useCallback(async () => {
+    const requestId = requestSeq.current + 1;
+    requestSeq.current = requestId;
+    setLoading(true);
+    setLoadFailed(false);
 
-    async function load() {
-      setLoading(true);
-      try {
-        const [loadedPendingOrders, loadedAllOrders, loadedPendingPayments, loadedPendingSelections] = await Promise.all([
-          apiGet<ParticipationOrder[]>('/api/participation-orders?status=PENDING_SALES_CONFIRM'),
-          apiGet<ParticipationOrder[]>('/api/participation-orders'),
-          apiGet<PaymentRecord[]>('/api/payments?status=PENDING_FINANCE_CONFIRM'),
-          apiGet<BoothSelection[]>('/api/booth-selections?status=PENDING_REVIEW'),
-        ]);
+    try {
+      const [loadedPendingOrders, loadedAllOrders, loadedPendingPayments, loadedPendingSelections] = await Promise.all([
+        apiGet<ParticipationOrder[]>('/api/participation-orders?status=PENDING_SALES_CONFIRM'),
+        apiGet<ParticipationOrder[]>('/api/participation-orders'),
+        apiGet<PaymentRecord[]>('/api/payments?status=PENDING_FINANCE_CONFIRM'),
+        apiGet<BoothSelection[]>('/api/booth-selections?status=PENDING_REVIEW'),
+      ]);
 
-        if (!alive) return;
-        setPendingOrders([...loadedPendingOrders].sort(byCreatedAtDesc));
-        setAllOrders([...loadedAllOrders].sort(byCreatedAtDesc));
-        setPendingPayments([...loadedPendingPayments].sort(byCreatedAtDesc));
-        setPendingSelections([...loadedPendingSelections].sort(byCreatedAtDesc));
-      } finally {
-        if (alive) setLoading(false);
-      }
+      if (requestSeq.current !== requestId) return;
+      setPendingOrders([...loadedPendingOrders].sort(byCreatedAtDesc));
+      setAllOrders([...loadedAllOrders].sort(byCreatedAtDesc));
+      setPendingPayments([...loadedPendingPayments].sort(byCreatedAtDesc));
+      setPendingSelections([...loadedPendingSelections].sort(byCreatedAtDesc));
+    } catch {
+      if (requestSeq.current !== requestId) return;
+      setLoadFailed(true);
+      setPendingOrders([]);
+      setAllOrders([]);
+      setPendingPayments([]);
+      setPendingSelections([]);
+    } finally {
+      if (requestSeq.current === requestId) setLoading(false);
     }
-
-    load();
-    return () => {
-      alive = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadDashboard();
+    return () => {
+      requestSeq.current += 1;
+    };
+  }, [loadDashboard]);
 
   if (loading) {
     return (
@@ -60,6 +71,19 @@ export default function DashboardPage() {
   return (
     <PageContainer title="工作台">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {loadFailed ? (
+          <Alert
+            showIcon
+            type="warning"
+            message="工作台数据加载失败，请稍后重试"
+            action={
+              <Button size="small" onClick={loadDashboard}>
+                重试
+              </Button>
+            }
+          />
+        ) : null}
+
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} xl={6}>
             <ProCard>
@@ -87,7 +111,7 @@ export default function DashboardPage() {
           <ProCard
             title="销售确认待办"
             extra={
-              <Button type="link" onClick={() => navigate('/admin/orders')}>
+              <Button type="link" onClick={() => navigate('/admin/orders?status=PENDING_SALES_CONFIRM')}>
                 查看全部
               </Button>
             }

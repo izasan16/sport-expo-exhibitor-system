@@ -2,7 +2,7 @@ import { PageContainer, ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, message, Modal, Space } from 'antd';
 import { useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { ParticipationOrder } from '../../../app/domain';
 import { formatArea, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
@@ -22,6 +22,8 @@ function buildQuery(params: Record<string, unknown>) {
 
 export default function AdminOrderListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const statusHint = searchParams.get('status') ?? undefined;
   const actionRef = useRef<ActionType>();
 
   const columns: ProColumns<ParticipationOrder>[] = [
@@ -99,6 +101,8 @@ export default function AdminOrderListPage() {
         actionRef={actionRef}
         rowKey="id"
         search={{ labelWidth: 'auto' }}
+        params={{ status: statusHint }}
+        form={{ initialValues: { status: statusHint } }}
         columns={columns}
         request={async (params) => {
           const data = await apiGet<ParticipationOrder[]>(`/api/participation-orders${buildQuery(params)}`);
