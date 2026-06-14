@@ -1,6 +1,6 @@
 import { PageContainer, ProForm, ProFormDigit, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { message } from 'antd';
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { apiPost } from '../../../app/request';
 
 type PaymentValues = {
@@ -15,8 +15,9 @@ type PaymentResponse = {
 };
 
 export default function PaymentSubmitPage() {
+  const { orderId: orderIdParam } = useParams();
   const [searchParams] = useSearchParams();
-  const orderId = searchParams.get('orderId') ?? undefined;
+  const orderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
 
   return (
     <PageContainer title="提交付款">

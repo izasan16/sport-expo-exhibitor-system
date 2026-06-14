@@ -2,7 +2,7 @@ import { PageContainer, ProForm, ProFormText, ProTable } from '@ant-design/pro-c
 import type { ProColumns } from '@ant-design/pro-components';
 import { Alert, Button, message, Space, Statistic } from 'antd';
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
 import { apiGet, apiPost } from '../../../app/request';
 import {
@@ -39,8 +39,9 @@ type LoadValues = {
 };
 
 export default function BoothSelectionPage() {
+  const { orderId: orderIdParam } = useParams();
   const [searchParams] = useSearchParams();
-  const initialOrderId = searchParams.get('orderId') ?? undefined;
+  const initialOrderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
   const [order, setOrder] = useState<OrderRow>();
   const [booths, setBooths] = useState<BoothRow[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
