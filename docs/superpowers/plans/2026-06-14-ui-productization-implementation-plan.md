@@ -27,6 +27,7 @@ Frontend files to create:
 frontend/src/app/domain.ts
 frontend/src/app/formatters.ts
 frontend/src/app/status.tsx
+frontend/src/app/apiLoaders.ts
 frontend/src/app/MobileUnsupported.tsx
 frontend/src/app/routeHelpers.ts
 frontend/src/pages/exhibitor/orders/ExhibitorOrderDetailPage.tsx
@@ -240,6 +241,21 @@ Change the final arguments of `new ParticipationOrderResponse(...)` to:
                 order.getUpdatedAt()
 ```
 
+- [ ] **Step 3.5: Verify or add `ParticipationOrderService.get(UUID)`**
+
+Ensure `ParticipationOrderService` contains this method before exposing the controller endpoint:
+
+```java
+@Transactional(readOnly = true)
+public ParticipationOrderResponse get(UUID id) {
+    return repository.findById(id)
+            .map(this::toResponse)
+            .orElseThrow(() -> new BusinessException("Participation order does not exist"));
+}
+```
+
+If the method already exists, leave it in place and only verify it maps through the updated `toResponse` method.
+
 - [ ] **Step 4: Expose order detail endpoint**
 
 In `ParticipationOrderController`, add this method below `list`:
@@ -281,12 +297,13 @@ git commit -m "feat: expose order detail timestamps"
 - Create: `frontend/src/app/domain.ts`
 - Create: `frontend/src/app/formatters.ts`
 - Create: `frontend/src/app/status.tsx`
+- Create: `frontend/src/app/apiLoaders.ts`
 - Modify: `frontend/src/pages/exhibitor/pageLogic.ts`
 - Modify: `frontend/src/pages/exhibitor/pageLogic.test.ts`
 
 - [ ] **Step 1: Add failing page logic tests**
 
-Extend `pageLogic.test.ts` imports:
+Extend `pageLogic.test.ts` imports from `./pageLogic` only:
 
 ```ts
 import {
@@ -294,10 +311,10 @@ import {
   getOrderNextAction,
   pickLatestActiveOrder,
 } from './pageLogic';
-import { formatArea, formatMoney, formatShortId } from '../../app/formatters';
-import { getOrderStatusMeta } from '../../app/status';
 import type { ParticipationOrder } from '../../app/domain';
 ```
+
+Do not import `formatters.ts` or `status.tsx` in this step. This keeps the red test focused on `pageLogic` and avoids failing because shared UI modules are not created yet.
 
 Append tests:
 
@@ -320,13 +337,6 @@ const baseOrder: ParticipationOrder = {
   updatedAt: '2026-06-14T10:00:00+08:00',
 };
 
-it('formats business values for product UI', () => {
-  expect(formatShortId(baseOrder.id)).toBe('e0e5589c');
-  expect(formatMoney('21600')).toBe('¥21,600.00');
-  expect(formatArea('18')).toBe('18.00 ㎡');
-  expect(getOrderStatusMeta('PENDING_PAYMENT')).toMatchObject({ label: '待付款' });
-});
-
 it('picks latest active order before completed orders', () => {
   const completed = { ...baseOrder, id: 'completed-order', status: 'COMPLETED' as const, createdAt: '2026-06-15T10:00:00+08:00' };
   const pending = { ...baseOrder, id: 'pending-order', status: 'PAID' as const, createdAt: '2026-06-13T10:00:00+08:00' };
@@ -338,9 +348,9 @@ it('derives order steps and next actions', () => {
   expect(getOrderStepIndex('PENDING_SALES_CONFIRM')).toBe(1);
   expect(getOrderStepIndex('PENDING_PAYMENT')).toBe(3);
   expect(getOrderStepIndex('PAID')).toBe(4);
-  expect(getOrderNextAction({ order: baseOrder, eligibilityStatus: 'AVAILABLE', latestSelectionStatus: undefined }))
+  expect(getOrderNextAction({ order: baseOrder }))
     .toMatchObject({ label: '提交付款', to: `/exhibitor/orders/${baseOrder.id}/payment` });
-  expect(getOrderNextAction({ order: { ...baseOrder, status: 'PAID' }, eligibilityStatus: 'AVAILABLE', latestSelectionStatus: undefined }))
+  expect(getOrderNextAction({ order: { ...baseOrder, status: 'PAID' }, eligibilityStatus: 'AVAILABLE' }))
     .toMatchObject({ label: '选择展位', to: `/exhibitor/orders/${baseOrder.id}/selection` });
 });
 ```
@@ -484,6 +494,21 @@ export function StatusTag({ meta }: { meta: StatusMeta }) {
 }
 ```
 
+- [ ] **Step 4.5: Create `apiLoaders.ts`**
+
+Create a shared loader for the existing single-object eligibility endpoint so page code does not accidentally treat it as an array:
+
+```ts
+import type { SelectionEligibility } from './domain';
+import { apiGet } from './request';
+
+export async function loadSelectionEligibility(orderId: string): Promise<SelectionEligibility> {
+  return apiGet<SelectionEligibility>(`/api/selection-eligibilities?orderId=${encodeURIComponent(orderId)}`);
+}
+```
+
+This plan keeps the existing single-object API contract. Do not change page code to `apiGet<SelectionEligibility[]>` unless the backend endpoint is deliberately changed in the same task.
+
 - [ ] **Step 5: Extend `pageLogic.ts`**
 
 Add imports:
@@ -539,6 +564,29 @@ export function getOrderNextAction(input: OrderNextActionInput) {
 }
 ```
 
+- [ ] **Step 5.5: Add shared formatter and status tests**
+
+After `formatters.ts` and `status.tsx` exist, extend `pageLogic.test.ts` imports:
+
+```ts
+import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../app/formatters';
+import { getOrderStatusMeta } from '../../app/status';
+```
+
+Append this test:
+
+```ts
+it('formats business values for product UI', () => {
+  expect(formatShortId(baseOrder.id)).toBe('e0e5589c');
+  expect(formatMoney('21600')).toBe('¥21,600.00');
+  expect(formatArea('18')).toBe('18.00 ㎡');
+  expect(formatFriendlyTime('2026-06-14T09:30:00+08:00', new Date('2026-06-14T12:00:00+08:00'))).toBe('今天 09:30');
+  expect(formatFriendlyTime('2026-06-13T20:15:00+08:00', new Date('2026-06-14T12:00:00+08:00'))).toBe('昨天 20:15');
+  expect(formatFriendlyTime('2026-06-10T08:05:00+08:00', new Date('2026-06-14T12:00:00+08:00'))).toBe('2026-06-10 08:05');
+  expect(getOrderStatusMeta('PENDING_PAYMENT')).toMatchObject({ label: '待付款' });
+});
+```
+
 - [ ] **Step 6: Run frontend logic tests**
 
 Run:
@@ -553,7 +601,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add frontend/src/app/domain.ts frontend/src/app/formatters.ts frontend/src/app/status.tsx frontend/src/pages/exhibitor/pageLogic.ts frontend/src/pages/exhibitor/pageLogic.test.ts
+git add frontend/src/app/domain.ts frontend/src/app/formatters.ts frontend/src/app/status.tsx frontend/src/app/apiLoaders.ts frontend/src/pages/exhibitor/pageLogic.ts frontend/src/pages/exhibitor/pageLogic.test.ts
 git commit -m "feat: add shared product ui language"
 ```
 
@@ -726,7 +774,7 @@ Keep `menuItemRender`; guard it so only leaf items navigate:
 
 ```tsx
 menuItemRender={(item, dom) => (
-  <a onClick={() => item.path && !item.children && navigate(item.path)}>{dom}</a>
+  <a onClick={() => item.path && !item.routes && navigate(item.path)}>{dom}</a>
 )}
 ```
 
@@ -780,6 +828,7 @@ import { useNavigate } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../app/demoActors';
 import type { BoothSelection, PaymentRecord, ParticipationOrder, SelectionEligibility } from '../../app/domain';
 import { formatArea, formatMoney, formatShortId } from '../../app/formatters';
+import { loadSelectionEligibility } from '../../app/apiLoaders';
 import { apiGet } from '../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
 import { getOrderNextAction, getOrderStepIndex, pickLatestActiveOrder } from './pageLogic';
@@ -818,7 +867,7 @@ export default function HomePage() {
         const [loadedPayments, loadedSelections, loadedEligibility] = await Promise.all([
           apiGet<PaymentRecord[]>(`/api/payments?orderId=${selectedOrder.id}`),
           apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${selectedOrder.id}`),
-          apiGet<SelectionEligibility>(`/api/selection-eligibilities?orderId=${selectedOrder.id}`),
+          loadSelectionEligibility(selectedOrder.id),
         ]);
         if (!alive) return;
         setPayments(loadedPayments);
@@ -912,6 +961,12 @@ export default function HomePage() {
 }
 ```
 
+Performance note for this V1:
+
+```text
+The home page intentionally loads the exhibitor order list first to choose the latest active order, then loads only that order's related data. Do not load related payments/selections/eligibility for all orders. If an exhibitor has many orders, the next iteration should replace this with a backend dashboard aggregation endpoint.
+```
+
 - [ ] **Step 2: Productize My Orders**
 
 In `MyOrdersPage.tsx`:
@@ -946,6 +1001,8 @@ render: (_, record) => {
   );
 }
 ```
+
+This list-level action intentionally calls `getOrderNextAction({ order: record })` without eligibility or latest selection details. The list should stay fast and show a generic next action; the order detail page is responsible for precise selection eligibility and selection history decisions.
 
 - [ ] **Step 3: Run frontend build**
 
@@ -985,6 +1042,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { BoothSelection, ContractRecord, PaymentRecord, ParticipationOrder, SelectionEligibility } from '../../../app/domain';
 import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
+import { loadSelectionEligibility } from '../../../app/apiLoaders';
 import { apiGet } from '../../../app/request';
 import { getContractStatusMeta, getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../../app/status';
 import { getOrderNextAction, getOrderStepIndex, isOrderPayable } from '../pageLogic';
@@ -1005,12 +1063,12 @@ export default function ExhibitorOrderDetailPage() {
       if (!orderId) return;
       setLoading(true);
       try {
-        const loadedOrder = await apiGet<ParticipationOrder>(`/api/participation-orders/${orderId}`);
-        const [loadedContracts, loadedPayments, loadedSelections, loadedEligibility] = await Promise.all([
+        const [loadedOrder, loadedContracts, loadedPayments, loadedSelections, loadedEligibility] = await Promise.all([
+          apiGet<ParticipationOrder>(`/api/participation-orders/${orderId}`),
           apiGet<ContractRecord[]>(`/api/contracts?orderId=${orderId}`),
           apiGet<PaymentRecord[]>(`/api/payments?orderId=${orderId}`),
           apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${orderId}`),
-          apiGet<SelectionEligibility>(`/api/selection-eligibilities?orderId=${orderId}`),
+          loadSelectionEligibility(orderId),
         ]);
         if (!alive) return;
         setOrder(loadedOrder);
@@ -1249,6 +1307,7 @@ Inside `BoothSelectionPage.tsx`, add a map block above the table:
     return (
       <Button
         key={booth.id}
+        title={`${booth.boothNo} / ${formatArea(booth.areaSqm)}`}
         type={selected ? 'primary' : 'default'}
         onClick={() => {
           setSelectedRowKeys((current) =>
@@ -1257,10 +1316,10 @@ Inside `BoothSelectionPage.tsx`, add a map block above the table:
               : [...current, booth.id],
           );
         }}
-        style={{ height: 72, whiteSpace: 'normal' }}
+        style={{ minHeight: 72, whiteSpace: 'normal', overflow: 'hidden' }}
       >
-        <div>{booth.boothNo}</div>
-        <div>{formatArea(booth.areaSqm)}</div>
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{booth.boothNo}</div>
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatArea(booth.areaSqm)}</div>
       </Button>
     );
   })}
@@ -1391,6 +1450,12 @@ Replace `DashboardPage.tsx` with a page that:
   - `/admin/selections`
 
 Use `ProCard`, `ProList`, `Statistic`, `Button`, `Space`, and shared formatters/status tags.
+
+Performance note for this V1:
+
+```text
+The dashboard uses list APIs and calculates counts client-side. Render only the first 100 orders in compact dashboard lists. If the order volume grows beyond that, replace `/api/participation-orders` with a backend count or dashboard aggregation endpoint.
+```
 
 - [ ] **Step 4: Productize admin order list**
 
@@ -1605,6 +1670,7 @@ With backend and frontend running:
 6. Open /admin/dashboard and verify pending counts are not static zeros.
 7. Open /admin/orders/{orderId} and verify tabs render.
 8. Open /admin/payments and /admin/selections and verify dangerous actions show confirmation before request.
+9. Resize the browser below 768px width and verify the desktop-only Result appears with `请在电脑端访问展商系统`.
 ```
 
 - [ ] **Step 6: Update README productized routes**
