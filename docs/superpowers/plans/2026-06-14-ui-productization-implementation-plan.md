@@ -1030,7 +1030,7 @@ git commit -m "feat: productize exhibitor home and orders"
 - Create: `frontend/src/pages/exhibitor/orders/ExhibitorOrderDetailPage.tsx`
 - Modify: `frontend/src/pages/exhibitor/payments/PaymentSubmitPage.tsx`
 
-- [ ] **Step 1: Create exhibitor order detail page**
+- [x] **Step 1: Create exhibitor order detail page**
 
 Create `ExhibitorOrderDetailPage.tsx`:
 
@@ -1206,7 +1206,7 @@ export default function ExhibitorOrderDetailPage() {
 }
 ```
 
-- [ ] **Step 2: Convert payment page to route-based child flow**
+- [x] **Step 2: Convert payment page to route-based child flow**
 
 In `PaymentSubmitPage.tsx`:
 
@@ -1228,7 +1228,7 @@ The submit body must be:
 }
 ```
 
-- [ ] **Step 3: Run frontend build**
+- [x] **Step 3: Run frontend build**
 
 Run:
 
@@ -1239,7 +1239,7 @@ cmd /c npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add frontend/src/pages/exhibitor/orders/ExhibitorOrderDetailPage.tsx frontend/src/pages/exhibitor/payments/PaymentSubmitPage.tsx
