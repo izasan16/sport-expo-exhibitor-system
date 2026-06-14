@@ -78,3 +78,45 @@ Frontend build:
 cd frontend
 npm run build
 ```
+
+## Second-round business smoke flow
+
+Demo actor IDs used before real authentication lands:
+
+```text
+DEMO_EXHIBITOR_ID=00000000-0000-0000-0000-000000000001
+DEMO_ADMIN_ID=00000000-0000-0000-0000-000000000002
+```
+
+The application initializes tables only for an empty schema. If an existing local
+`exhibitor_sys` schema was created from an older baseline, reset it before the
+smoke run:
+
+```bash
+psql -h localhost -p 18182 -U postgres -d postgres -c "drop schema if exists exhibitor_sys cascade"
+```
+
+Start backend and frontend, then verify this UI chain:
+
+```text
+1. Admin creates an event from 展会管理.
+2. Admin creates two 9.00 STANDARD booths from 展位管理.
+3. Admin creates an 18.00 area tier from 面积档位.
+4. Admin creates a STANDARD price rule from 价格规则.
+5. Exhibitor creates an order from 我要下单.
+6. Admin sales-confirms the order from 订单管理.
+7. Admin marks the generated contract as offline signed from 合同管理.
+8. Exhibitor submits an offline payment from 提交付款.
+9. Admin confirms the payment from 付款确认.
+10. Exhibitor selects the two 9.00 STANDARD booths from 选择展位.
+11. Admin approves the booth selection from 选位审核.
+```
+
+Expected final state:
+
+```text
+order.status=PAID
+selectionEligibility.status=CLOSED
+boothSelection.status=CONFIRMED
+selected booths status=CONFIRMED
+```
