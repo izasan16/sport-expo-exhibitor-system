@@ -14,9 +14,14 @@ import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
 import com.sportexpo.exhibitor.selection.dto.RejectBoothSelectionRequest;
 import com.sportexpo.exhibitor.selection.dto.SelectionEligibilityResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -28,6 +33,7 @@ import java.util.UUID;
 
 @Service
 public class BoothSelectionService {
+    private static final Logger logger = LoggerFactory.getLogger(BoothSelectionService.class);
     private static final int MAX_REJECT_REASON_LENGTH = 500;
     private static final int MAX_OPTIONAL_TEXT_LENGTH = 500;
 
@@ -39,6 +45,7 @@ public class BoothSelectionService {
     private final BoothLockRepository lockRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final TransactionTemplate timeoutReleaseTransactionTemplate;
 
     public BoothSelectionService(ParticipationOrderRepository orderRepository,
                                  EventRepository eventRepository,
@@ -47,7 +54,8 @@ public class BoothSelectionService {
                                  BoothSelectionRepository selectionRepository,
                                  BoothLockRepository lockRepository,
                                  AuditService auditService,
-                                 NotificationService notificationService) {
+                                 NotificationService notificationService,
+                                 PlatformTransactionManager transactionManager) {
         this.orderRepository = orderRepository;
         this.eventRepository = eventRepository;
         this.eligibilityRepository = eligibilityRepository;
@@ -56,6 +64,8 @@ public class BoothSelectionService {
         this.lockRepository = lockRepository;
         this.auditService = auditService;
         this.notificationService = notificationService;
+        this.timeoutReleaseTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.timeoutReleaseTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional
@@ -221,17 +231,20 @@ public class BoothSelectionService {
         return timeoutRelease(selectionId, actorId, OffsetDateTime.now());
     }
 
-    @Transactional
     public int releaseExpiredSelections(OffsetDateTime now, UUID actorId) {
         var expiredSelections = selectionRepository.findByStatusAndLockExpiresAtBefore(
                 BusinessStatuses.SELECTION_PENDING_REVIEW, now);
         var releasedCount = 0;
         for (var expiredSelection : expiredSelections) {
             try {
-                timeoutRelease(expiredSelection.getId(), actorId, now);
+                timeoutReleaseTransactionTemplate.executeWithoutResult(
+                        ignored -> timeoutRelease(expiredSelection.getId(), actorId, now));
                 releasedCount++;
             } catch (BusinessException ignored) {
                 // The job is idempotent; a concurrent reviewer may have already moved this selection.
+            } catch (RuntimeException exception) {
+                logger.warn("Unexpected error while releasing expired booth selection {}",
+                        expiredSelection.getId(), exception);
             }
         }
         return releasedCount;

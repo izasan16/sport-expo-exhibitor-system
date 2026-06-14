@@ -19,6 +19,8 @@ import com.sportexpo.exhibitor.pricing.PriceRule;
 import com.sportexpo.exhibitor.pricing.PriceRuleRepository;
 import com.sportexpo.exhibitor.selection.SelectionEligibility;
 import com.sportexpo.exhibitor.selection.SelectionEligibilityRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,8 @@ import java.util.UUID;
 
 @Service
 public class ParticipationOrderService {
+    private static final Logger logger = LoggerFactory.getLogger(ParticipationOrderService.class);
+    private static final String GENERIC_BATCH_CONFIRM_FAILURE_REASON = "Order confirmation failed";
     private static final BigDecimal ZERO_AMOUNT = money(BigDecimal.ZERO);
     private static final DateTimeFormatter CONTRACT_NO_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final Map<String, Object> SALES_CONFIRM_SNAPSHOT = Map.of(
@@ -214,10 +218,9 @@ public class ParticipationOrderService {
             } catch (BusinessException exception) {
                 failures.add(new BatchConfirmOrdersResponse.BatchFailure(orderId, exception.getMessage()));
             } catch (RuntimeException exception) {
-                var reason = exception.getMessage() == null
-                        ? exception.getClass().getSimpleName()
-                        : exception.getMessage();
-                failures.add(new BatchConfirmOrdersResponse.BatchFailure(orderId, reason));
+                logger.warn("Unexpected error while batch confirming order {}", orderId, exception);
+                failures.add(new BatchConfirmOrdersResponse.BatchFailure(
+                        orderId, GENERIC_BATCH_CONFIRM_FAILURE_REASON));
             }
         }
         return new BatchConfirmOrdersResponse(successCount, failures.size(), failures);

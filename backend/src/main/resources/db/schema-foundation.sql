@@ -275,9 +275,20 @@ create table if not exists __schema__.notifications (
 );
 
 create index if not exists idx_booths_event_status on __schema__.booths(event_id, status);
+create index if not exists idx_participation_orders_status_created_at
+    on __schema__.participation_orders(status, created_at desc);
+create index if not exists idx_participation_orders_created_at
+    on __schema__.participation_orders(created_at);
 create index if not exists idx_payments_order_status on __schema__.payments(order_id, status);
+create index if not exists idx_payments_status_created_at
+    on __schema__.payments(status, created_at desc);
 create index if not exists idx_refunds_order_status on __schema__.refunds(order_id, status);
+create index if not exists idx_booth_selections_status_created_at
+    on __schema__.booth_selections(status, created_at desc);
+create index if not exists idx_booth_selections_status_lock_expires_at
+    on __schema__.booth_selections(status, lock_expires_at);
 create index if not exists idx_booth_locks_event_booth_status on __schema__.booth_locks(event_id, booth_id, status);
+create index if not exists idx_booth_locks_selection_id on __schema__.booth_locks(selection_id);
 create index if not exists idx_release_tasks_event_status on __schema__.booth_release_tasks(event_id, status);
 create index if not exists idx_audit_logs_object on __schema__.audit_logs(object_type, object_id);
 create index if not exists idx_notifications_recipient on __schema__.notifications(recipient_id, created_at desc);

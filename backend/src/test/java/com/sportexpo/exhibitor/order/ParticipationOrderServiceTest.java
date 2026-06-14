@@ -6,6 +6,7 @@ import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
+import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.pricing.AreaTierService;
 import com.sportexpo.exhibitor.pricing.PriceRuleService;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
@@ -24,6 +26,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 
 @SpringBootTest
 class ParticipationOrderServiceTest extends TestDatabaseSupport {
@@ -34,6 +39,7 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Autowired ParticipationOrderService orderService;
     @Autowired SelectionEligibilityRepository eligibilityRepository;
     @Autowired JdbcTemplate jdbcTemplate;
+    @SpyBean NotificationService notificationService;
     @Value("${app.db.schema}") String schema;
 
     @Test
@@ -105,6 +111,33 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
                 .extracting("orderId")
                 .containsExactlyInAnyOrder(alreadyConfirmed.id(), missingOrderId);
         assertThat(orderService.get(ready.id()).status()).isEqualTo(BusinessStatuses.ORDER_PENDING_CONTRACT);
+    }
+
+    @Test
+    void batchConfirmSalesKeepsBusinessReasonsButHidesUnexpectedRuntimeMessages() {
+        var ready = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
+        var alreadyConfirmed = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
+        orderService.confirmSales(alreadyConfirmed.id(), DemoActors.DEMO_ADMIN_ID);
+        doThrow(new IllegalStateException("internal notification outage"))
+                .when(notificationService)
+                .create(eq(ready.eventId()), anyString(), eq(ready.exhibitorId()), anyString(), anyString(), anyString());
+
+        var result = orderService.batchConfirmSales(
+                List.of(alreadyConfirmed.id(), ready.id()),
+                DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(result.successCount()).isZero();
+        assertThat(result.failureCount()).isEqualTo(2);
+        assertThat(result.failures())
+                .anySatisfy(failure -> {
+                    assertThat(failure.orderId()).isEqualTo(alreadyConfirmed.id());
+                    assertThat(failure.reason()).isEqualTo("Order is not pending sales confirmation");
+                })
+                .anySatisfy(failure -> {
+                    assertThat(failure.orderId()).isEqualTo(ready.id());
+                    assertThat(failure.reason()).isEqualTo("Order confirmation failed");
+                });
+        assertThat(orderService.get(ready.id()).status()).isEqualTo(BusinessStatuses.ORDER_PENDING_SALES_CONFIRM);
     }
 
     @Test

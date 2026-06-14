@@ -274,6 +274,25 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
+    void releaseExpiredSelectionsProcessesMultipleExpiredSelections() {
+        var first = fixture.createExpiredPendingSelection("9.00", "STANDARD");
+        var second = fixture.createExpiredPendingSelection("9.00", "STANDARD");
+
+        var releasedCount = selectionService.releaseExpiredSelections(
+                java.time.OffsetDateTime.now(), DemoActors.SYSTEM_ACTOR_ID);
+
+        assertThat(releasedCount).isGreaterThanOrEqualTo(2);
+        assertThat(selectionService.list(first.orderId(), null))
+                .first()
+                .extracting("status")
+                .isEqualTo(BusinessStatuses.SELECTION_TIMEOUT);
+        assertThat(selectionService.list(second.orderId(), null))
+                .first()
+                .extracting("status")
+                .isEqualTo(BusinessStatuses.SELECTION_TIMEOUT);
+    }
+
+    @Test
     void concurrentSameBoothAllowsExactlyOneSelection() throws Exception {
         var event = fixture.createEvent();
         var firstOrder = fixture.createPaidOrderForEvent(event.id(), "9.00", "1200.00", "STANDARD");
