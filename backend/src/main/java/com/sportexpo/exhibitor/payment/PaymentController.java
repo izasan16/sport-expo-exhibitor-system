@@ -3,6 +3,7 @@ package com.sportexpo.exhibitor.payment;
 import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
+import com.sportexpo.exhibitor.payment.dto.FailPaymentRequest;
 import com.sportexpo.exhibitor.payment.dto.PaymentResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,7 +43,8 @@ public class PaymentController {
     }
 
     @PostMapping("/{paymentId}/fail")
-    public ApiResponse<PaymentResponse> fail(@PathVariable UUID paymentId) {
-        return ApiResponse.ok(service.fail(paymentId, DemoActors.DEMO_ADMIN_ID));
+    public ApiResponse<PaymentResponse> fail(@PathVariable UUID paymentId,
+                                             @Valid @RequestBody FailPaymentRequest request) {
+        return ApiResponse.ok(service.fail(paymentId, DemoActors.DEMO_ADMIN_ID, request.reason()));
     }
 }

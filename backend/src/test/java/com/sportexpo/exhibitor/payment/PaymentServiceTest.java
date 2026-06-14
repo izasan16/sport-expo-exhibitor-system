@@ -5,6 +5,8 @@ import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.notification.NotificationRepository;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.ParticipationOrderService;
 import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
 import com.sportexpo.exhibitor.selection.SelectionEligibilityRepository;
@@ -27,6 +29,7 @@ class PaymentServiceTest extends TestDatabaseSupport {
     @Autowired TestBusinessFixture fixture;
     @Autowired PaymentService paymentService;
     @Autowired PaymentRepository paymentRepository;
+    @Autowired NotificationRepository notificationRepository;
     @Autowired ParticipationOrderService orderService;
     @Autowired SelectionEligibilityRepository eligibilityRepository;
 
@@ -133,5 +136,31 @@ class PaymentServiceTest extends TestDatabaseSupport {
                 order.id(), new BigDecimal("21599.995"), "OFFLINE_TRANSFER")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Payment amount must have at most 2 decimal places");
+    }
+
+    @Test
+    void failRequiresAndPersistsFailureReason() {
+        var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
+        var payment = paymentService.create(new CreatePaymentRequest(
+                order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
+
+        var failed = paymentService.fail(payment.id(), DemoActors.DEMO_ADMIN_ID, "户名不符");
+
+        assertThat(failed.status()).isEqualTo(BusinessStatuses.PAYMENT_CONFIRM_FAILED);
+        assertThat(failed.failureReason()).isEqualTo("户名不符");
+        assertThat(paymentRepository.findById(payment.id()).orElseThrow().getFailureReason())
+                .isEqualTo("户名不符");
+        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(order.exhibitorId()))
+                .anySatisfy(notification -> {
+                    assertThat(notification.getEventId()).isEqualTo(order.eventId());
+                    assertThat(notification.getType()).isEqualTo(NotificationTypes.PAYMENT_FAILED);
+                    assertThat(notification.getContent()).isEqualTo("户名不符");
+                });
+
+        var otherPayment = paymentService.create(new CreatePaymentRequest(
+                order.id(), new BigDecimal("1.00"), "OFFLINE_TRANSFER"));
+        assertThatThrownBy(() -> paymentService.fail(otherPayment.id(), DemoActors.DEMO_ADMIN_ID, " "))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Payment failure reason must not be blank");
     }
 }

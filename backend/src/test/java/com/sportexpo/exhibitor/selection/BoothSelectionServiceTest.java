@@ -36,6 +36,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     @Autowired BoothService boothService;
     @Autowired SelectionEligibilityRepository eligibilityRepository;
     @Autowired BoothLockRepository lockRepository;
+    @Autowired BoothSelectionRepository selectionRepository;
     @Autowired EventRepository eventRepository;
     @Autowired MockMvc mockMvc;
 
@@ -195,6 +196,28 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var eligibility = eligibilityRepository.findByOrderId(pending.orderId()).orElseThrow();
         assertThat(eligibility.getStatus()).isEqualTo(BusinessStatuses.ELIGIBILITY_AVAILABLE);
         assertThat(eligibility.getPauseReason()).isNull();
+    }
+
+    @Test
+    void submitPersistsExhibitorRemarkAndRejectReturnsRecommendation() {
+        var order = fixture.createPaidOrder("18.00", "1200.00", "STANDARD");
+        var b1 = fixture.createBooth(order.eventId(), "A101", "9.00", "STANDARD");
+        var b2 = fixture.createBooth(order.eventId(), "A102", "9.00", "STANDARD");
+
+        var submitted = selectionService.submit(new CreateBoothSelectionRequest(
+                order.id(), order.exhibitorId(), List.of(b1.id(), b2.id()), "希望靠近主通道"));
+
+        assertThat(submitted.exhibitorRemark()).isEqualTo("希望靠近主通道");
+        assertThat(selectionRepository.findById(submitted.id()).orElseThrow().getExhibitorRemark())
+                .isEqualTo("希望靠近主通道");
+
+        var rejected = selectionService.reject(
+                submitted.id(),
+                new RejectBoothSelectionRequest("booth not suitable", "A101 / A102"),
+                DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(rejected.reviewComment()).isEqualTo("booth not suitable");
+        assertThat(rejected.recommendedBooths()).isEqualTo("A101 / A102");
     }
 
     @Test

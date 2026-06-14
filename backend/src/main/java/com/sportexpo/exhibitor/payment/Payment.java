@@ -26,6 +26,8 @@ public class Payment {
     private String status;
     @Column(name = "method")
     private String method;
+    @Column(name = "failure_reason")
+    private String failureReason;
     @Column(name = "confirmed_at")
     private OffsetDateTime confirmedAt;
     @Column(name = "created_at")
@@ -41,6 +43,7 @@ public class Payment {
     }
 
     public Payment(UUID id, UUID eventId, UUID orderId, BigDecimal amount, String status, String method,
+                   String failureReason,
                    OffsetDateTime confirmedAt, OffsetDateTime createdAt, OffsetDateTime updatedAt,
                    UUID createdBy, UUID updatedBy) {
         this.id = id;
@@ -49,6 +52,7 @@ public class Payment {
         this.amount = amount;
         this.status = status;
         this.method = method;
+        this.failureReason = failureReason;
         this.confirmedAt = confirmedAt;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -62,6 +66,7 @@ public class Payment {
     public BigDecimal getAmount() { return amount; }
     public String getStatus() { return status; }
     public String getMethod() { return method; }
+    public String getFailureReason() { return failureReason; }
     public OffsetDateTime getConfirmedAt() { return confirmedAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
@@ -70,13 +75,15 @@ public class Payment {
 
     public void markConfirmed(UUID actorId, OffsetDateTime now) {
         this.status = BusinessStatuses.PAYMENT_CONFIRMED;
+        this.failureReason = null;
         this.confirmedAt = now;
         this.updatedAt = now;
         this.updatedBy = actorId;
     }
 
-    public void markFailed(UUID actorId, OffsetDateTime now) {
+    public void markFailed(UUID actorId, String failureReason, OffsetDateTime now) {
         this.status = BusinessStatuses.PAYMENT_CONFIRM_FAILED;
+        this.failureReason = failureReason;
         this.updatedAt = now;
         this.updatedBy = actorId;
     }

@@ -8,7 +8,7 @@ import java.util.UUID;
 public record BoothSelectionResponse(UUID id, UUID eventId, UUID orderId, UUID exhibitorId, String status,
                                      BigDecimal totalAreaSqm, OffsetDateTime lockStartedAt,
                                      OffsetDateTime lockExpiresAt, UUID helperUserId, UUID reviewerUserId,
-                                     OffsetDateTime reviewedAt, String reviewComment, List<UUID> boothIds,
-                                     OffsetDateTime createdAt, OffsetDateTime updatedAt, UUID createdBy,
-                                     UUID updatedBy) {
+                                     OffsetDateTime reviewedAt, String reviewComment, String exhibitorRemark,
+                                     String recommendedBooths, List<UUID> boothIds, OffsetDateTime createdAt,
+                                     OffsetDateTime updatedAt, UUID createdBy, UUID updatedBy) {
 }

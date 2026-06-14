@@ -27,6 +27,7 @@ import java.util.UUID;
 @Service
 public class BoothSelectionService {
     private static final int MAX_REJECT_REASON_LENGTH = 500;
+    private static final int MAX_OPTIONAL_TEXT_LENGTH = 500;
 
     private final ParticipationOrderRepository orderRepository;
     private final EventRepository eventRepository;
@@ -55,6 +56,8 @@ public class BoothSelectionService {
     @Transactional
     public BoothSelectionResponse submit(CreateBoothSelectionRequest request) {
         var sortedBoothIds = validateAndSortBoothIds(request.boothIds());
+        var exhibitorRemark = normalizeOptionalText(request.exhibitorRemark(),
+                "Exhibitor remark must not exceed 500 characters");
         var order = orderRepository.findByIdForUpdate(request.orderId())
                 .orElseThrow(() -> new BusinessException("Participation order does not exist"));
         if (!order.getExhibitorId().equals(request.exhibitorId())) {
@@ -101,6 +104,8 @@ public class BoothSelectionService {
                 null,
                 null,
                 null,
+                null,
+                exhibitorRemark,
                 null,
                 now,
                 now,
@@ -174,12 +179,14 @@ public class BoothSelectionService {
         if (reason.length() > MAX_REJECT_REASON_LENGTH) {
             throw new BusinessException("Reject reason must not exceed 500 characters");
         }
+        var recommendedBooths = normalizeOptionalText(request.recommendedBooths(),
+                "Recommended booths must not exceed 500 characters");
         var selection = findPendingSelectionForUpdate(selectionId);
         var locks = lockRepository.findBySelectionId(selection.getId());
         var booths = lockBoothsForLocks(locks);
 
         var now = OffsetDateTime.now();
-        selection.markRejected(actorId, reason, now);
+        selection.markRejected(actorId, reason, recommendedBooths, now);
         locks.forEach(lock -> lock.markRejected(now, actorId));
         booths.forEach(booth -> booth.markAvailable(now, actorId));
         var eligibility = eligibilityRepository.findByOrderId(selection.getOrderId())
@@ -312,12 +319,25 @@ public class BoothSelectionService {
                 selection.getReviewerUserId(),
                 selection.getReviewedAt(),
                 selection.getReviewComment(),
+                selection.getExhibitorRemark(),
+                selection.getRecommendedBooths(),
                 boothIds,
                 selection.getCreatedAt(),
                 selection.getUpdatedAt(),
                 selection.getCreatedBy(),
                 selection.getUpdatedBy()
         );
+    }
+
+    private String normalizeOptionalText(String value, String tooLongMessage) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        var trimmed = value.trim();
+        if (trimmed.length() > MAX_OPTIONAL_TEXT_LENGTH) {
+            throw new BusinessException(tooLongMessage);
+        }
+        return trimmed;
     }
 
     private SelectionEligibilityResponse toResponse(SelectionEligibility eligibility) {

@@ -4,6 +4,8 @@ import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.notification.NotificationService;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.ParticipationOrder;
 import com.sportexpo.exhibitor.order.ParticipationOrderRepository;
 import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
@@ -27,13 +29,16 @@ public class PaymentService {
     private final ParticipationOrderRepository orderRepository;
     private final SelectionEligibilityRepository eligibilityRepository;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public PaymentService(PaymentRepository paymentRepository, ParticipationOrderRepository orderRepository,
-                          SelectionEligibilityRepository eligibilityRepository, AuditService auditService) {
+                          SelectionEligibilityRepository eligibilityRepository, AuditService auditService,
+                          NotificationService notificationService) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.eligibilityRepository = eligibilityRepository;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -59,6 +64,7 @@ public class PaymentService {
                 money(request.amount()),
                 BusinessStatuses.PAYMENT_PENDING_FINANCE_CONFIRM,
                 request.method(),
+                null,
                 null,
                 now,
                 now,
@@ -109,19 +115,27 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponse fail(UUID paymentId, UUID actorId) {
+    public PaymentResponse fail(UUID paymentId, UUID actorId, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("Payment failure reason must not be blank");
+        }
+        var trimmedReason = reason.trim();
         var payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new BusinessException("Payment does not exist"));
         if (!BusinessStatuses.PAYMENT_PENDING_FINANCE_CONFIRM.equals(payment.getStatus())) {
             throw new BusinessException("Payment is not pending finance confirmation");
         }
+        var order = orderRepository.findById(payment.getOrderId())
+                .orElseThrow(() -> new BusinessException("Participation order does not exist"));
 
         var now = OffsetDateTime.now();
         var oldPaymentStatus = payment.getStatus();
-        payment.markFailed(actorId, now);
+        payment.markFailed(actorId, trimmedReason, now);
         paymentRepository.save(payment);
+        notificationService.create(payment.getEventId(), "EXHIBITOR", order.getExhibitorId(),
+                "Payment failed", trimmedReason, NotificationTypes.PAYMENT_FAILED);
         auditService.record(payment.getEventId(), actorId, "PAYMENT_FAIL", "Payment",
-                payment.getId(), oldPaymentStatus, payment.getStatus(), "fail payment");
+                payment.getId(), oldPaymentStatus, payment.getStatus(), trimmedReason);
         return toResponse(payment);
     }
 
@@ -171,6 +185,7 @@ public class PaymentService {
                 payment.getAmount(),
                 payment.getStatus(),
                 payment.getMethod(),
+                payment.getFailureReason(),
                 payment.getConfirmedAt(),
                 payment.getCreatedAt(),
                 payment.getUpdatedAt(),

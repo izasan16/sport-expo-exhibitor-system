@@ -36,7 +36,8 @@ public class BoothSelectionController {
         var demoRequest = new CreateBoothSelectionRequest(
                 request.orderId(),
                 DemoActors.DEMO_EXHIBITOR_ID,
-                request.boothIds()
+                request.boothIds(),
+                request.exhibitorRemark()
         );
         return ApiResponse.ok(service.submit(demoRequest));
     }

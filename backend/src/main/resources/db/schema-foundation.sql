@@ -155,6 +155,8 @@ create table if not exists __schema__.payments (
     updated_by uuid
 );
 
+alter table __schema__.payments add column if not exists failure_reason varchar(500);
+
 create table if not exists __schema__.refunds (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
@@ -206,11 +208,16 @@ create table if not exists __schema__.booth_selections (
     reviewer_user_id uuid,
     reviewed_at timestamptz,
     review_comment varchar(500),
+    exhibitor_remark varchar(500),
+    recommended_booths varchar(500),
     created_at timestamptz not null,
     updated_at timestamptz not null,
     created_by uuid,
     updated_by uuid
 );
+
+alter table __schema__.booth_selections add column if not exists exhibitor_remark varchar(500);
+alter table __schema__.booth_selections add column if not exists recommended_booths varchar(500);
 
 create table if not exists __schema__.booth_locks (
     id uuid primary key,
@@ -255,12 +262,25 @@ create table if not exists __schema__.audit_logs (
     created_at timestamptz not null
 );
 
+create table if not exists __schema__.notifications (
+    id uuid primary key,
+    event_id uuid references __schema__.events(id),
+    recipient_type varchar(40) not null,
+    recipient_id uuid not null,
+    title varchar(200) not null,
+    content varchar(1000) not null,
+    type varchar(80) not null,
+    read_at timestamptz,
+    created_at timestamptz not null
+);
+
 create index if not exists idx_booths_event_status on __schema__.booths(event_id, status);
 create index if not exists idx_payments_order_status on __schema__.payments(order_id, status);
 create index if not exists idx_refunds_order_status on __schema__.refunds(order_id, status);
 create index if not exists idx_booth_locks_event_booth_status on __schema__.booth_locks(event_id, booth_id, status);
 create index if not exists idx_release_tasks_event_status on __schema__.booth_release_tasks(event_id, status);
 create index if not exists idx_audit_logs_object on __schema__.audit_logs(object_type, object_id);
+create index if not exists idx_notifications_recipient on __schema__.notifications(recipient_id, created_at desc);
 
 create unique index if not exists uidx_area_tiers_event_zone_area
     on __schema__.area_tiers(event_id, coalesce(zone_id, '00000000-0000-0000-0000-000000000000'::uuid), area_sqm);

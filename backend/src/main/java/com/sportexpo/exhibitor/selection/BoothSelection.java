@@ -26,6 +26,8 @@ public class BoothSelection {
     @Column(name = "reviewer_user_id") private UUID reviewerUserId;
     @Column(name = "reviewed_at") private OffsetDateTime reviewedAt;
     @Column(name = "review_comment") private String reviewComment;
+    @Column(name = "exhibitor_remark") private String exhibitorRemark;
+    @Column(name = "recommended_booths") private String recommendedBooths;
     @Column(name = "created_at") private OffsetDateTime createdAt;
     @Column(name = "updated_at") private OffsetDateTime updatedAt;
     @Column(name = "created_by") private UUID createdBy;
@@ -37,7 +39,8 @@ public class BoothSelection {
     public BoothSelection(UUID id, UUID eventId, UUID orderId, UUID exhibitorId, String status,
                           BigDecimal totalAreaSqm, OffsetDateTime lockStartedAt, OffsetDateTime lockExpiresAt,
                           UUID helperUserId, UUID reviewerUserId, OffsetDateTime reviewedAt, String reviewComment,
-                          OffsetDateTime createdAt, OffsetDateTime updatedAt, UUID createdBy, UUID updatedBy) {
+                          String exhibitorRemark, String recommendedBooths, OffsetDateTime createdAt,
+                          OffsetDateTime updatedAt, UUID createdBy, UUID updatedBy) {
         this.id = id;
         this.eventId = eventId;
         this.orderId = orderId;
@@ -50,6 +53,8 @@ public class BoothSelection {
         this.reviewerUserId = reviewerUserId;
         this.reviewedAt = reviewedAt;
         this.reviewComment = reviewComment;
+        this.exhibitorRemark = exhibitorRemark;
+        this.recommendedBooths = recommendedBooths;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.createdBy = createdBy;
@@ -68,6 +73,8 @@ public class BoothSelection {
     public UUID getReviewerUserId() { return reviewerUserId; }
     public OffsetDateTime getReviewedAt() { return reviewedAt; }
     public String getReviewComment() { return reviewComment; }
+    public String getExhibitorRemark() { return exhibitorRemark; }
+    public String getRecommendedBooths() { return recommendedBooths; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public UUID getCreatedBy() { return createdBy; }
@@ -78,15 +85,18 @@ public class BoothSelection {
         this.reviewerUserId = reviewerUserId;
         this.reviewedAt = now;
         this.reviewComment = null;
+        this.recommendedBooths = null;
         this.updatedAt = now;
         this.updatedBy = reviewerUserId;
     }
 
-    public void markRejected(UUID reviewerUserId, String reviewComment, OffsetDateTime now) {
+    public void markRejected(UUID reviewerUserId, String reviewComment, String recommendedBooths,
+                             OffsetDateTime now) {
         this.status = BusinessStatuses.SELECTION_REJECTED;
         this.reviewerUserId = reviewerUserId;
         this.reviewedAt = now;
         this.reviewComment = reviewComment;
+        this.recommendedBooths = recommendedBooths;
         this.updatedAt = now;
         this.updatedBy = reviewerUserId;
     }
@@ -95,6 +105,7 @@ public class BoothSelection {
         this.status = BusinessStatuses.SELECTION_TIMEOUT;
         this.reviewedAt = now;
         this.reviewComment = reviewComment;
+        this.recommendedBooths = null;
         this.updatedAt = now;
         this.updatedBy = actorId;
     }

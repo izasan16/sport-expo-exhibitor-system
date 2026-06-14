@@ -8,5 +8,9 @@ import java.util.UUID;
 
 public record CreateBoothSelectionRequest(@NotNull UUID orderId,
                                           @NotNull UUID exhibitorId,
-                                          @NotNull @Size(min = 1) List<UUID> boothIds) {
+                                          @NotNull @Size(min = 1) List<UUID> boothIds,
+                                          @Size(max = 500) String exhibitorRemark) {
+    public CreateBoothSelectionRequest(UUID orderId, UUID exhibitorId, List<UUID> boothIds) {
+        this(orderId, exhibitorId, boothIds, null);
+    }
 }
