@@ -1,8 +1,10 @@
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Drawer, message, Space } from 'antd';
+import { Button, Drawer, message, Modal, Space } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
+import { getContractStatusMeta, StatusTag } from '../../../app/status';
 
 type ContractRow = {
   id: string;
@@ -70,11 +72,26 @@ export default function ContractListPage() {
   }, [activeContract, versionDrawerOpen]);
 
   const columns: ProColumns<ContractRow>[] = [
-    { title: '订单 ID', dataIndex: 'orderId', ellipsis: true },
+    { title: '订单', dataIndex: 'orderId', ellipsis: true, render: (_, record) => formatShortId(record.orderId) },
     { title: '合同编号', dataIndex: 'contractNo', hideInSearch: true },
-    { title: '状态', dataIndex: 'status', hideInSearch: true },
-    { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime', hideInSearch: true },
-    { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime', hideInSearch: true },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      hideInSearch: true,
+      render: (_, record) => <StatusTag meta={getContractStatusMeta(record.status)} />,
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      hideInSearch: true,
+      render: (_, record) => formatFriendlyTime(record.createdAt),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      hideInSearch: true,
+      render: (_, record) => formatFriendlyTime(record.updatedAt),
+    },
     {
       title: '操作',
       valueType: 'option',
@@ -94,10 +111,18 @@ export default function ContractListPage() {
           <Button
             type="link"
             size="small"
-            onClick={async () => {
-              await apiPost<ContractRow>(`/api/contracts/${record.id}/mark-offline-signed`);
-              message.success('已标记线下签署');
-              actionRef.current?.reload();
+            onClick={() => {
+              Modal.confirm({
+                title: '标记线下签署？',
+                content: `合同 ${record.contractNo || formatShortId(record.id)} 将标记为已线下签署。`,
+                okText: '标记签署',
+                cancelText: '取消',
+                onOk: async () => {
+                  await apiPost<ContractRow>(`/api/contracts/${record.id}/mark-offline-signed`);
+                  message.success('已标记线下签署');
+                  actionRef.current?.reload();
+                },
+              });
             }}
           >
             标记线下签署
@@ -114,6 +139,7 @@ export default function ContractListPage() {
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         columns={columns}
+        locale={{ emptyText: '暂无合同记录' }}
         request={async (params) => {
           const data = await apiGet<ContractRow[]>(`/api/contracts${buildQuery(params)}`);
           return { data, success: true, total: data.length };
@@ -141,11 +167,15 @@ export default function ContractListPage() {
           columns={[
             { title: '版本号', dataIndex: 'versionNo' },
             { title: '原因', dataIndex: 'reason' },
-            { title: '金额', dataIndex: 'amount', valueType: 'money' },
+            { title: '金额', dataIndex: 'amount', render: (_, record) => formatMoney(record.amount) },
             { title: '面积', dataIndex: 'areaSqm', valueType: 'digit' },
-            { title: '签署状态', dataIndex: 'signStatus' },
-            { title: '签署时间', dataIndex: 'signedAt', valueType: 'dateTime' },
-            { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
+            {
+              title: '签署状态',
+              dataIndex: 'signStatus',
+              render: (_, record) => <StatusTag meta={getContractStatusMeta(record.signStatus)} />,
+            },
+            { title: '签署时间', dataIndex: 'signedAt', render: (_, record) => formatFriendlyTime(record.signedAt) },
+            { title: '创建时间', dataIndex: 'createdAt', render: (_, record) => formatFriendlyTime(record.createdAt) },
           ]}
         />
       </Drawer>

@@ -20,6 +20,7 @@ export default function EventListPage() {
       <ProTable<EventRow>
         actionRef={actionRef}
         rowKey="id"
+        locale={{ emptyText: '先创建展会，再配置展位、面积档位和价格规则' }}
         search={false}
         columns={[
           { title: '展会名称', dataIndex: 'name' },

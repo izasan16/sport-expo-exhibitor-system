@@ -22,7 +22,7 @@ export default function BoothListPage() {
       <ProTable<BoothRow>
         actionRef={actionRef}
         rowKey="id"
-        locale={{ emptyText: '请选择展会后查看展位' }}
+        locale={{ emptyText: '当前展会还没有展位，请先创建展位' }}
         search={{ labelWidth: 'auto' }}
         columns={[
           { title: '展会 ID', dataIndex: 'eventId', hideInTable: true },
