@@ -34,6 +34,8 @@ describe('business display helpers', () => {
 
   it('formats supported payment methods and leaves unsupported values raw', () => {
     expect(formatPaymentMethod('OFFLINE_TRANSFER')).toBe('银行转账');
+    expect(formatPaymentMethod('OFFLINE_CASH')).toBe('现金');
+    expect(formatPaymentMethod('OFFLINE_CHECK')).toBe('支票');
     expect(formatPaymentMethod('OFFLINE_BANK')).toBe('OFFLINE_BANK');
   });
 });
