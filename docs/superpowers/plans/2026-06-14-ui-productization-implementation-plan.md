@@ -190,7 +190,7 @@ export type Booth = {
 - Modify: `backend/src/main/java/com/sportexpo/exhibitor/order/ParticipationOrderController.java`
 - Test: `backend/src/test/java/com/sportexpo/exhibitor/order/ParticipationOrderServiceTest.java`
 
-- [ ] **Step 1: Add failing service test for response timestamps and detail lookup**
+- [x] **Step 1: Add failing service test for response timestamps and detail lookup**
 
 Append this test to `ParticipationOrderServiceTest`:
 
@@ -215,7 +215,7 @@ void returnsOrderDetailWithCreatedAndUpdatedTimes() {
 
 Expected before implementation: compilation fails because `createdAt()` and `updatedAt()` do not exist on `ParticipationOrderResponse`.
 
-- [ ] **Step 2: Update `ParticipationOrderResponse`**
+- [x] **Step 2: Update `ParticipationOrderResponse`**
 
 Add imports and fields:
 
@@ -231,7 +231,7 @@ Change the record to include these fields after `totalAmount`:
         OffsetDateTime updatedAt
 ```
 
-- [ ] **Step 3: Map timestamps in `ParticipationOrderService.toResponse`**
+- [x] **Step 3: Map timestamps in `ParticipationOrderService.toResponse`**
 
 Change the final arguments of `new ParticipationOrderResponse(...)` to:
 
@@ -241,7 +241,7 @@ Change the final arguments of `new ParticipationOrderResponse(...)` to:
                 order.getUpdatedAt()
 ```
 
-- [ ] **Step 3.5: Verify or add `ParticipationOrderService.get(UUID)`**
+- [x] **Step 3.5: Verify or add `ParticipationOrderService.get(UUID)`**
 
 Ensure `ParticipationOrderService` contains this method before exposing the controller endpoint:
 
@@ -256,7 +256,7 @@ public ParticipationOrderResponse get(UUID id) {
 
 If the method already exists, leave it in place and only verify it maps through the updated `toResponse` method.
 
-- [ ] **Step 4: Expose order detail endpoint**
+- [x] **Step 4: Expose order detail endpoint**
 
 In `ParticipationOrderController`, add this method below `list`:
 
@@ -267,7 +267,7 @@ public ApiResponse<ParticipationOrderResponse> get(@PathVariable UUID orderId) {
 }
 ```
 
-- [ ] **Step 5: Run focused backend test**
+- [x] **Step 5: Run focused backend test**
 
 Run:
 
@@ -282,7 +282,7 @@ mvn test -Dtest=ParticipationOrderServiceTest
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add backend/src/main/java/com/sportexpo/exhibitor/order backend/src/test/java/com/sportexpo/exhibitor/order/ParticipationOrderServiceTest.java
