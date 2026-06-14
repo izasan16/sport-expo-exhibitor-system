@@ -49,6 +49,21 @@ export type MobileTimelineEvent = {
   timeDisplay: string;
 };
 
+export type PaymentProgressSource = {
+  amount?: string | number | null;
+  status?: string | null;
+};
+
+export type PaymentProgressSummary = {
+  confirmedAmount: number;
+  totalAmount: number;
+  remainingAmount: number;
+  percent: number;
+  confirmedDisplay: string;
+  totalDisplay: string;
+  remainingDisplay: string;
+};
+
 const homeFlowSteps: FlowStep[] = [
   { title: '提交订单' },
   { title: '销售确认' },
@@ -178,6 +193,28 @@ export function buildMobileTimelineEvents(input: MobileTimelineInput) {
   });
 
   return events.sort((left, right) => Date.parse(left.happenedAt) - Date.parse(right.happenedAt));
+}
+
+export function buildPaymentProgressSummary(
+  totalPayable: string | number | undefined | null,
+  payments: PaymentProgressSource[],
+): PaymentProgressSummary {
+  const totalAmount = toNumber(totalPayable);
+  const confirmedAmount = payments
+    .filter((payment) => payment.status === 'CONFIRMED')
+    .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
+  const remainingAmount = Math.max(totalAmount - confirmedAmount, 0);
+  const percent = totalAmount > 0 ? Math.min(Math.round((confirmedAmount / totalAmount) * 100), 100) : 0;
+
+  return {
+    confirmedAmount: Number(confirmedAmount.toFixed(2)),
+    totalAmount: Number(totalAmount.toFixed(2)),
+    remainingAmount: Number(remainingAmount.toFixed(2)),
+    percent,
+    confirmedDisplay: formatMoney(confirmedAmount),
+    totalDisplay: formatMobileAmount(totalPayable),
+    remainingDisplay: formatMoney(remainingAmount),
+  };
 }
 
 export function formatNotificationType(type: NotificationType | string) {

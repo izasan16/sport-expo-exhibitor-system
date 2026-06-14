@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildHomeFlowSteps,
   buildMobileTimelineEvents,
+  buildPaymentProgressSummary,
   buildSelectedBoothSummary,
   formatMobileAmount,
   formatMobileOptional,
@@ -113,6 +114,31 @@ describe('exhibitor mobile view models', () => {
         }),
       ]),
     );
+  });
+
+  it('summarizes confirmed payment progress with capped percentage and remaining floor', () => {
+    const summary = buildPaymentProgressSummary('1000.00', [
+      { amount: '300.00', status: 'CONFIRMED' },
+      { amount: 250, status: 'PENDING_FINANCE_CONFIRM' },
+      { amount: '900.00', status: 'CONFIRMED' },
+    ]);
+
+    expect(summary).toEqual({
+      confirmedAmount: 1200,
+      totalAmount: 1000,
+      remainingAmount: 0,
+      percent: 100,
+      confirmedDisplay: '¥1,200.00',
+      totalDisplay: '¥1,000.00',
+      remainingDisplay: '¥0.00',
+    });
+
+    expect(buildPaymentProgressSummary(null, [{ amount: '20.00', status: 'CONFIRMED' }])).toMatchObject({
+      totalAmount: 0,
+      remainingAmount: 0,
+      percent: 0,
+      totalDisplay: '-',
+    });
   });
 
   it('labels all supported notification types', () => {

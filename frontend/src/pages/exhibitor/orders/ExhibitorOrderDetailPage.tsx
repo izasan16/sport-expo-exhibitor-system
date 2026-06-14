@@ -1,11 +1,11 @@
 import { CopyOutlined } from '@ant-design/icons';
 import { PageContainer, ProCard, ProDescriptions, ProTable } from '@ant-design/pro-components';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Collapse, Empty, List, message, Result, Skeleton, Space, Statistic, Steps, Tabs, Timeline, Tooltip, Typography } from 'antd';
+import { Button, Collapse, Empty, List, message, Progress, Result, Skeleton, Space, Statistic, Steps, Tabs, Timeline, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadSelectionEligibility } from '../../../app/apiLoaders';
-import { formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay, formatPaymentMethod, type AreaTierLookupSource } from '../../../app/display';
+import { formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay, formatSupportedPaymentMethod, type AreaTierLookupSource } from '../../../app/display';
 import type { BoothSelection, ContractRecord, ParticipationOrder, PaymentRecord, SelectionEligibility } from '../../../app/domain';
 import { formatArea, formatShortId } from '../../../app/formatters';
 import { apiGet } from '../../../app/request';
@@ -19,7 +19,15 @@ import {
   StatusTag,
 } from '../../../app/status';
 import { useEvents } from '../../../app/useEvents';
-import { buildHomeFlowSteps, buildMobileTimelineEvents, formatMobileAmount, formatMobileOptional, formatMobileText, formatMobileTime } from '../mobileViewModels';
+import {
+  buildHomeFlowSteps,
+  buildMobileTimelineEvents,
+  buildPaymentProgressSummary,
+  formatMobileAmount,
+  formatMobileOptional,
+  formatMobileText,
+  formatMobileTime,
+} from '../mobileViewModels';
 import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, isOrderPayable } from '../pageLogic';
 
 function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right: T) {
@@ -106,6 +114,10 @@ export default function ExhibitorOrderDetailPage() {
     () => buildMobileTimelineEvents({ order, payments, selections, contracts }),
     [contracts, order, payments, selections],
   );
+  const paymentProgress = useMemo(
+    () => buildPaymentProgressSummary(order?.totalAmount, payments),
+    [order?.totalAmount, payments],
+  );
 
   const basicColumns = useMemo<ProDescriptionsItemProps<ParticipationOrder>[]>(
     () => [
@@ -140,7 +152,7 @@ export default function ExhibitorOrderDetailPage() {
       dataIndex: 'amount',
       render: (_, record) => formatMobileAmount(record.amount),
     },
-    { title: '方式', dataIndex: 'method', render: (_, record) => formatPaymentMethod(record.method) },
+    { title: '方式', dataIndex: 'method', render: (_, record) => formatSupportedPaymentMethod(record.method) },
     {
       title: '状态',
       dataIndex: 'status',
@@ -259,6 +271,18 @@ export default function ExhibitorOrderDetailPage() {
               <Typography.Text type="secondary">
                 {formatArea(order.areaSqm)} · {formatMobileText(order.boothType)} · {formatMobileAmount(order.totalAmount)}
               </Typography.Text>
+              <Typography.Text type="secondary">
+                当前等待说明：{nextAction.reason || nextAction.label || '暂无'}
+              </Typography.Text>
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Typography.Text strong>付款进度</Typography.Text>
+                <Progress percent={paymentProgress.percent} />
+                <Space direction="vertical" size={4}>
+                  <Typography.Text>已确认金额：{paymentProgress.confirmedDisplay}</Typography.Text>
+                  <Typography.Text>应付总额：{paymentProgress.totalDisplay}</Typography.Text>
+                  <Typography.Text>剩余金额：{paymentProgress.remainingDisplay}</Typography.Text>
+                </Space>
+              </Space>
             </Space>
           </ProCard>
 
@@ -324,7 +348,7 @@ export default function ExhibitorOrderDetailPage() {
                           <ProCard title={`付款 ${formatShortId(payment.id)}`}>
                             <Space direction="vertical" size={6}>
                               <Typography.Text>金额：{formatMobileAmount(payment.amount)}</Typography.Text>
-                              <Typography.Text>方式：{formatPaymentMethod(payment.method)}</Typography.Text>
+                              <Typography.Text>方式：{formatSupportedPaymentMethod(payment.method)}</Typography.Text>
                               <StatusTag meta={payment.status ? getPaymentStatusMeta(payment.status) : { label: '未填写', color: 'default' }} />
                               <Typography.Text type="secondary">提交时间：{formatMobileTime(payment.createdAt)}</Typography.Text>
                               <Typography.Text type="secondary">确认时间：{formatMobileTime(payment.confirmedAt)}</Typography.Text>
