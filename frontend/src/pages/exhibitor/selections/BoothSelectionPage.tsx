@@ -4,7 +4,8 @@ import { Alert, Button, message, Modal, Result, Skeleton, Space, Statistic } fro
 import { useEffect, useMemo, useState } from 'react';
 import type { Key } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { Booth, ParticipationOrder } from '../../../app/domain';
+import { loadSelectionEligibility } from '../../../app/apiLoaders';
+import type { Booth, ParticipationOrder, SelectionEligibility } from '../../../app/domain';
 import { formatArea } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import {
@@ -27,9 +28,12 @@ export default function BoothSelectionPage() {
   const orderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
   const [order, setOrder] = useState<ParticipationOrder>();
   const [booths, setBooths] = useState<Booth[]>([]);
+  const [eligibility, setEligibility] = useState<SelectionEligibility>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [loading, setLoading] = useState(Boolean(orderId));
+  const [loadFailed, setLoadFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [reloadSignal, setReloadSignal] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -38,25 +42,38 @@ export default function BoothSelectionPage() {
       if (!orderId) {
         setOrder(undefined);
         setBooths([]);
+        setEligibility(undefined);
         setSelectedRowKeys([]);
+        setLoadFailed(false);
         setLoading(false);
         return;
       }
 
       setLoading(true);
+      setLoadFailed(false);
       setOrder(undefined);
       setBooths([]);
+      setEligibility(undefined);
       setSelectedRowKeys([]);
 
       try {
         const loadedOrder = await apiGet<ParticipationOrder>(`/api/participation-orders/${encodeURIComponent(orderId)}`);
-        const availableBooths = await apiGet<Booth[]>(
-          `/api/booths?eventId=${encodeURIComponent(loadedOrder.eventId)}&status=AVAILABLE`,
-        );
+        const [availableBooths, loadedEligibility] = await Promise.all([
+          apiGet<Booth[]>(`/api/booths?eventId=${encodeURIComponent(loadedOrder.eventId)}&status=AVAILABLE`),
+          loadSelectionEligibility(loadedOrder.id),
+        ]);
 
         if (!alive) return;
         setOrder(loadedOrder);
         setBooths(filterBoothsForOrderType(availableBooths, loadedOrder));
+        setEligibility(loadedEligibility);
+      } catch {
+        if (!alive) return;
+        setLoadFailed(true);
+        setOrder(undefined);
+        setBooths([]);
+        setEligibility(undefined);
+        setSelectedRowKeys([]);
       } finally {
         if (alive) setLoading(false);
       }
@@ -66,7 +83,7 @@ export default function BoothSelectionPage() {
     return () => {
       alive = false;
     };
-  }, [orderId]);
+  }, [orderId, reloadSignal]);
 
   const sortedBooths = useMemo(() => sortBoothsForMap(booths), [booths]);
   const selectedBooths = useMemo(
@@ -78,12 +95,15 @@ export default function BoothSelectionPage() {
     [order?.areaSqm, selectedBooths],
   );
   const showAreaAlert = order && selectedRowKeys.length > 0 && !areaComparison.matches;
-  const canSubmit = canSubmitBoothSelection({
-    loading,
-    hasOrder: Boolean(order),
-    areaMatches: areaComparison.matches,
-    selectedCount: selectedRowKeys.length,
-  });
+  const isEligibleForSelection = order?.status === 'PAID' && eligibility?.status === 'AVAILABLE';
+  const canSubmit =
+    isEligibleForSelection &&
+    canSubmitBoothSelection({
+      loading,
+      hasOrder: Boolean(order),
+      areaMatches: areaComparison.matches,
+      selectedCount: selectedRowKeys.length,
+    });
 
   const columns: ProColumns<Booth>[] = [
     { title: '展位号', dataIndex: 'boothNo' },
@@ -144,6 +164,26 @@ export default function BoothSelectionPage() {
     );
   }
 
+  if (loadFailed) {
+    return (
+      <PageContainer title="选择展位">
+        <Result
+          status="error"
+          title="加载展位信息失败"
+          subTitle="网络或服务暂时异常，请稍后重试，或返回订单列表重新进入选位。"
+          extra={
+            <Space>
+              <Button type="primary" onClick={() => setReloadSignal((current) => current + 1)}>
+                重试
+              </Button>
+              <Button onClick={() => navigate('/exhibitor/orders')}>返回我的订单</Button>
+            </Space>
+          }
+        />
+      </PageContainer>
+    );
+  }
+
   if (!order) {
     return (
       <PageContainer title="选择展位">
@@ -179,8 +219,17 @@ export default function BoothSelectionPage() {
           />
         ) : null}
 
+        {!isEligibleForSelection ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="当前订单暂不可选位"
+            description="订单需已付款，且选位资格已开放后才能提交展位选择。"
+          />
+        ) : null}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 8 }}>
-          {sortBoothsForMap(booths).map((booth) => {
+          {sortedBooths.map((booth) => {
             const selected = selectedRowKeys.includes(booth.id);
             return (
               <Button
