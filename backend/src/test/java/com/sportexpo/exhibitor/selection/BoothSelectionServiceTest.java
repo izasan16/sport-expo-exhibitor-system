@@ -7,6 +7,8 @@ import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventRepository;
+import com.sportexpo.exhibitor.notification.NotificationService;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
 import com.sportexpo.exhibitor.selection.dto.RejectBoothSelectionRequest;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     @Autowired BoothLockRepository lockRepository;
     @Autowired BoothSelectionRepository selectionRepository;
     @Autowired EventRepository eventRepository;
+    @Autowired NotificationService notificationService;
     @Autowired MockMvc mockMvc;
 
     @Test
@@ -249,6 +252,25 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var eligibility = eligibilityRepository.findByOrderId(pending.orderId()).orElseThrow();
         assertThat(eligibility.getStatus()).isEqualTo(BusinessStatuses.ELIGIBILITY_AVAILABLE);
         assertThat(eligibility.getPauseReason()).isNull();
+    }
+
+    @Test
+    void releaseExpiredSelectionsCreatesTimeoutNotificationForExhibitor() {
+        var pending = fixture.createExpiredPendingSelection("9.00", "STANDARD");
+
+        var releasedCount = selectionService.releaseExpiredSelections(
+                java.time.OffsetDateTime.now(), DemoActors.SYSTEM_ACTOR_ID);
+
+        assertThat(releasedCount).isEqualTo(1);
+        assertThat(notificationService.list(pending.exhibitorId()))
+                .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_TIMEOUT_RELEASED))
+                .filteredOn(notification -> notification.eventId().equals(pending.eventId()))
+                .hasSize(1)
+                .first()
+                .satisfies(notification -> {
+                    assertThat(notification.recipientId()).isEqualTo(pending.exhibitorId());
+                    assertThat(notification.eventId()).isEqualTo(pending.eventId());
+                });
     }
 
     @Test

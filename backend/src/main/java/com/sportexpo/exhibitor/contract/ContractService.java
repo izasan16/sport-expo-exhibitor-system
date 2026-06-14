@@ -5,6 +5,8 @@ import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.contract.dto.ContractResponse;
 import com.sportexpo.exhibitor.contract.dto.ContractVersionResponse;
+import com.sportexpo.exhibitor.notification.NotificationService;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.ParticipationOrderRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,13 +21,16 @@ public class ContractService {
     private final ContractVersionRepository versionRepository;
     private final ParticipationOrderRepository orderRepository;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public ContractService(ContractRepository contractRepository, ContractVersionRepository versionRepository,
-                           ParticipationOrderRepository orderRepository, AuditService auditService) {
+                           ParticipationOrderRepository orderRepository, AuditService auditService,
+                           NotificationService notificationService) {
         this.contractRepository = contractRepository;
         this.versionRepository = versionRepository;
         this.orderRepository = orderRepository;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -72,6 +77,9 @@ public class ContractService {
                 contract.getId(), BusinessStatuses.CONTRACT_GENERATED, contract.getStatus(), "mark offline signed");
         auditService.record(order.getEventId(), actorId, "ORDER_CONTRACT_EFFECTIVE", "ParticipationOrder",
                 order.getId(), BusinessStatuses.ORDER_PENDING_CONTRACT, order.getStatus(), "contract effective");
+        notificationService.create(contract.getEventId(), "EXHIBITOR", order.getExhibitorId(),
+                "Contract signed", "Your offline contract has been marked as signed.",
+                NotificationTypes.CONTRACT_SIGNED);
         return toResponse(contract);
     }
 

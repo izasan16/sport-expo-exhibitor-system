@@ -6,6 +6,8 @@ import com.sportexpo.exhibitor.booth.BoothRepository;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.event.EventRepository;
+import com.sportexpo.exhibitor.notification.NotificationService;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.ParticipationOrder;
 import com.sportexpo.exhibitor.order.ParticipationOrderRepository;
 import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
@@ -36,6 +38,7 @@ public class BoothSelectionService {
     private final BoothSelectionRepository selectionRepository;
     private final BoothLockRepository lockRepository;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public BoothSelectionService(ParticipationOrderRepository orderRepository,
                                  EventRepository eventRepository,
@@ -43,7 +46,8 @@ public class BoothSelectionService {
                                  BoothRepository boothRepository,
                                  BoothSelectionRepository selectionRepository,
                                  BoothLockRepository lockRepository,
-                                 AuditService auditService) {
+                                 AuditService auditService,
+                                 NotificationService notificationService) {
         this.orderRepository = orderRepository;
         this.eventRepository = eventRepository;
         this.eligibilityRepository = eligibilityRepository;
@@ -51,6 +55,7 @@ public class BoothSelectionService {
         this.selectionRepository = selectionRepository;
         this.lockRepository = lockRepository;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -138,6 +143,9 @@ public class BoothSelectionService {
 
         auditService.record(order.getEventId(), request.exhibitorId(), "BOOTH_SELECTION_SUBMIT",
                 "BoothSelection", selection.getId(), null, selection.getStatus(), "submit booth selection");
+        notificationService.create(order.getEventId(), "EXHIBITOR", order.getExhibitorId(),
+                "Selection submitted", "Your booth selection has been submitted for review.",
+                NotificationTypes.SELECTION_SUBMITTED);
         return toResponse(selection, sortedBoothIds);
     }
 
@@ -167,6 +175,9 @@ public class BoothSelectionService {
         auditService.record(selection.getEventId(), actorId, "BOOTH_SELECTION_APPROVE",
                 "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
                 selection.getStatus(), "approve booth selection");
+        notificationService.create(selection.getEventId(), "EXHIBITOR", selection.getExhibitorId(),
+                "Selection approved", "Your booth selection has been approved.",
+                NotificationTypes.SELECTION_APPROVED);
         return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
     }
 
@@ -200,13 +211,34 @@ public class BoothSelectionService {
         auditService.record(selection.getEventId(), actorId, "BOOTH_SELECTION_REJECT",
                 "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
                 selection.getStatus(), reason);
+        notificationService.create(selection.getEventId(), "EXHIBITOR", selection.getExhibitorId(),
+                "Selection rejected", reason, NotificationTypes.SELECTION_REJECTED);
         return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
     }
 
     @Transactional
     public BoothSelectionResponse timeoutRelease(UUID selectionId, UUID actorId) {
+        return timeoutRelease(selectionId, actorId, OffsetDateTime.now());
+    }
+
+    @Transactional
+    public int releaseExpiredSelections(OffsetDateTime now, UUID actorId) {
+        var expiredSelections = selectionRepository.findByStatusAndLockExpiresAtBefore(
+                BusinessStatuses.SELECTION_PENDING_REVIEW, now);
+        var releasedCount = 0;
+        for (var expiredSelection : expiredSelections) {
+            try {
+                timeoutRelease(expiredSelection.getId(), actorId, now);
+                releasedCount++;
+            } catch (BusinessException ignored) {
+                // The job is idempotent; a concurrent reviewer may have already moved this selection.
+            }
+        }
+        return releasedCount;
+    }
+
+    private BoothSelectionResponse timeoutRelease(UUID selectionId, UUID actorId, OffsetDateTime now) {
         var selection = findPendingSelectionForUpdate(selectionId);
-        var now = OffsetDateTime.now();
         if (!now.isAfter(selection.getLockExpiresAt())) {
             throw new BusinessException("Selection lock has not expired");
         }
@@ -228,6 +260,9 @@ public class BoothSelectionService {
         auditService.record(selection.getEventId(), actorId, "BOOTH_SELECTION_TIMEOUT_RELEASE",
                 "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
                 selection.getStatus(), comment);
+        notificationService.create(selection.getEventId(), "EXHIBITOR", selection.getExhibitorId(),
+                "Selection timeout released", "Your booth selection lock expired and has been released.",
+                NotificationTypes.SELECTION_TIMEOUT_RELEASED);
         return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
     }
 

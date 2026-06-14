@@ -12,6 +12,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface BoothSelectionRepository extends JpaRepository<BoothSelection, UUID> {
+    long countByStatus(String status);
+
+    List<BoothSelection> findTop5ByStatusOrderByCreatedAtDesc(String status);
+
     boolean existsByOrderIdAndStatus(UUID orderId, String status);
 
     List<BoothSelection> findByOrderIdOrderByCreatedAtDesc(UUID orderId);

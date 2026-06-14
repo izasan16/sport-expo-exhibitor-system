@@ -1,5 +1,6 @@
 package com.sportexpo.exhibitor.order;
 
+import com.sportexpo.exhibitor.TestBusinessFixture;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
@@ -18,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class ParticipationOrderServiceTest extends TestDatabaseSupport {
+    @Autowired TestBusinessFixture fixture;
     @Autowired EventService eventService;
     @Autowired AreaTierService areaTierService;
     @Autowired PriceRuleService priceRuleService;
@@ -83,6 +86,25 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
         assertThat(detail.id()).isEqualTo(created.id());
         assertThat(detail.createdAt()).isNotNull();
         assertThat(detail.updatedAt()).isNotNull();
+    }
+
+    @Test
+    void batchConfirmSalesKeepsSuccessfulOrdersWhenOtherItemsFail() {
+        var ready = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
+        var alreadyConfirmed = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
+        orderService.confirmSales(alreadyConfirmed.id(), DemoActors.DEMO_ADMIN_ID);
+        var missingOrderId = UUID.randomUUID();
+
+        var result = orderService.batchConfirmSales(
+                List.of(ready.id(), alreadyConfirmed.id(), missingOrderId),
+                DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.failureCount()).isEqualTo(2);
+        assertThat(result.failures())
+                .extracting("orderId")
+                .containsExactlyInAnyOrder(alreadyConfirmed.id(), missingOrderId);
+        assertThat(orderService.get(ready.id()).status()).isEqualTo(BusinessStatuses.ORDER_PENDING_CONTRACT);
     }
 
     @Test

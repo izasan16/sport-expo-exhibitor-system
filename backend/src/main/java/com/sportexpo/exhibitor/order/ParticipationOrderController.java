@@ -2,6 +2,8 @@ package com.sportexpo.exhibitor.order;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.order.dto.BatchConfirmOrdersRequest;
+import com.sportexpo.exhibitor.order.dto.BatchConfirmOrdersResponse;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
 import jakarta.validation.Valid;
@@ -33,6 +35,11 @@ public class ParticipationOrderController {
     @PostMapping("/{orderId}/confirm")
     public ApiResponse<ParticipationOrderResponse> confirm(@PathVariable UUID orderId) {
         return ApiResponse.ok(service.confirmSales(orderId, DemoActors.DEMO_ADMIN_ID));
+    }
+
+    @PostMapping("/batch-confirm")
+    public ApiResponse<BatchConfirmOrdersResponse> batchConfirm(@Valid @RequestBody BatchConfirmOrdersRequest request) {
+        return ApiResponse.ok(service.batchConfirmSales(request.orderIds(), DemoActors.DEMO_ADMIN_ID));
     }
 
     @GetMapping

@@ -112,6 +112,9 @@ public class PaymentService {
 
         auditService.record(payment.getEventId(), actorId, "PAYMENT_CONFIRM", "Payment",
                 payment.getId(), oldPaymentStatus, payment.getStatus(), "confirm payment");
+        notificationService.create(payment.getEventId(), "EXHIBITOR", order.getExhibitorId(),
+                "Payment confirmed", "Your payment has been confirmed by finance.",
+                NotificationTypes.PAYMENT_CONFIRMED);
         return toResponse(payment);
     }
 

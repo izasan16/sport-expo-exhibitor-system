@@ -8,6 +8,9 @@ import com.sportexpo.exhibitor.contract.ContractRepository;
 import com.sportexpo.exhibitor.contract.ContractVersion;
 import com.sportexpo.exhibitor.contract.ContractVersionRepository;
 import com.sportexpo.exhibitor.event.EventRepository;
+import com.sportexpo.exhibitor.notification.NotificationService;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
+import com.sportexpo.exhibitor.order.dto.BatchConfirmOrdersResponse;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
 import com.sportexpo.exhibitor.pricing.AreaTier;
@@ -19,12 +22,16 @@ import com.sportexpo.exhibitor.selection.SelectionEligibilityRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -50,6 +57,8 @@ public class ParticipationOrderService {
     private final ContractRepository contractRepository;
     private final ContractVersionRepository contractVersionRepository;
     private final AuditService auditService;
+    private final NotificationService notificationService;
+    private final TransactionTemplate batchTransactionTemplate;
 
     public ParticipationOrderService(ParticipationOrderRepository repository,
                                      EventRepository eventRepository,
@@ -58,7 +67,9 @@ public class ParticipationOrderService {
                                      SelectionEligibilityRepository eligibilityRepository,
                                      ContractRepository contractRepository,
                                      ContractVersionRepository contractVersionRepository,
-                                     AuditService auditService) {
+                                     AuditService auditService,
+                                     NotificationService notificationService,
+                                     PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.eventRepository = eventRepository;
         this.areaTierRepository = areaTierRepository;
@@ -67,6 +78,9 @@ public class ParticipationOrderService {
         this.contractRepository = contractRepository;
         this.contractVersionRepository = contractVersionRepository;
         this.auditService = auditService;
+        this.notificationService = notificationService;
+        this.batchTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.batchTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional
@@ -183,7 +197,30 @@ public class ParticipationOrderService {
                 order.getId(), oldOrderStatus, order.getStatus(), "sales confirm order");
         auditService.record(contract.getEventId(), actorId, "CONTRACT_GENERATE", "Contract",
                 contract.getId(), null, contract.getStatus(), "generate contract");
+        notificationService.create(order.getEventId(), "EXHIBITOR", order.getExhibitorId(),
+                "Order sales confirmed", "Your participation order has been confirmed by sales.",
+                NotificationTypes.ORDER_SALES_CONFIRMED);
         return toResponse(order);
+    }
+
+    public BatchConfirmOrdersResponse batchConfirmSales(List<UUID> orderIds, UUID actorId) {
+        var failures = new ArrayList<BatchConfirmOrdersResponse.BatchFailure>();
+        var successCount = 0;
+        for (var orderId : orderIds == null ? List.<UUID>of() : orderIds) {
+            try {
+                batchTransactionTemplate.executeWithoutResult(
+                        ignored -> confirmSales(orderId, actorId));
+                successCount++;
+            } catch (BusinessException exception) {
+                failures.add(new BatchConfirmOrdersResponse.BatchFailure(orderId, exception.getMessage()));
+            } catch (RuntimeException exception) {
+                var reason = exception.getMessage() == null
+                        ? exception.getClass().getSimpleName()
+                        : exception.getMessage();
+                failures.add(new BatchConfirmOrdersResponse.BatchFailure(orderId, reason));
+            }
+        }
+        return new BatchConfirmOrdersResponse(successCount, failures.size(), failures);
     }
 
     private Optional<PriceRule> findEnabledPriceRule(CreateParticipationOrderRequest request) {
