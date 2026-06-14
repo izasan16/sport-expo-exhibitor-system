@@ -1,0 +1,115 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildHomeFlowSteps,
+  buildMobileTimelineEvents,
+  buildSelectedBoothSummary,
+  formatMobileAmount,
+  formatMobileOptional,
+  formatMobileText,
+  formatMobileTime,
+  formatNotificationType,
+  formatShortId,
+  removeSelectedBooth,
+} from './mobileViewModels';
+
+describe('exhibitor mobile view models', () => {
+  it('returns the six-step home flow for the empty home state', () => {
+    expect(buildHomeFlowSteps()).toEqual([
+      { title: '提交订单' },
+      { title: '销售确认' },
+      { title: '合同确认' },
+      { title: '付款确认' },
+      { title: '选择展位' },
+      { title: '审核完成' },
+    ]);
+  });
+
+  it('removes a selected booth and recalculates selected area', () => {
+    const selectedBooths = [
+      { id: 'booth-1', boothNo: 'A001', areaSqm: '9.00' },
+      { id: 'booth-2', boothNo: 'A002', areaSqm: '18.50' },
+      { id: 'booth-3', boothNo: 'A003', areaSqm: 12 },
+    ];
+
+    expect(buildSelectedBoothSummary(selectedBooths)).toMatchObject({
+      boothIds: ['booth-1', 'booth-2', 'booth-3'],
+      selectedCount: 3,
+      selectedAreaSqm: 39.5,
+      selectedAreaDisplay: '39.50 ㎡',
+    });
+
+    expect(removeSelectedBooth(selectedBooths, 'booth-2')).toMatchObject({
+      boothIds: ['booth-1', 'booth-3'],
+      selectedCount: 2,
+      selectedAreaSqm: 21,
+      selectedAreaDisplay: '21.00 ㎡',
+    });
+  });
+
+  it('uses updatedAt fallback when an exact timeline event time is absent', () => {
+    const events = buildMobileTimelineEvents({
+      order: {
+        id: 'order-1',
+        createdAt: '2026-06-14T09:00:00+08:00',
+        updatedAt: '2026-06-14T09:30:00+08:00',
+      },
+      payments: [
+        {
+          id: 'payment-1',
+          createdAt: '2026-06-14T10:00:00+08:00',
+          updatedAt: '2026-06-14T10:30:00+08:00',
+          confirmedAt: null,
+        },
+      ],
+      selections: [
+        {
+          id: 'selection-1',
+          createdAt: '2026-06-14T11:00:00+08:00',
+          updatedAt: '2026-06-14T11:45:00+08:00',
+          reviewedAt: null,
+        },
+      ],
+      contracts: [
+        {
+          id: 'contract-1',
+          createdAt: '2026-06-14T12:00:00+08:00',
+          updatedAt: '2026-06-14T12:15:00+08:00',
+          signedAt: null,
+        },
+      ],
+    });
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'payment-payment-1-confirmed', happenedAt: '2026-06-14T10:30:00+08:00' }),
+        expect.objectContaining({ key: 'selection-selection-1-reviewed', happenedAt: '2026-06-14T11:45:00+08:00' }),
+        expect.objectContaining({ key: 'contract-contract-1-signed', happenedAt: '2026-06-14T12:15:00+08:00' }),
+      ]),
+    );
+  });
+
+  it('labels all supported notification types', () => {
+    expect(formatNotificationType('ORDER_SALES_CONFIRMED')).toBe('销售已确认');
+    expect(formatNotificationType('CONTRACT_SIGNED')).toBe('合同已签署');
+    expect(formatNotificationType('PAYMENT_CONFIRMED')).toBe('付款已确认');
+    expect(formatNotificationType('PAYMENT_FAILED')).toBe('付款确认失败');
+    expect(formatNotificationType('SELECTION_SUBMITTED')).toBe('选位已提交');
+    expect(formatNotificationType('SELECTION_APPROVED')).toBe('选位已通过');
+    expect(formatNotificationType('SELECTION_REJECTED')).toBe('选位已驳回');
+    expect(formatNotificationType('SELECTION_TIMEOUT_RELEASED')).toBe('选位超时释放');
+  });
+
+  it('formats short ids safely at boundaries', () => {
+    expect(formatShortId(undefined)).toBe('-');
+    expect(formatShortId(null)).toBe('-');
+    expect(formatShortId('e0e5589c-90aa-43b5-beb0-c42878beb4aa')).toBe('e0e5589c');
+    expect(formatShortId('short')).toBe('short');
+  });
+
+  it('uses null-safe display fallbacks by field type', () => {
+    expect(formatMobileText(null)).toBe('未填写');
+    expect(formatMobileOptional(undefined)).toBe('暂无');
+    expect(formatMobileTime(null)).toBe('时间未记录');
+    expect(formatMobileAmount(undefined)).toBe('-');
+  });
+});

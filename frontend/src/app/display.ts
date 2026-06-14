@@ -35,6 +35,17 @@ export function formatAreaTierDisplay(areaTierId: string | null | undefined, are
   return tier.zoneId ? `${formatArea(tier.areaSqm)} / 分区 ${formatShortId(tier.zoneId)}` : formatArea(tier.areaSqm);
 }
 
+const paymentMethodLabels: Record<string, string> = {
+  OFFLINE_TRANSFER: '银行转账',
+  OFFLINE_CASH: '现金',
+  OFFLINE_CHECK: '支票',
+};
+
+export function formatPaymentMethod(method: string | null | undefined) {
+  if (!method) return '-';
+  return paymentMethodLabels[method] ?? method;
+}
+
 export function buildEventSelectOptions(events: EventLookupSource[]) {
   return events.map((event) => ({
     label: formatEventDisplay(event.id, events),

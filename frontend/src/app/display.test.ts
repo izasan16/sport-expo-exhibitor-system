@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEMO_EXHIBITOR_ID } from './demoActors';
-import { buildEventSelectOptions, formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay } from './display';
+import {
+  buildEventSelectOptions,
+  formatAreaTierDisplay,
+  formatEventDisplay,
+  formatExhibitorDisplay,
+  formatPaymentMethod,
+} from './display';
 
 describe('business display helpers', () => {
   const events = [
@@ -24,5 +30,10 @@ describe('business display helpers', () => {
       .toBe('18.00 ㎡');
     expect(formatAreaTierDisplay('tier-2', [{ id: 'tier-2', eventId: 'event-1', zoneId: 'zone-a', areaSqm: '36.00', enabled: true }]))
       .toBe('36.00 ㎡ / 分区 zone-a');
+  });
+
+  it('formats supported payment methods and leaves unsupported values raw', () => {
+    expect(formatPaymentMethod('OFFLINE_TRANSFER')).toBe('银行转账');
+    expect(formatPaymentMethod('OFFLINE_BANK')).toBe('OFFLINE_BANK');
   });
 });
