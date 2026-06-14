@@ -369,14 +369,17 @@ export default function ExhibitorOrderDetailPage() {
               },
               {
                 key: 'timeline',
-                label: '业务进度',
+                label: '操作时间线',
                 children: timelineEvents.length ? (
-                  <Timeline
-                    items={timelineEvents.map((event) => ({
-                      key: event.key,
-                      children: `${event.title}：${event.timeDisplay}`,
-                    }))}
-                  />
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Typography.Text strong>业务进度</Typography.Text>
+                    <Timeline
+                      items={timelineEvents.map((event) => ({
+                        key: event.key,
+                        children: `${event.title}：${event.timeDisplay}`,
+                      }))}
+                    />
+                  </Space>
                 ) : (
                   <Empty description="暂无" />
                 ),

@@ -6,6 +6,7 @@ import {
   formatEventDisplay,
   formatExhibitorDisplay,
   formatPaymentMethod,
+  formatSupportedPaymentMethod,
 } from './display';
 
 describe('business display helpers', () => {
@@ -37,5 +38,13 @@ describe('business display helpers', () => {
     expect(formatPaymentMethod('OFFLINE_CASH')).toBe('现金');
     expect(formatPaymentMethod('OFFLINE_CHECK')).toBe('支票');
     expect(formatPaymentMethod('OFFLINE_BANK')).toBe('OFFLINE_BANK');
+  });
+
+  it('formats existing payment records with safe supported-method fallback', () => {
+    expect(formatSupportedPaymentMethod('OFFLINE_TRANSFER')).toBe('银行转账');
+    expect(formatSupportedPaymentMethod('OFFLINE_CASH')).toBe('现金');
+    expect(formatSupportedPaymentMethod('OFFLINE_CHECK')).toBe('支票');
+    expect(formatSupportedPaymentMethod('OFFLINE_BANK')).toBe('未知付款方式');
+    expect(formatSupportedPaymentMethod(null)).toBe('未填写');
   });
 });

@@ -46,6 +46,11 @@ export function formatPaymentMethod(method: string | null | undefined) {
   return paymentMethodLabels[method] ?? method;
 }
 
+export function formatSupportedPaymentMethod(method: string | null | undefined) {
+  if (!method) return '未填写';
+  return paymentMethodLabels[method] ?? '未知付款方式';
+}
+
 export function buildEventSelectOptions(events: EventLookupSource[]) {
   return events.map((event) => ({
     label: formatEventDisplay(event.id, events),

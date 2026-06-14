@@ -3,7 +3,7 @@ import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-compo
 import { Button, Empty, List, message, Result, Skeleton, Space, Statistic, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { formatPaymentMethod } from '../../../app/display';
+import { formatSupportedPaymentMethod } from '../../../app/display';
 import type { ParticipationOrder, PaymentRecord } from '../../../app/domain';
 import { formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
@@ -105,7 +105,7 @@ export default function PaymentSubmitPage() {
       dataIndex: 'amount',
       render: (_, record) => formatMobileAmount(record.amount),
     },
-    { title: '方式', dataIndex: 'method', render: (_, record) => formatPaymentMethod(record.method) },
+    { title: '方式', dataIndex: 'method', render: (_, record) => formatSupportedPaymentMethod(record.method) },
     {
       title: '状态',
       dataIndex: 'status',
@@ -273,7 +273,7 @@ export default function PaymentSubmitPage() {
                   <ProCard title={`付款 ${formatShortId(payment.id)}`}>
                     <Space direction="vertical" size={6}>
                       <Typography.Text>金额：{formatMobileAmount(payment.amount)}</Typography.Text>
-                      <Typography.Text>方式：{formatPaymentMethod(payment.method)}</Typography.Text>
+                      <Typography.Text>方式：{formatSupportedPaymentMethod(payment.method)}</Typography.Text>
                       <StatusTag meta={payment.status ? getPaymentStatusMeta(payment.status) : { label: '未填写', color: 'default' }} />
                       <Typography.Text type="secondary">提交时间：{formatMobileTime(payment.createdAt)}</Typography.Text>
                       {payment.status === 'CONFIRM_FAILED' ? (
