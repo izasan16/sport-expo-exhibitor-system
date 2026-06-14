@@ -1606,7 +1606,7 @@ git commit -m "feat: add admin confirmations and empty states"
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Run all backend tests**
+- [x] **Step 1: Run all backend tests**
 
 Run:
 
@@ -1621,7 +1621,7 @@ mvn test
 
 Expected: `Tests run: 34` or more, `Failures: 0`, `Errors: 0`.
 
-- [ ] **Step 2: Run frontend tests**
+- [x] **Step 2: Run frontend tests**
 
 Run:
 
@@ -1633,7 +1633,7 @@ cmd /c npm test -- dashboardLogic
 
 Expected: all listed tests PASS.
 
-- [ ] **Step 3: Run frontend build**
+- [x] **Step 3: Run frontend build**
 
 Run:
 
@@ -1644,7 +1644,7 @@ cmd /c npm run build
 
 Expected: PASS. Existing Vite chunk-size warnings are acceptable.
 
-- [ ] **Step 4: Run API smoke chain**
+- [x] **Step 4: Run API smoke chain**
 
 Use the existing smoke flow from `README.md` against `APP_DB_SCHEMA=exhibitor_sys`.
 
@@ -1657,7 +1657,7 @@ boothSelection.status=CONFIRMED
 selected booths status=CONFIRMED
 ```
 
-- [ ] **Step 5: Run UI smoke**
+- [x] **Step 5: Run UI smoke**
 
 With backend and frontend running:
 
@@ -1673,7 +1673,7 @@ With backend and frontend running:
 9. Resize the browser below 768px width and verify the desktop-only Result appears with `请在电脑端访问展商系统`.
 ```
 
-- [ ] **Step 6: Update README productized routes**
+- [x] **Step 6: Update README productized routes**
 
 Add this section:
 
@@ -1698,7 +1698,7 @@ Admin:
 - `/admin/selections` - booth selection review
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add README.md
