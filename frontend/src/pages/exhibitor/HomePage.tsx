@@ -10,6 +10,10 @@ import { apiGet } from '../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
 import { getOrderNextAction, getOrderStepIndex, pickLatestActiveOrder } from './pageLogic';
 
+function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
+  return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -47,8 +51,8 @@ export default function HomePage() {
           loadSelectionEligibility(selectedOrder.id),
         ]);
         if (!alive) return;
-        setPayments(loadedPayments);
-        setSelections(loadedSelections);
+        setPayments([...loadedPayments].sort(byCreatedAtDesc));
+        setSelections([...loadedSelections].sort(byCreatedAtDesc));
         setEligibility(loadedEligibility);
       } finally {
         if (alive) setLoading(false);
