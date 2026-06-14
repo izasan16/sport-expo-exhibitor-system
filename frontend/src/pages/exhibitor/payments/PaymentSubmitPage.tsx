@@ -7,6 +7,7 @@ import type { ParticipationOrder, PaymentRecord } from '../../../app/domain';
 import { formatFriendlyTime, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, StatusTag } from '../../../app/status';
+import { isOrderPayable } from '../pageLogic';
 
 type PaymentValues = {
   amount: number;
@@ -20,6 +21,10 @@ type PaymentResponse = {
 
 function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
   return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+}
+
+function hasAtMostTwoDecimals(value: unknown) {
+  return /^\d+(\.\d{1,2})?$/.test(String(value));
 }
 
 export default function PaymentSubmitPage() {
@@ -143,6 +148,25 @@ export default function PaymentSubmitPage() {
     );
   }
 
+  if (!isOrderPayable(order.status)) {
+    return (
+      <PageContainer title="提交付款">
+        <ProCard>
+          <Result
+            status="info"
+            title="当前订单无需提交付款"
+            subTitle="只有待付款或部分付款订单可以继续提交付款。"
+            extra={
+              <Button type="primary" onClick={() => navigate(`/exhibitor/orders/${order.id}`)}>
+                返回订单详情
+              </Button>
+            }
+          />
+        </ProCard>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer title="提交付款">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -181,7 +205,7 @@ export default function PaymentSubmitPage() {
                 {
                   validator: async (_rule: unknown, value: unknown) => {
                     if (value === undefined || value === null || value === '') return;
-                    if (!Number.isInteger(Number(value) * 100)) {
+                    if (!hasAtMostTwoDecimals(value)) {
                       throw new Error('付款金额最多保留两位小数');
                     }
                   },
