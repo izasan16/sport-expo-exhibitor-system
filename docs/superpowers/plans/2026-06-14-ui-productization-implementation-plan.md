@@ -1379,7 +1379,7 @@ git commit -m "feat: add order-based booth selection map"
 - Modify: `frontend/src/pages/admin/orders/AdminOrderListPage.tsx`
 - Create: `frontend/src/pages/admin/orders/AdminOrderDetailPage.tsx`
 
-- [ ] **Step 1: Add dashboard logic tests**
+- [x] **Step 1: Add dashboard logic tests**
 
 Create `dashboardLogic.test.ts`:
 
@@ -1416,7 +1416,7 @@ describe('dashboard logic', () => {
 });
 ```
 
-- [ ] **Step 2: Implement dashboard logic**
+- [x] **Step 2: Implement dashboard logic**
 
 Create `dashboardLogic.ts`:
 
@@ -1433,7 +1433,7 @@ export function countTodayOrders(orders: ParticipationOrder[], now = new Date())
 }
 ```
 
-- [ ] **Step 3: Implement real admin dashboard**
+- [x] **Step 3: Implement real admin dashboard**
 
 Replace `DashboardPage.tsx` with a page that:
 
@@ -1457,7 +1457,7 @@ Performance note for this V1:
 The dashboard uses list APIs and calculates counts client-side. Render only the first 100 orders in compact dashboard lists. If the order volume grows beyond that, replace `/api/participation-orders` with a backend count or dashboard aggregation endpoint.
 ```
 
-- [ ] **Step 4: Productize admin order list**
+- [x] **Step 4: Productize admin order list**
 
 In `AdminOrderListPage.tsx`:
 
@@ -1484,7 +1484,7 @@ Modal.confirm({
 });
 ```
 
-- [ ] **Step 5: Create admin order detail page**
+- [x] **Step 5: Create admin order detail page**
 
 Create `AdminOrderDetailPage.tsx` using the same data-loading pattern as exhibitor detail, with:
 
@@ -1503,7 +1503,7 @@ GET /api/payments?orderId={orderId}
 GET /api/booth-selections?orderId={orderId}
 ```
 
-- [ ] **Step 6: Run dashboard tests and build**
+- [x] **Step 6: Run dashboard tests and build**
 
 Run:
 
@@ -1515,7 +1515,7 @@ cmd /c npm run build
 
 Expected: both PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add frontend/src/pages/admin/DashboardPage.tsx frontend/src/pages/admin/dashboard frontend/src/pages/admin/orders
