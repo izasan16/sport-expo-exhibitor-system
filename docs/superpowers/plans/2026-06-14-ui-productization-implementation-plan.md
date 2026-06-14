@@ -1535,7 +1535,7 @@ git commit -m "feat: productize admin dashboard and orders"
 - Modify: `frontend/src/pages/admin/area-tiers/AreaTierListPage.tsx`
 - Modify: `frontend/src/pages/admin/price-rules/PriceRuleListPage.tsx`
 
-- [ ] **Step 1: Add confirmation modals and loading to payment actions**
+- [x] **Step 1: Add confirmation modals and loading to payment actions**
 
 In `PaymentConfirmPage.tsx`:
 
@@ -1551,7 +1551,7 @@ const [loadingId, setLoadingId] = useState<string>();
 - Use shared status/money/time formatters.
 - Add `locale={{ emptyText: '当前没有待确认付款' }}` to `ProTable`.
 
-- [ ] **Step 2: Add confirmation modals and loading to selection actions**
+- [x] **Step 2: Add confirmation modals and loading to selection actions**
 
 In `SelectionReviewPage.tsx`:
 
@@ -1562,7 +1562,7 @@ In `SelectionReviewPage.tsx`:
 - Use shared status/area/time formatters.
 - Add `locale={{ emptyText: '当前没有待审核选位' }}`.
 
-- [ ] **Step 3: Productize contract actions**
+- [x] **Step 3: Productize contract actions**
 
 In `ContractListPage.tsx`:
 
@@ -1570,7 +1570,7 @@ In `ContractListPage.tsx`:
 - Use `StatusTag` and `formatFriendlyTime`.
 - Add `locale={{ emptyText: '暂无合同记录' }}`.
 
-- [ ] **Step 4: Add configuration empty states**
+- [x] **Step 4: Add configuration empty states**
 
 For each configuration table:
 
@@ -1581,7 +1581,7 @@ For each configuration table:
 
 Keep existing `ModalForm` create actions.
 
-- [ ] **Step 5: Run frontend build**
+- [x] **Step 5: Run frontend build**
 
 Run:
 
@@ -1592,7 +1592,7 @@ cmd /c npm run build
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add frontend/src/pages/admin
