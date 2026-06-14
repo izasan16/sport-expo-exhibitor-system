@@ -301,7 +301,7 @@ git commit -m "feat: expose order detail timestamps"
 - Modify: `frontend/src/pages/exhibitor/pageLogic.ts`
 - Modify: `frontend/src/pages/exhibitor/pageLogic.test.ts`
 
-- [ ] **Step 1: Add failing page logic tests**
+- [x] **Step 1: Add failing page logic tests**
 
 Extend `pageLogic.test.ts` imports from `./pageLogic` only:
 
@@ -357,11 +357,11 @@ it('derives order steps and next actions', () => {
 
 Expected before implementation: FAIL because new modules and functions do not exist.
 
-- [ ] **Step 2: Create `domain.ts`**
+- [x] **Step 2: Create `domain.ts`**
 
 Create the file using the exact shared frontend contracts from the "Shared Frontend Contracts" section of this plan.
 
-- [ ] **Step 3: Create `formatters.ts`**
+- [x] **Step 3: Create `formatters.ts`**
 
 ```ts
 export function formatShortId(id?: string | null) {
@@ -409,7 +409,7 @@ export function formatFriendlyTime(value?: string | null, now = new Date()) {
 }
 ```
 
-- [ ] **Step 4: Create `status.tsx`**
+- [x] **Step 4: Create `status.tsx`**
 
 ```tsx
 import { Tag } from 'antd';
@@ -494,7 +494,7 @@ export function StatusTag({ meta }: { meta: StatusMeta }) {
 }
 ```
 
-- [ ] **Step 4.5: Create `apiLoaders.ts`**
+- [x] **Step 4.5: Create `apiLoaders.ts`**
 
 Create a shared loader for the existing single-object eligibility endpoint so page code does not accidentally treat it as an array:
 
@@ -509,7 +509,7 @@ export async function loadSelectionEligibility(orderId: string): Promise<Selecti
 
 This plan keeps the existing single-object API contract. Do not change page code to `apiGet<SelectionEligibility[]>` unless the backend endpoint is deliberately changed in the same task.
 
-- [ ] **Step 5: Extend `pageLogic.ts`**
+- [x] **Step 5: Extend `pageLogic.ts`**
 
 Add imports:
 
@@ -564,7 +564,7 @@ export function getOrderNextAction(input: OrderNextActionInput) {
 }
 ```
 
-- [ ] **Step 5.5: Add shared formatter and status tests**
+- [x] **Step 5.5: Add shared formatter and status tests**
 
 After `formatters.ts` and `status.tsx` exist, extend `pageLogic.test.ts` imports:
 
@@ -587,7 +587,7 @@ it('formats business values for product UI', () => {
 });
 ```
 
-- [ ] **Step 6: Run frontend logic tests**
+- [x] **Step 6: Run frontend logic tests**
 
 Run:
 
@@ -598,7 +598,7 @@ cmd /c npm test -- pageLogic
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add frontend/src/app/domain.ts frontend/src/app/formatters.ts frontend/src/app/status.tsx frontend/src/app/apiLoaders.ts frontend/src/pages/exhibitor/pageLogic.ts frontend/src/pages/exhibitor/pageLogic.test.ts
