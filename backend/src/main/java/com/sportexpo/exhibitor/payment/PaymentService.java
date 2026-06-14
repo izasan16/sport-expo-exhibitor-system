@@ -24,6 +24,7 @@ import java.util.UUID;
 @Service
 public class PaymentService {
     private static final BigDecimal ZERO_AMOUNT = money(BigDecimal.ZERO);
+    private static final int MAX_FAILURE_REASON_LENGTH = 500;
 
     private final PaymentRepository paymentRepository;
     private final ParticipationOrderRepository orderRepository;
@@ -120,6 +121,9 @@ public class PaymentService {
             throw new BusinessException("Payment failure reason must not be blank");
         }
         var trimmedReason = reason.trim();
+        if (trimmedReason.length() > MAX_FAILURE_REASON_LENGTH) {
+            throw new BusinessException("Payment failure reason must not exceed 500 characters");
+        }
         var payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new BusinessException("Payment does not exist"));
         if (!BusinessStatuses.PAYMENT_PENDING_FINANCE_CONFIRM.equals(payment.getStatus())) {

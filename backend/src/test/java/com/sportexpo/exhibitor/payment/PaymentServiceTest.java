@@ -163,4 +163,16 @@ class PaymentServiceTest extends TestDatabaseSupport {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Payment failure reason must not be blank");
     }
+
+    @Test
+    void failRejectsFailureReasonLongerThanColumnAfterTrim() {
+        var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
+        var payment = paymentService.create(new CreatePaymentRequest(
+                order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
+        var tooLongReason = " " + "x".repeat(501) + " ";
+
+        assertThatThrownBy(() -> paymentService.fail(payment.id(), DemoActors.DEMO_ADMIN_ID, tooLongReason))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Payment failure reason must not exceed 500 characters");
+    }
 }
