@@ -29,8 +29,18 @@ export function buildAdminReasonRules(emptyMessage: string) {
   ];
 }
 
-export function isOrderSalesConfirmable(order: Pick<ParticipationOrder, 'status'>) {
+export function isOrderSalesConfirmable(order: { status: string }) {
   return order.status === 'PENDING_SALES_CONFIRM';
+}
+
+export function filterConfirmableSelectedKeys<T extends { id: string; status: string }>(
+  selectedKeys: Array<string | number>,
+  currentRows: T[],
+) {
+  const selectedKeySet = new Set(selectedKeys.map(String));
+  return currentRows
+    .filter((row) => selectedKeySet.has(row.id) && isOrderSalesConfirmable(row))
+    .map((row) => row.id);
 }
 
 export function joinPaymentsWithOrders(payments: PaymentRecord[], orders: ParticipationOrder[]) {
@@ -53,5 +63,6 @@ export function formatSelectionBoothNumbers(selection: Pick<BoothSelection, 'boo
 }
 
 export function formatNullableAdminText(value?: string | null, fallback = '暂无') {
-  return value?.trim() ? value : fallback;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : fallback;
 }

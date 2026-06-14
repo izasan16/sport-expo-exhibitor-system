@@ -2,7 +2,7 @@ import { PageContainer, ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Alert, Button, message, Modal, Space } from 'antd';
 import type { Key } from 'react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { notifyAdminDashboardStale } from '../../../app/apiLoaders';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
@@ -12,7 +12,7 @@ import { formatArea, formatMoney, formatShortId } from '../../../app/formatters'
 import { apiGet, apiPost } from '../../../app/request';
 import { getOrderStatusMeta, StatusTag } from '../../../app/status';
 import { useEvents } from '../../../app/useEvents';
-import { buildBatchConfirmFailureItems, isOrderSalesConfirmable } from '../pageLogic';
+import { buildBatchConfirmFailureItems, filterConfirmableSelectedKeys, isOrderSalesConfirmable } from '../pageLogic';
 
 function buildQuery(params: Record<string, unknown>) {
   const searchParams = new URLSearchParams();
@@ -34,6 +34,7 @@ export default function AdminOrderListPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [batchConfirming, setBatchConfirming] = useState(false);
   const [batchFailures, setBatchFailures] = useState<Array<{ key: string; text: string }>>([]);
+  const [currentRows, setCurrentRows] = useState<ParticipationOrder[]>([]);
   const { events, eventValueEnum } = useEvents();
   const exhibitorValueEnum = buildValueEnum([{ label: '演示展商', value: DEMO_EXHIBITOR_ID }]);
   const statusValueEnum = Object.fromEntries(
@@ -109,6 +110,7 @@ export default function AdminOrderListPage() {
                   onOk: async () => {
                     await apiPost<ParticipationOrder>(`/api/participation-orders/${record.id}/confirm`);
                     message.success('销售确认已完成');
+                    setSelectedRowKeys([]);
                     notifyAdminDashboardStale();
                     actionRef.current?.reload();
                   },
@@ -124,9 +126,18 @@ export default function AdminOrderListPage() {
       },
     },
   ];
+  const visibleConfirmableSelectedKeys = useMemo(
+    () => filterConfirmableSelectedKeys(selectedRowKeys.map(String), currentRows),
+    [currentRows, selectedRowKeys],
+  );
 
   const handleBatchConfirm = () => {
-    const orderIds = selectedRowKeys.map(String);
+    const orderIds = visibleConfirmableSelectedKeys;
+    if (orderIds.length === 0) {
+      setSelectedRowKeys([]);
+      return;
+    }
+
     Modal.confirm({
       title: '批量确认销售审核？',
       content: `将确认 ${orderIds.length} 个订单，确认后将生成合同。`,
@@ -195,14 +206,16 @@ export default function AdminOrderListPage() {
             key="batch-confirm"
             type="primary"
             loading={batchConfirming}
-            disabled={selectedRowKeys.length === 0}
+            disabled={visibleConfirmableSelectedKeys.length === 0}
             onClick={handleBatchConfirm}
           >
             批量销售确认
           </Button>,
         ]}
         request={async (params) => {
+          setSelectedRowKeys([]);
           const data = await apiGet<ParticipationOrder[]>(`/api/participation-orders${buildQuery(params)}`);
+          setCurrentRows(data);
           return { data, success: true, total: data.length };
         }}
       />

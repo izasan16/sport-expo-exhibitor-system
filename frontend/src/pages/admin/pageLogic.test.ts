@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ADMIN_REASON_MAX_LENGTH,
   buildBatchConfirmFailureItems,
+  filterConfirmableSelectedKeys,
+  formatNullableAdminText,
   validateRequiredAdminReason,
 } from './pageLogic';
 import type { BatchConfirmOrdersResponse } from '../../app/domain';
@@ -28,5 +30,22 @@ describe('admin page logic', () => {
     expect(validateRequiredAdminReason('   ')).toBe('请输入原因');
     expect(validateRequiredAdminReason('a'.repeat(ADMIN_REASON_MAX_LENGTH))).toBeUndefined();
     expect(validateRequiredAdminReason('a'.repeat(ADMIN_REASON_MAX_LENGTH + 1))).toBe('原因不能超过 500 字');
+  });
+
+  it('trims nullable admin display text before rendering it', () => {
+    expect(formatNullableAdminText('  推荐 A101  ')).toBe('推荐 A101');
+    expect(formatNullableAdminText('   ')).toBe('暂无');
+  });
+
+  it('keeps batch confirm ids limited to visible confirmable rows', () => {
+    const currentRows = [
+      { id: 'visible-confirmable', status: 'PENDING_SALES_CONFIRM' },
+      { id: 'visible-not-confirmable', status: 'PENDING_PAYMENT' },
+    ];
+
+    expect(filterConfirmableSelectedKeys(
+      ['visible-confirmable', 'visible-not-confirmable', 'hidden-confirmable'],
+      currentRows,
+    )).toEqual(['visible-confirmable']);
   });
 });
