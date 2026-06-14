@@ -1256,7 +1256,7 @@ git commit -m "feat: add exhibitor order detail flow"
 - Modify: `frontend/src/pages/exhibitor/pageLogic.ts`
 - Modify: `frontend/src/pages/exhibitor/pageLogic.test.ts`
 
-- [ ] **Step 1: Add map selection helper tests**
+- [x] **Step 1: Add map selection helper tests**
 
 Extend the existing `pageLogic.test.ts` import from `./pageLogic` to include `sortBoothsForMap`, then append the test below:
 
@@ -1274,7 +1274,7 @@ it('sorts booths by booth number for the simplified map', () => {
 
 Expected before implementation: FAIL because `sortBoothsForMap` does not exist.
 
-- [ ] **Step 2: Add map sorting helper**
+- [x] **Step 2: Add map sorting helper**
 
 Append to `pageLogic.ts`:
 
@@ -1284,7 +1284,7 @@ export function sortBoothsForMap<T extends { boothNo: string }>(booths: T[]) {
 }
 ```
 
-- [ ] **Step 3: Convert booth selection page to nested route**
+- [x] **Step 3: Convert booth selection page to nested route**
 
 In `BoothSelectionPage.tsx`:
 
@@ -1296,7 +1296,7 @@ In `BoothSelectionPage.tsx`:
 - Add confirmation modal before `apiPost('/api/booth-selections', ...)`.
 - Navigate back to `/exhibitor/orders/{orderId}` after success.
 
-- [ ] **Step 4: Add simplified booth map**
+- [x] **Step 4: Add simplified booth map**
 
 Inside `BoothSelectionPage.tsx`, add a map block above the table:
 
@@ -1328,7 +1328,7 @@ Inside `BoothSelectionPage.tsx`, add a map block above the table:
 
 Use `formatArea` from `app/formatters`.
 
-- [ ] **Step 5: Turn selection result page into redirect/helper**
+- [x] **Step 5: Turn selection result page into redirect/helper**
 
 In `SelectionResultPage.tsx`, show a friendly result instead of an order ID form:
 
@@ -1349,7 +1349,7 @@ export default function SelectionResultPage() {
 }
 ```
 
-- [ ] **Step 6: Run tests and build**
+- [x] **Step 6: Run tests and build**
 
 Run:
 
@@ -1361,7 +1361,7 @@ cmd /c npm run build
 
 Expected: both PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add frontend/src/pages/exhibitor/selections frontend/src/pages/exhibitor/pageLogic.ts frontend/src/pages/exhibitor/pageLogic.test.ts
