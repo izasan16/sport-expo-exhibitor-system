@@ -31,16 +31,28 @@ export type ParticipationOrder = {
   updatedAt: string;
 };
 
+export type BatchConfirmOrdersResponse = {
+  successCount: number;
+  failureCount: number;
+  failures: Array<{
+    orderId: string;
+    reason: string;
+  }>;
+};
+
 export type PaymentRecord = {
   id: string;
-  eventId: string;
+  eventId?: string | null;
   orderId: string;
-  amount: number | string;
+  amount?: number | string | null;
   status: PaymentStatus;
-  method: string;
+  method?: string | null;
+  failureReason?: string | null;
   confirmedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
 };
 
 export type ContractRecord = {
@@ -93,9 +105,13 @@ export type BoothSelection = {
   reviewerUserId?: string | null;
   reviewedAt?: string | null;
   reviewComment?: string | null;
+  exhibitorRemark?: string | null;
+  recommendedBooths?: string | null;
   boothIds: string[];
   createdAt: string;
   updatedAt: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
 };
 
 export type Booth = {
@@ -105,4 +121,15 @@ export type Booth = {
   areaSqm: number | string;
   boothType: string;
   status: BoothStatus;
+};
+
+export type AdminDashboardResponse = {
+  generatedAt?: string | null;
+  pendingSalesConfirmCount?: number | null;
+  pendingFinanceConfirmCount?: number | null;
+  pendingSelectionReviewCount?: number | null;
+  todayNewOrderCount?: number | null;
+  pendingSalesConfirmOrders?: ParticipationOrder[];
+  pendingFinanceConfirmPayments?: PaymentRecord[];
+  pendingSelectionReviews?: BoothSelection[];
 };

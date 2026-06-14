@@ -1,26 +1,20 @@
 import { PageContainer, ProCard, ProList } from '@ant-design/pro-components';
 import { Alert, Button, Col, Row, Skeleton, Space, Statistic, Typography } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { BoothSelection, ParticipationOrder, PaymentRecord } from '../../app/domain';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ADMIN_DASHBOARD_REFRESH_EVENT, loadAdminDashboard } from '../../app/apiLoaders';
+import type { AdminDashboardResponse, BoothSelection, ParticipationOrder, PaymentRecord } from '../../app/domain';
 import { formatArea, formatMoney, formatShortId } from '../../app/formatters';
-import { apiGet } from '../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
-import { countTodayOrders } from './dashboard/dashboardLogic';
-
-function byCreatedAtDesc<T extends { createdAt: string }>(left: T, right: T) {
-  return Date.parse(right.createdAt) - Date.parse(left.createdAt);
-}
+import { buildDashboardViewModel } from './dashboard/dashboardLogic';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const requestSeq = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [pendingOrders, setPendingOrders] = useState<ParticipationOrder[]>([]);
-  const [allOrders, setAllOrders] = useState<ParticipationOrder[]>([]);
-  const [pendingPayments, setPendingPayments] = useState<PaymentRecord[]>([]);
-  const [pendingSelections, setPendingSelections] = useState<BoothSelection[]>([]);
+  const [dashboard, setDashboard] = useState<AdminDashboardResponse>();
 
   const loadDashboard = useCallback(async () => {
     const requestId = requestSeq.current + 1;
@@ -29,25 +23,13 @@ export default function DashboardPage() {
     setLoadFailed(false);
 
     try {
-      const [loadedPendingOrders, loadedAllOrders, loadedPendingPayments, loadedPendingSelections] = await Promise.all([
-        apiGet<ParticipationOrder[]>('/api/participation-orders?status=PENDING_SALES_CONFIRM'),
-        apiGet<ParticipationOrder[]>('/api/participation-orders'),
-        apiGet<PaymentRecord[]>('/api/payments?status=PENDING_FINANCE_CONFIRM'),
-        apiGet<BoothSelection[]>('/api/booth-selections?status=PENDING_REVIEW'),
-      ]);
-
+      const loadedDashboard = await loadAdminDashboard();
       if (requestSeq.current !== requestId) return;
-      setPendingOrders([...loadedPendingOrders].sort(byCreatedAtDesc));
-      setAllOrders([...loadedAllOrders].sort(byCreatedAtDesc));
-      setPendingPayments([...loadedPendingPayments].sort(byCreatedAtDesc));
-      setPendingSelections([...loadedPendingSelections].sort(byCreatedAtDesc));
+      setDashboard(loadedDashboard);
     } catch {
       if (requestSeq.current !== requestId) return;
       setLoadFailed(true);
-      setPendingOrders([]);
-      setAllOrders([]);
-      setPendingPayments([]);
-      setPendingSelections([]);
+      setDashboard(undefined);
     } finally {
       if (requestSeq.current === requestId) setLoading(false);
     }
@@ -55,7 +37,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboard();
+  }, [loadDashboard, location.key]);
+
+  useEffect(() => {
+    window.addEventListener('focus', loadDashboard);
+    window.addEventListener(ADMIN_DASHBOARD_REFRESH_EVENT, loadDashboard);
     return () => {
+      window.removeEventListener('focus', loadDashboard);
+      window.removeEventListener(ADMIN_DASHBOARD_REFRESH_EVENT, loadDashboard);
       requestSeq.current += 1;
     };
   }, [loadDashboard]);
@@ -67,6 +56,11 @@ export default function DashboardPage() {
       </PageContainer>
     );
   }
+
+  const viewModel = buildDashboardViewModel(dashboard ?? {});
+  const pendingOrders = viewModel.pendingSalesConfirmOrders.slice(0, 5);
+  const pendingPayments = viewModel.pendingFinanceConfirmPayments.slice(0, 5);
+  const pendingSelections = viewModel.pendingSelectionReviews.slice(0, 5);
 
   return (
     <PageContainer title="工作台">
@@ -87,25 +81,27 @@ export default function DashboardPage() {
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} xl={6}>
             <ProCard>
-              <Statistic title="待销售确认" value={pendingOrders.length} />
+              <Statistic title="待销售确认" value={viewModel.counts.pendingSalesConfirm} />
             </ProCard>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <ProCard>
-              <Statistic title="今日新增订单" value={countTodayOrders(allOrders)} />
+              <Statistic title="今日新增订单" value={viewModel.counts.todayNewOrder} />
             </ProCard>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <ProCard>
-              <Statistic title="待财务确认" value={pendingPayments.length} />
+              <Statistic title="待财务确认" value={viewModel.counts.pendingFinanceConfirm} />
             </ProCard>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <ProCard>
-              <Statistic title="待选位审核" value={pendingSelections.length} />
+              <Statistic title="待选位审核" value={viewModel.counts.pendingSelectionReview} />
             </ProCard>
           </Col>
         </Row>
+
+        <Typography.Text type="secondary">生成时间：{viewModel.generatedAtDisplay}</Typography.Text>
 
         <ProCard split="vertical">
           <ProCard
@@ -118,8 +114,8 @@ export default function DashboardPage() {
           >
             <ProList<ParticipationOrder>
               rowKey="id"
-              dataSource={pendingOrders.slice(0, 100)}
-              locale={{ emptyText: '暂无待确认订单' }}
+              dataSource={pendingOrders}
+              locale={{ emptyText: '暂无待处理事项' }}
               metas={{
                 title: { render: (_, record) => `订单 ${formatShortId(record.id)}` },
                 description: {
@@ -152,8 +148,8 @@ export default function DashboardPage() {
           >
             <ProList<PaymentRecord>
               rowKey="id"
-              dataSource={pendingPayments.slice(0, 100)}
-              locale={{ emptyText: '暂无待确认付款' }}
+              dataSource={pendingPayments}
+              locale={{ emptyText: '暂无待处理事项' }}
               metas={{
                 title: { render: (_, record) => `付款 ${formatShortId(record.id)}` },
                 description: {
@@ -186,8 +182,8 @@ export default function DashboardPage() {
           >
             <ProList<BoothSelection>
               rowKey="id"
-              dataSource={pendingSelections.slice(0, 100)}
-              locale={{ emptyText: '暂无待审核选位' }}
+              dataSource={pendingSelections}
+              locale={{ emptyText: '暂无待处理事项' }}
               metas={{
                 title: { render: (_, record) => `选位 ${formatShortId(record.id)}` },
                 description: {

@@ -1,15 +1,18 @@
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, message, Modal, Space } from 'antd';
-import { useRef } from 'react';
+import { Alert, Button, message, Modal, Space } from 'antd';
+import type { Key } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { notifyAdminDashboardStale } from '../../../app/apiLoaders';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
 import { buildValueEnum, formatEventDisplay, formatExhibitorDisplay } from '../../../app/display';
-import type { ParticipationOrder } from '../../../app/domain';
+import type { BatchConfirmOrdersResponse, ParticipationOrder } from '../../../app/domain';
 import { formatArea, formatMoney, formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import { getOrderStatusMeta, StatusTag } from '../../../app/status';
 import { useEvents } from '../../../app/useEvents';
+import { buildBatchConfirmFailureItems, isOrderSalesConfirmable } from '../pageLogic';
 
 function buildQuery(params: Record<string, unknown>) {
   const searchParams = new URLSearchParams();
@@ -28,6 +31,9 @@ export default function AdminOrderListPage() {
   const [searchParams] = useSearchParams();
   const statusHint = searchParams.get('status') ?? undefined;
   const actionRef = useRef<ActionType>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [batchConfirming, setBatchConfirming] = useState(false);
+  const [batchFailures, setBatchFailures] = useState<Array<{ key: string; text: string }>>([]);
   const { events, eventValueEnum } = useEvents();
   const exhibitorValueEnum = buildValueEnum([{ label: '演示展商', value: DEMO_EXHIBITOR_ID }]);
   const statusValueEnum = Object.fromEntries(
@@ -103,6 +109,7 @@ export default function AdminOrderListPage() {
                   onOk: async () => {
                     await apiPost<ParticipationOrder>(`/api/participation-orders/${record.id}/confirm`);
                     message.success('销售确认已完成');
+                    notifyAdminDashboardStale();
                     actionRef.current?.reload();
                   },
                 });
@@ -118,8 +125,57 @@ export default function AdminOrderListPage() {
     },
   ];
 
+  const handleBatchConfirm = () => {
+    const orderIds = selectedRowKeys.map(String);
+    Modal.confirm({
+      title: '批量确认销售审核？',
+      content: `将确认 ${orderIds.length} 个订单，确认后将生成合同。`,
+      okText: '批量确认',
+      cancelText: '取消',
+      onOk: async () => {
+        setBatchConfirming(true);
+        setBatchFailures([]);
+        try {
+          const response = await apiPost<BatchConfirmOrdersResponse, { orderIds: string[] }>(
+            '/api/participation-orders/batch-confirm',
+            { orderIds },
+          );
+          const failures = buildBatchConfirmFailureItems(response);
+          setBatchFailures(failures);
+          if (response.failureCount > 0) {
+            message.warning(`批量确认完成，${response.failureCount} 个订单失败`);
+          } else {
+            message.success(`已确认 ${response.successCount} 个订单`);
+          }
+          notifyAdminDashboardStale();
+          actionRef.current?.reload();
+        } finally {
+          setSelectedRowKeys([]);
+          setBatchConfirming(false);
+        }
+      },
+    });
+  };
+
   return (
     <PageContainer title="订单管理">
+      {batchFailures.length > 0 ? (
+        <Alert
+          showIcon
+          type="warning"
+          message="部分订单批量确认失败"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {batchFailures.map((failure) => (
+                <li key={failure.key}>{failure.text}</li>
+              ))}
+            </ul>
+          }
+          closable
+          onClose={() => setBatchFailures([])}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
       <ProTable<ParticipationOrder>
         actionRef={actionRef}
         rowKey="id"
@@ -127,6 +183,24 @@ export default function AdminOrderListPage() {
         params={{ status: statusHint }}
         form={{ initialValues: { status: statusHint } }}
         columns={columns}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+          getCheckboxProps: (record) => ({
+            disabled: !isOrderSalesConfirmable(record),
+          }),
+        }}
+        toolBarRender={() => [
+          <Button
+            key="batch-confirm"
+            type="primary"
+            loading={batchConfirming}
+            disabled={selectedRowKeys.length === 0}
+            onClick={handleBatchConfirm}
+          >
+            批量销售确认
+          </Button>,
+        ]}
         request={async (params) => {
           const data = await apiGet<ParticipationOrder[]>(`/api/participation-orders${buildQuery(params)}`);
           return { data, success: true, total: data.length };
