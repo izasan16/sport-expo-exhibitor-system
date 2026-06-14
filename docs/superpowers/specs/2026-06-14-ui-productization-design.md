@@ -212,6 +212,12 @@ Data source:
   - `GET /api/booth-selections?orderId=...`
   - `GET /api/selection-eligibilities?orderId=...`
 
+Performance tradeoff:
+
+- V1 uses existing list APIs, so the home page performs one order-list request and up to three related-data requests for the latest active order.
+- This is acceptable for the current implementation scope, but the page must show `Skeleton` loading blocks for the summary, next action, and recent activity areas to avoid a white-screen feel.
+- A future backend aggregation endpoint such as `GET /api/exhibitors/{exhibitorId}/dashboard` can replace these calls, but it is not part of this round.
+
 Latest active order rule:
 
 ```text
@@ -242,6 +248,12 @@ Disabled actions must show a reason in tooltip text.
 ### 5.3 Exhibitor Order Detail
 
 `/exhibitor/orders/:orderId` is the center of the exhibitor workflow.
+
+Layout:
+
+- Use `Tabs` for the main detail sections: `基本信息`, `合同`, `付款`, `选位`.
+- Keep the header and progress `Steps` above the tabs so the current stage and next action remain visible.
+- Each tab may use `Card` or `ProCard` internally, but cards must not be nested inside other cards.
 
 Sections:
 
@@ -322,7 +334,7 @@ KPIs:
 - 待销售确认订单: count of `PENDING_SALES_CONFIRM`.
 - 待财务确认付款: count of `PENDING_FINANCE_CONFIRM`.
 - 待审核选位: count of `PENDING_REVIEW`.
-- 今日新增订单: count of orders created today, if `createdAt` is available from API; otherwise omit until API exposes it.
+- 今日新增订单: count of orders whose `createdAt` falls on the current local date.
 
 Task lists:
 
@@ -360,6 +372,12 @@ Changes:
 ### 6.3 Admin Order Detail
 
 `/admin/orders/:orderId` gives administrators a single place to inspect and act.
+
+Layout:
+
+- Use `Tabs` for the main detail sections: `基本信息`, `合同`, `付款`, `选位`, `操作时间线`.
+- Keep the header summary and primary action area above the tabs.
+- This avoids a long undifferentiated page while still keeping a single order-detail route.
 
 Sections:
 
@@ -429,14 +447,14 @@ For this V1, event and exhibitor names may remain unavailable; the UI must label
 
 ### 7.2 Response Fields
 
-Ensure list/detail responses expose:
+This round must expose these fields on order, payment, contract, and selection list/detail responses:
 
 ```text
 createdAt
 updatedAt
 ```
 
-If a response does not expose these fields yet, the UI must not fake timestamps. It should hide time columns until the backend response includes them.
+The admin dashboard depends on `createdAt` to calculate `今日新增订单`. The UI must not fake timestamps.
 
 ### 7.3 Dashboard Counts
 
