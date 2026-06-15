@@ -45,6 +45,43 @@ Frontend dev server: http://localhost:5173
 
 Backend API: http://localhost:8080
 
+## Render Deployment
+
+The repository includes `render.yaml` for a Render Blueprint deployment:
+
+- `sport-expo-exhibitor-web`: static React site
+- `sport-expo-exhibitor-api`: Dockerized Spring Boot API
+- `sport-expo-exhibitor-db`: Render PostgreSQL
+- `sport-expo-exhibitor-cache`: Render Key Value cache
+
+Deploy steps:
+
+```text
+1. Push the repository to GitHub.
+2. In Render, choose New -> Blueprint.
+3. Select this repository and keep the Blueprint file path as render.yaml.
+4. Deploy the Blueprint.
+5. After creation, verify the actual service URLs.
+```
+
+Default Blueprint URLs are:
+
+```text
+Frontend: https://sport-expo-exhibitor-web.onrender.com
+Backend:  https://sport-expo-exhibitor-api.onrender.com
+Health:   https://sport-expo-exhibitor-api.onrender.com/api/health
+```
+
+If Render changes the service slug because of a name collision, update:
+
+```text
+Frontend env VITE_API_BASE_URL -> actual backend URL
+Backend env APP_CORS_ALLOWED_ORIGINS -> actual frontend URL
+```
+
+Render free instances can sleep after inactivity. The first customer visit after
+sleep may take longer while the backend starts again.
+
 ## Verification
 
 Backend compile:

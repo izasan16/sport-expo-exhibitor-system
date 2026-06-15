@@ -6,6 +6,16 @@ type ApiResponse<T> = {
   message?: string;
 };
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+function withApiBaseUrl(url: string): string {
+  if (!apiBaseUrl || /^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  return `${apiBaseUrl}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 async function parseApiResponse<T>(response: Response): Promise<T> {
   const body = await parseBody<T>(response);
 
@@ -37,7 +47,7 @@ async function parseBody<T>(response: Response): Promise<ApiResponse<T> | undefi
 }
 
 export async function apiGet<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(withApiBaseUrl(url), {
     headers: {
       Accept: 'application/json',
     },
@@ -59,7 +69,7 @@ export async function apiPost<T, B = unknown>(url: string, body?: B): Promise<T>
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, options);
+  const response = await fetch(withApiBaseUrl(url), options);
 
   return parseApiResponse<T>(response);
 }
@@ -77,7 +87,7 @@ export async function apiPut<T, B = unknown>(url: string, body?: B): Promise<T> 
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, options);
+  const response = await fetch(withApiBaseUrl(url), options);
 
   return parseApiResponse<T>(response);
 }
