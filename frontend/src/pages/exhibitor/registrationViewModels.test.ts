@@ -39,6 +39,13 @@ describe('exhibitor registration view models', () => {
     ])).toMatchObject({ id: 'approved-old', status: 'APPROVED' });
   });
 
+  it('prioritizes rejected registration on home before an older approved registration', () => {
+    expect(getPrimaryRegistrationForHome([
+      { id: 'approved-old', status: 'APPROVED', updatedAt: '2026-06-14T10:00:00+08:00' },
+      { id: 'rejected-new', status: 'REJECTED', updatedAt: '2026-06-15T10:00:00+08:00' },
+    ])).toMatchObject({ id: 'rejected-new', status: 'REJECTED' });
+  });
+
   it('guides rejected same-event registrations back to editing instead of new registration', () => {
     expect(getRegistrationListPrimaryAction([
       { id: 'rejected-current', status: 'REJECTED', updatedAt: '2026-06-15T10:00:00+08:00' },

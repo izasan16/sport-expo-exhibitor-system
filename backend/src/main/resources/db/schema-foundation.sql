@@ -154,7 +154,7 @@ create table if not exists __schema__.participation_orders (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
     exhibitor_id uuid not null,
-    registration_id uuid references __schema__.registrations(id),
+    registration_id uuid,
     zone_id uuid references __schema__.zones(id),
     area_tier_id uuid not null references __schema__.area_tiers(id),
     area_sqm numeric(14,2) not null,
@@ -342,6 +342,13 @@ create table if not exists __schema__.notifications (
 alter table __schema__.notifications add column if not exists related_type varchar(80);
 alter table __schema__.notifications add column if not exists related_id uuid;
 alter table __schema__.notifications add column if not exists related_order_id uuid;
+alter table __schema__.participation_orders add column if not exists registration_id uuid;
+alter table __schema__.participation_orders drop constraint if exists fk_participation_orders_registration_id;
+alter table __schema__.participation_orders
+    add constraint fk_participation_orders_registration_id
+    foreign key (registration_id)
+    references __schema__.registrations(id)
+    not valid;
 
 create index if not exists idx_booths_event_status on __schema__.booths(event_id, status);
 create index if not exists idx_participation_orders_status_created_at

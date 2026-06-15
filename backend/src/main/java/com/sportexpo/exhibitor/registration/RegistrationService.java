@@ -13,6 +13,8 @@ import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
 import com.sportexpo.exhibitor.registration.dto.RegistrationResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 import java.util.Map;
@@ -35,16 +37,21 @@ public class RegistrationService {
     private final EventCategoryRepository eventCategoryRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final JdbcTemplate jdbcTemplate;
+    private final String schema;
 
     public RegistrationService(RegistrationRepository repository, ExhibitorRepository exhibitorRepository,
                                EventRepository eventRepository, EventCategoryRepository eventCategoryRepository,
-                               NotificationService notificationService, AuditService auditService) {
+                               NotificationService notificationService, AuditService auditService,
+                               JdbcTemplate jdbcTemplate, @Value("${app.db.schema}") String schema) {
         this.repository = repository;
         this.exhibitorRepository = exhibitorRepository;
         this.eventRepository = eventRepository;
         this.eventCategoryRepository = eventCategoryRepository;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.schema = schema;
     }
 
     @Transactional
@@ -56,6 +63,7 @@ public class RegistrationService {
                 .orElseThrow(() -> new BusinessException("Event does not exist"));
         eventCategoryRepository.findByEventIdAndCodeAndEnabled(request.eventId(), request.category(), true)
                 .orElseThrow(() -> new BusinessException("Registration category is not enabled for this event"));
+        validateZoneBelongsToEvent(request.eventId(), request.zoneId());
         if (repository.existsByEventIdAndExhibitorIdAndStatusIn(request.eventId(), exhibitor.getId(), IN_PROGRESS_STATUSES)) {
             throw new BusinessException("Active registration already exists for this exhibitor and event");
         }
@@ -82,6 +90,7 @@ public class RegistrationService {
         }
         eventCategoryRepository.findByEventIdAndCodeAndEnabled(request.eventId(), request.category(), true)
                 .orElseThrow(() -> new BusinessException("Registration category is not enabled for this event"));
+        validateZoneBelongsToEvent(request.eventId(), request.zoneId());
         registration.updateEditableFields(request.category(), request.zoneId(), request.intentAreaSqm(),
                 request.contactName(), request.contactPhone(), request.remark(), actorId);
         auditService.record(registration.getEventId(), actorId, "REGISTRATION_UPDATE", "Registration",
@@ -172,6 +181,21 @@ public class RegistrationService {
     private Registration findEntityForUpdate(UUID id) {
         return repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new BusinessException("Registration does not exist"));
+    }
+
+    private void validateZoneBelongsToEvent(UUID eventId, UUID zoneId) {
+        if (zoneId == null) {
+            return;
+        }
+        var count = jdbcTemplate.queryForObject(
+                "select count(*) from " + schema + ".zones where id = ? and event_id = ?",
+                Integer.class,
+                zoneId,
+                eventId
+        );
+        if (count == null || count == 0) {
+            throw new BusinessException("Registration zone is not available for this event");
+        }
     }
 
     private void notifyAdmin(Registration registration, String type, String title, String content) {

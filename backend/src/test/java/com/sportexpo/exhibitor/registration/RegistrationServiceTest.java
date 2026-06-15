@@ -37,6 +37,10 @@ class RegistrationServiceTest extends TestDatabaseSupport {
     RegistrationRepository registrationRepository;
     @Autowired
     NotificationRepository notificationRepository;
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @org.springframework.beans.factory.annotation.Value("${app.db.schema}")
+    String schema;
 
     @Test
     void rejectsRegistrationCategoryOutsideEventConfiguration() {
@@ -46,6 +50,32 @@ class RegistrationServiceTest extends TestDatabaseSupport {
                 DemoActors.DEMO_EXHIBITOR_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("Registration category is not enabled for this event");
+    }
+
+    @Test
+    void rejectsRegistrationZoneOutsideEvent() {
+        var setup = setupRegistrationFixture();
+        var otherSetup = setupRegistrationFixture();
+        var pavilionId = UUID.randomUUID();
+        var otherZoneId = UUID.randomUUID();
+        var suffix = otherZoneId.toString().substring(0, 8);
+        jdbcTemplate.update("""
+                        insert into %s.pavilions (id, event_id, name, code, created_at, updated_at)
+                        values (?, ?, ?, ?, now(), now())
+                        """.formatted(schema),
+                pavilionId, otherSetup.eventId(), "其它展馆-" + suffix, "P-" + suffix);
+        jdbcTemplate.update("""
+                        insert into %s.zones (id, event_id, pavilion_id, name, code, category_code, created_at, updated_at)
+                        values (?, ?, ?, ?, ?, 'SPORTS_EQUIPMENT', now(), now())
+                        """.formatted(schema),
+                otherZoneId, otherSetup.eventId(), pavilionId, "其它展区-" + suffix, "Z-" + suffix);
+
+        assertThatThrownBy(() -> registrationService.create(
+                new RegistrationRequest(setup.eventId(), setup.exhibitorId(), "SPORTS_EQUIPMENT", otherZoneId,
+                        new BigDecimal("18.00"), "王老板", "13800000000", "希望参加本届展会"),
+                DemoActors.DEMO_EXHIBITOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Registration zone is not available for this event");
     }
 
     @Test

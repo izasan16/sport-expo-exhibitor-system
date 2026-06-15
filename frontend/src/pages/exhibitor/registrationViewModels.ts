@@ -76,6 +76,10 @@ export function getLatestRegistration<T extends { createdAt?: string | null; upd
 export function getPrimaryRegistrationForHome<T extends RegistrationActionSource & { createdAt?: string | null; updatedAt?: string | null }>(
   registrations: T[],
 ) {
+  const latestRejected = getLatestRegistration(registrations.filter((registration) => registration.status === 'REJECTED'));
+  if (latestRejected) {
+    return latestRejected;
+  }
   return registrations.find((registration) => registration.status === 'APPROVED') ?? getLatestRegistration(registrations);
 }
 
