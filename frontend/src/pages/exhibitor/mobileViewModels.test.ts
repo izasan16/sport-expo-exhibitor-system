@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildHomeDashboardSummary,
   buildHomeFlowSteps,
+  buildHomeTodoItems,
+  buildHomeWorkbenchSections,
   buildMobileTimelineEvents,
+  buildOrderContextHeader,
   buildPaymentProgressSummary,
   buildSelectedBoothSummary,
   formatMobileAmount,
@@ -24,6 +28,98 @@ describe('exhibitor mobile view models', () => {
       { title: '选择展位' },
       { title: '审核完成' },
     ]);
+  });
+
+  it('keeps the exhibitor home as a workbench instead of an order detail page', () => {
+    expect(buildHomeWorkbenchSections(true)).toEqual(['dashboardSummary', 'todoList', 'flow', 'recentOrders']);
+    expect(buildHomeWorkbenchSections(false)).toEqual(['emptyFlow', 'startOrder']);
+    expect(buildHomeWorkbenchSections(true)).not.toContain('recentPayments');
+    expect(buildHomeWorkbenchSections(true)).not.toContain('recentSelections');
+  });
+
+  it('summarizes all exhibitor orders on home instead of picking one latest order', () => {
+    const orders = [
+      { id: 'pay-1', status: 'PENDING_PAYMENT', totalAmount: '21600.00', areaSqm: '18.00' },
+      { id: 'select-1', status: 'PAID', totalAmount: '10800.00', areaSqm: '9.00' },
+      { id: 'review-1', status: 'PAID', totalAmount: '10800.00', areaSqm: '9.00' },
+      { id: 'done-1', status: 'COMPLETED', totalAmount: '10800.00', areaSqm: '9.00' },
+    ];
+
+    expect(buildHomeDashboardSummary({
+      orders,
+      eligibilitiesByOrderId: {
+        'select-1': { status: 'AVAILABLE' },
+        'review-1': { status: 'PAUSED' },
+      },
+      latestSelectionsByOrderId: {
+        'review-1': { status: 'PENDING_REVIEW' },
+      },
+    })).toEqual({
+      totalCount: 4,
+      pendingPaymentCount: 1,
+      readyForSelectionCount: 1,
+      selectionReviewCount: 1,
+      completedCount: 1,
+      otherInProgressCount: 0,
+    });
+  });
+
+  it('builds prioritized home todo items from every order', () => {
+    const todos = buildHomeTodoItems({
+      orders: [
+        {
+          id: 'select-1',
+          eventName: '2026体博会',
+          status: 'PAID',
+          totalAmount: '10800.00',
+          areaSqm: '9.00',
+          updatedAt: '2026-06-14T12:00:00+08:00',
+        },
+        {
+          id: 'pay-1',
+          eventName: '2026体博会',
+          status: 'PENDING_PAYMENT',
+          totalAmount: '21600.00',
+          areaSqm: '18.00',
+          updatedAt: '2026-06-14T11:00:00+08:00',
+        },
+      ],
+      eligibilitiesByOrderId: {
+        'select-1': { status: 'AVAILABLE' },
+      },
+      latestSelectionsByOrderId: {},
+    });
+
+    expect(todos.map((todo) => todo.actionLabel)).toEqual(['去付款', '去选位']);
+    expect(todos[0]).toMatchObject({
+      orderId: 'pay-1',
+      title: '等待您提交付款',
+      to: '/exhibitor/orders/pay-1/payment',
+      disabled: false,
+    });
+    expect(todos[1]).toMatchObject({
+      orderId: 'select-1',
+      title: '可以选择展位了',
+      to: '/exhibitor/orders/select-1/selection',
+    });
+  });
+
+  it('builds order context header copy for payment and selection pages', () => {
+    expect(buildOrderContextHeader({
+      orderId: 'e0e5589c-90aa-43b5-beb0-c42878beb4aa',
+      eventName: '2026体博会',
+      totalAmount: '21600.00',
+      areaSqm: '18.00',
+      boothTypeLabel: '标准展位',
+    })).toEqual({
+      title: '2026体博会',
+      subtitle: '订单 e0e5589c',
+      metrics: [
+        { label: '订单金额', value: '¥21,600.00' },
+        { label: '订单面积', value: '18.00 ㎡' },
+        { label: '展位类型', value: '标准展位' },
+      ],
+    });
   });
 
   it('summarizes selected booths after adding or removing a booth', () => {

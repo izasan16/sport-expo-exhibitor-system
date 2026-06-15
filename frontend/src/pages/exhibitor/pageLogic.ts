@@ -3,9 +3,15 @@ import type { EligibilityStatus, OrderStatus, ParticipationOrder, SelectionStatu
 
 export type BoothType = 'STANDARD' | 'CUSTOM';
 export type LegacyOrderTarget = 'payment' | 'selection' | 'detail';
+export const EXHIBITOR_MOBILE_EXPERIENCE = true;
+
+export function shouldUseMobileExhibitorView() {
+  return EXHIBITOR_MOBILE_EXPERIENCE;
+}
 
 export type OrderCreateValues = {
   eventId: string;
+  registrationId?: string;
   zoneId?: string;
   areaTierId: string;
   boothType: BoothType;
@@ -15,6 +21,7 @@ export function buildOrderCreateBody(values: OrderCreateValues) {
   return {
     eventId: values.eventId,
     exhibitorId: DEMO_EXHIBITOR_ID,
+    registrationId: values.registrationId || null,
     zoneId: values.zoneId || null,
     areaTierId: values.areaTierId,
     boothType: values.boothType,
@@ -103,7 +110,7 @@ export function compareAreaToOrder(selectedAreas: Array<string | number>, orderA
 }
 
 export function buildBoothSelectionBody(orderId: string, boothIds: string[], remark = '') {
-  return { orderId, boothIds, exhibitorRemark: remark };
+  return { orderId, boothIds, remark };
 }
 
 export type NotificationReadFilter = 'all' | 'unread';
@@ -164,11 +171,6 @@ export function getOrderStepIndex(status: OrderStatus | string) {
   return 0;
 }
 
-export function pickLatestActiveOrder(orders: ParticipationOrder[]) {
-  const byCreatedDesc = [...orders].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
-  return byCreatedDesc.find((order) => order.status !== 'COMPLETED') ?? byCreatedDesc[0];
-}
-
 export type OrderNextActionInput = {
   order?: ParticipationOrder;
   eligibilityStatus?: EligibilityStatus;
@@ -195,5 +197,12 @@ export function getOrderNextAction(input: OrderNextActionInput) {
   if (latestSelectionStatus === 'CONFIRMED') {
     return { label: '查看选位结果', to: `/exhibitor/orders/${order.id}`, disabled: false, reason: '' };
   }
-  return { label: '查看订单', to: `/exhibitor/orders/${order.id}`, disabled: false, reason: '' };
+  return { label: '查看进度', to: `/exhibitor/orders/${order.id}`, disabled: false, reason: '' };
+}
+
+export function getOrderCardInteraction(order: ParticipationOrder) {
+  return {
+    tapTarget: `/exhibitor/orders/${order.id}`,
+    showDetailButton: false,
+  };
 }

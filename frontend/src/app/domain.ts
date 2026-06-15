@@ -12,11 +12,58 @@ export type ContractSignStatus = 'UNSIGNED' | 'MARKED_SIGNED';
 export type SelectionStatus = 'PENDING_REVIEW' | 'CONFIRMED' | 'REJECTED' | 'TIMEOUT';
 export type BoothStatus = 'AVAILABLE' | 'LOCKED' | 'CONFIRMED' | 'RESERVED' | 'DISABLED';
 export type EligibilityStatus = 'NOT_OPEN' | 'AVAILABLE' | 'PAUSED' | 'CLOSED';
+export type ExhibitorStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+export type RegistrationStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+export type Exhibitor = {
+  id: string;
+  companyName: string;
+  creditCode?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  address?: string | null;
+  status: ExhibitorStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EventCategory = {
+  id: string;
+  eventId: string;
+  code: string;
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Registration = {
+  id: string;
+  eventId: string;
+  exhibitorId: string;
+  status: RegistrationStatus;
+  category?: string | null;
+  categoryName?: string | null;
+  zoneId?: string | null;
+  intentAreaSqm?: string | number | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  remark?: string | null;
+  reviewComment?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  submittedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type ParticipationOrder = {
   id: string;
   eventId: string;
   exhibitorId: string;
+  registrationId?: string | null;
   zoneId?: string | null;
   areaTierId: string;
   areaSqm: number | string;

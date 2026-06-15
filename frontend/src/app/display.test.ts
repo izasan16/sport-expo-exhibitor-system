@@ -3,9 +3,13 @@ import { DEMO_EXHIBITOR_ID } from './demoActors';
 import {
   buildEventSelectOptions,
   formatAreaTierDisplay,
+  formatBoothType,
+  formatEventCategoryDisplay,
   formatEventDisplay,
   formatExhibitorDisplay,
+  formatExhibitorStatus,
   formatPaymentMethod,
+  formatRegistrationStatus,
   formatSupportedPaymentMethod,
 } from './display';
 
@@ -40,11 +44,27 @@ describe('business display helpers', () => {
     expect(formatPaymentMethod('OFFLINE_BANK')).toBe('OFFLINE_BANK');
   });
 
+  it('formats booth type values as business copy', () => {
+    expect(formatBoothType('STANDARD')).toBe('标准展位');
+    expect(formatBoothType('CUSTOM')).toBe('特装展位');
+    expect(formatBoothType('UNKNOWN')).toBe('UNKNOWN');
+    expect(formatBoothType(null)).toBe('未填写');
+  });
+
   it('formats existing payment records with safe supported-method fallback', () => {
     expect(formatSupportedPaymentMethod('OFFLINE_TRANSFER')).toBe('银行转账');
     expect(formatSupportedPaymentMethod('OFFLINE_CASH')).toBe('现金');
     expect(formatSupportedPaymentMethod('OFFLINE_CHECK')).toBe('支票');
     expect(formatSupportedPaymentMethod('OFFLINE_BANK')).toBe('未知付款方式');
     expect(formatSupportedPaymentMethod(null)).toBe('未填写');
+  });
+
+  it('formats exhibitor registration business values', () => {
+    expect(formatRegistrationStatus('SUBMITTED')).toBe('待审核');
+    expect(formatRegistrationStatus('APPROVED')).toBe('审核通过');
+    expect(formatExhibitorStatus('ACTIVE')).toBe('正常');
+    expect(formatExhibitorStatus('SUSPENDED')).toBe('已停用');
+    expect(formatEventCategoryDisplay({ code: 'SPORTS', name: '体育用品' })).toBe('体育用品（SPORTS）');
+    expect(formatEventCategoryDisplay(undefined)).toBe('-');
   });
 });

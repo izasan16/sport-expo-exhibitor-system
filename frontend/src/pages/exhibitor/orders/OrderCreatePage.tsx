@@ -3,12 +3,15 @@ import type { ProFormInstance } from '@ant-design/pro-components';
 import { Button, Empty, message, Result, Skeleton, Space } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
+import { formatEventDisplay } from '../../../app/display';
+import type { Registration } from '../../../app/domain';
 import { apiGet, apiPost } from '../../../app/request';
-import { useIsMobile } from '../../../app/responsive';
-import { buildAreaTierOptions, buildOrderCreateBody, getExhibitorLoadErrorCopy, type BoothType } from '../pageLogic';
+import { buildAreaTierOptions, buildOrderCreateBody, getExhibitorLoadErrorCopy, shouldUseMobileExhibitorView, type BoothType } from '../pageLogic';
 
 type OrderCreateValues = {
   eventId: string;
+  registrationId?: string;
   areaTierId: string;
   boothType: BoothType;
   zoneId?: string;
@@ -37,40 +40,52 @@ type CreatedOrder = {
 
 export default function OrderCreatePage() {
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
+  const isMobile = shouldUseMobileExhibitorView();
   const formRef = useRef<ProFormInstance<OrderCreateValues>>();
   const [loading, setLoading] = useState(true);
   const [loadingTiers, setLoadingTiers] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [events, setEvents] = useState<EventOption[]>([]);
+  const [approvedRegistrations, setApprovedRegistrations] = useState<Registration[]>([]);
   const [areaTiers, setAreaTiers] = useState<AreaTierOption[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>();
+  const [selectedRegistrationId, setSelectedRegistrationId] = useState<string>();
 
   useEffect(() => {
     let alive = true;
 
-    async function loadEvents() {
+    async function loadInitialOptions() {
       setLoading(true);
       setLoadError(false);
       try {
-        const loadedEvents = await apiGet<EventOption[]>('/api/events');
+        const [loadedEvents, loadedRegistrations] = await Promise.all([
+          apiGet<EventOption[]>('/api/events'),
+          apiGet<Registration[]>(`/api/registrations?exhibitorId=${DEMO_EXHIBITOR_ID}&status=APPROVED`),
+        ]);
         if (!alive) return;
         setEvents(loadedEvents);
-        const firstEvent = loadedEvents[0]?.id;
+        setApprovedRegistrations(loadedRegistrations);
+        const automaticRegistration = loadedRegistrations.length === 1 ? loadedRegistrations[0] : undefined;
+        const firstEvent = automaticRegistration?.eventId ?? loadedEvents[0]?.id;
         setSelectedEventId(firstEvent);
+        setSelectedRegistrationId(automaticRegistration?.id);
         if (firstEvent) {
-          formRef.current?.setFieldsValue({ eventId: firstEvent });
+          formRef.current?.setFieldsValue({
+            eventId: firstEvent,
+            registrationId: automaticRegistration?.id,
+          });
         }
       } catch {
         if (!alive) return;
         setEvents([]);
+        setApprovedRegistrations([]);
         setLoadError(true);
       } finally {
         if (alive) setLoading(false);
       }
     }
 
-    loadEvents();
+    loadInitialOptions();
     return () => {
       alive = false;
     };
@@ -110,6 +125,13 @@ export default function OrderCreatePage() {
     () => events.map((event) => ({ label: `${event.name}（${event.year}）`, value: event.id })),
     [events],
   );
+  const registrationOptions = useMemo(
+    () => approvedRegistrations.map((registration) => ({
+      label: `${formatEventDisplay(registration.eventId, events)} · ${registration.categoryName || registration.category || '未选择类别'}`,
+      value: registration.id,
+    })),
+    [approvedRegistrations, events],
+  );
   const areaTierOptions = useMemo(() => buildAreaTierOptions(areaTiers, selectedEventId), [areaTiers, selectedEventId]);
 
   if (loading) {
@@ -148,12 +170,35 @@ export default function OrderCreatePage() {
     );
   }
 
+  if (!approvedRegistrations.length) {
+    return (
+      <PageContainer title="我要下单">
+        <ProCard>
+          <Empty
+            description={
+              <Space direction="vertical" size={4}>
+                <span>还没有审核通过的报名</span>
+                <span>请先提交报名，审核通过后再创建参展订单。</span>
+              </Space>
+            }
+          >
+            <Button type="primary" onClick={() => navigate('/exhibitor/registrations/new')}>去提交报名</Button>
+          </Empty>
+        </ProCard>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer title="我要下单">
       <ProForm<OrderCreateValues>
         formRef={formRef}
         layout={isMobile ? 'vertical' : 'horizontal'}
-        initialValues={{ eventId: selectedEventId, boothType: 'STANDARD' }}
+        initialValues={{
+          eventId: selectedEventId,
+          registrationId: selectedRegistrationId,
+          boothType: 'STANDARD',
+        }}
         submitter={{
           searchConfig: { submitText: '提交订单' },
           render: (_, doms) => (
@@ -163,16 +208,47 @@ export default function OrderCreatePage() {
           ),
         }}
         onFinish={async (values) => {
+          const registrationId = approvedRegistrations.length === 1
+            ? approvedRegistrations[0].id
+            : values.registrationId;
+          if (!registrationId) {
+            message.error('请选择审核通过的报名记录');
+            return false;
+          }
+          const selectedRegistration = approvedRegistrations.find((registration) => registration.id === registrationId);
           const selectedTier = areaTiers.find((tier) => tier.id === values.areaTierId);
-          const created = await apiPost<CreatedOrder>('/api/participation-orders', buildOrderCreateBody({
-            ...values,
+          const orderBody = buildOrderCreateBody({
+            eventId: selectedRegistration?.eventId ?? values.eventId,
+            registrationId,
+            areaTierId: values.areaTierId,
+            boothType: values.boothType,
             zoneId: selectedTier?.zoneId ?? undefined,
-          }));
+          });
+          const created = await apiPost<CreatedOrder>('/api/participation-orders', orderBody);
           message.success(`订单 ${created.id} 创建成功，状态：${created.status}，总金额：${created.totalAmount}`);
           navigate(`/exhibitor/orders/${created.id}`);
           return true;
         }}
       >
+        {approvedRegistrations.length > 1 ? (
+          <ProFormSelect
+            name="registrationId"
+            label="已通过报名"
+            rules={[{ required: true, message: '请选择已通过报名' }]}
+            options={registrationOptions}
+            fieldProps={{
+              onChange: (value) => {
+                const nextRegistrationId = String(value);
+                const registration = approvedRegistrations.find((item) => item.id === nextRegistrationId);
+                setSelectedRegistrationId(nextRegistrationId);
+                if (registration) {
+                  setSelectedEventId(registration.eventId);
+                  formRef.current?.setFieldsValue({ eventId: registration.eventId, areaTierId: undefined });
+                }
+              },
+            }}
+          />
+        ) : null}
         <ProFormSelect
           name="eventId"
           label="展会"
@@ -181,6 +257,7 @@ export default function OrderCreatePage() {
           fieldProps={{
             onChange: (value) => setSelectedEventId(String(value)),
           }}
+          disabled={Boolean(selectedRegistrationId)}
         />
         <ProFormSelect
           name="areaTierId"
@@ -202,8 +279,8 @@ export default function OrderCreatePage() {
           initialValue="STANDARD"
           rules={[{ required: true, message: '请选择展位类型' }]}
           options={[
-            { label: 'STANDARD', value: 'STANDARD' },
-            { label: 'CUSTOM', value: 'CUSTOM' },
+            { label: '标准展位', value: 'STANDARD' },
+            { label: '特装展位', value: 'CUSTOM' },
           ]}
         />
       </ProForm>

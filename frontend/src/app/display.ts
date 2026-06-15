@@ -1,4 +1,5 @@
 import { DEMO_EXHIBITOR_ID } from './demoActors';
+import type { EventCategory, ExhibitorStatus, RegistrationStatus } from './domain';
 import { formatArea, formatShortId } from './formatters';
 
 export type EventLookupSource = {
@@ -41,6 +42,25 @@ const paymentMethodLabels: Record<string, string> = {
   OFFLINE_CHECK: '支票',
 };
 
+const boothTypeLabels: Record<string, string> = {
+  STANDARD: '标准展位',
+  CUSTOM: '特装展位',
+};
+
+const registrationStatusLabels: Record<RegistrationStatus, string> = {
+  DRAFT: '草稿',
+  SUBMITTED: '待审核',
+  APPROVED: '审核通过',
+  REJECTED: '已驳回',
+  CANCELLED: '已取消',
+};
+
+const exhibitorStatusLabels: Record<ExhibitorStatus, string> = {
+  ACTIVE: '正常',
+  SUSPENDED: '已停用',
+  ARCHIVED: '已归档',
+};
+
 export function formatPaymentMethod(method: string | null | undefined) {
   if (!method) return '-';
   return paymentMethodLabels[method] ?? method;
@@ -49,6 +69,26 @@ export function formatPaymentMethod(method: string | null | undefined) {
 export function formatSupportedPaymentMethod(method: string | null | undefined) {
   if (!method) return '未填写';
   return paymentMethodLabels[method] ?? '未知付款方式';
+}
+
+export function formatBoothType(boothType: string | null | undefined) {
+  if (!boothType) return '未填写';
+  return boothTypeLabels[boothType] ?? boothType;
+}
+
+export function formatRegistrationStatus(status: RegistrationStatus | string | null | undefined) {
+  if (!status) return '-';
+  return registrationStatusLabels[status as RegistrationStatus] ?? status;
+}
+
+export function formatExhibitorStatus(status: ExhibitorStatus | string | null | undefined) {
+  if (!status) return '-';
+  return exhibitorStatusLabels[status as ExhibitorStatus] ?? status;
+}
+
+export function formatEventCategoryDisplay(category: Pick<EventCategory, 'code' | 'name'> | null | undefined) {
+  if (!category) return '-';
+  return `${category.name}（${category.code}）`;
 }
 
 export function buildEventSelectOptions(events: EventLookupSource[]) {

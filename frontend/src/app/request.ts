@@ -63,3 +63,21 @@ export async function apiPost<T, B = unknown>(url: string, body?: B): Promise<T>
 
   return parseApiResponse<T>(response);
 }
+
+export async function apiPut<T, B = unknown>(url: string, body?: B): Promise<T> {
+  const options: RequestInit = {
+    method: 'PUT',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body !== undefined) {
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(url, options);
+
+  return parseApiResponse<T>(response);
+}

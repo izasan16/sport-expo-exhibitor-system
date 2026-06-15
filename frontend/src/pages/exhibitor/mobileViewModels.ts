@@ -1,4 +1,4 @@
-import { formatArea, formatFriendlyTime, formatMoney } from '../../app/formatters';
+import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../app/formatters';
 export { formatShortId } from '../../app/formatters';
 
 export type NotificationType =
@@ -13,6 +13,67 @@ export type NotificationType =
 
 export type FlowStep = {
   title: string;
+};
+
+export type HomeWorkbenchSection =
+  | 'dashboardSummary'
+  | 'todoList'
+  | 'flow'
+  | 'recentOrders'
+  | 'emptyFlow'
+  | 'startOrder';
+
+export type HomeDashboardOrderSource = {
+  id: string;
+  eventName?: string | null;
+  status?: string | null;
+  totalAmount?: string | number | null;
+  areaSqm?: string | number | null;
+  updatedAt?: string | null;
+};
+
+export type HomeDashboardRelatedStatus = {
+  status?: string | null;
+};
+
+export type HomeDashboardInput = {
+  orders: HomeDashboardOrderSource[];
+  eligibilitiesByOrderId?: Record<string, HomeDashboardRelatedStatus | undefined>;
+  latestSelectionsByOrderId?: Record<string, HomeDashboardRelatedStatus | undefined>;
+};
+
+export type HomeDashboardSummary = {
+  totalCount: number;
+  pendingPaymentCount: number;
+  readyForSelectionCount: number;
+  selectionReviewCount: number;
+  completedCount: number;
+  otherInProgressCount: number;
+};
+
+export type HomeTodoItem = {
+  key: string;
+  orderId: string;
+  priority: number;
+  title: string;
+  description: string;
+  actionLabel: string;
+  to: string;
+  disabled: boolean;
+};
+
+export type OrderContextHeaderInput = {
+  orderId?: string | null;
+  eventName?: string | null;
+  totalAmount?: string | number | null;
+  areaSqm?: string | number | null;
+  boothTypeLabel?: string | null;
+};
+
+export type OrderContextHeader = {
+  title: string;
+  subtitle: string;
+  metrics: Array<{ label: string; value: string }>;
 };
 
 export type SelectedBoothSource = {
@@ -122,6 +183,138 @@ function addTimelineEventWithFallback(
 
 export function buildHomeFlowSteps() {
   return [...homeFlowSteps];
+}
+
+export function buildHomeWorkbenchSections(hasActiveOrder: boolean): HomeWorkbenchSection[] {
+  return hasActiveOrder
+    ? ['dashboardSummary', 'todoList', 'flow', 'recentOrders']
+    : ['emptyFlow', 'startOrder'];
+}
+
+function isPendingPaymentStatus(status?: string | null) {
+  return status === 'PENDING_PAYMENT' || status === 'PARTIALLY_PAID';
+}
+
+function isReadyForSelection(order: HomeDashboardOrderSource, eligibility?: HomeDashboardRelatedStatus) {
+  return order.status === 'PAID' && eligibility?.status === 'AVAILABLE';
+}
+
+function isSelectionReviewing(selection?: HomeDashboardRelatedStatus) {
+  return selection?.status === 'PENDING_REVIEW';
+}
+
+function buildTodoDescription(order: HomeDashboardOrderSource) {
+  return `${formatMobileText(order.eventName)} · 订单 ${formatShortId(order.id)} · ${formatMobileAmount(order.totalAmount)} · ${formatArea(order.areaSqm)}`;
+}
+
+export function buildHomeDashboardSummary(input: HomeDashboardInput): HomeDashboardSummary {
+  const pendingPaymentCount = input.orders.filter((order) => isPendingPaymentStatus(order.status)).length;
+  const readyForSelectionCount = input.orders.filter((order) => (
+    isReadyForSelection(order, input.eligibilitiesByOrderId?.[order.id])
+  )).length;
+  const selectionReviewCount = input.orders.filter((order) => (
+    isSelectionReviewing(input.latestSelectionsByOrderId?.[order.id])
+  )).length;
+  const completedCount = input.orders.filter((order) => order.status === 'COMPLETED').length;
+  const categorizedCount = pendingPaymentCount + readyForSelectionCount + selectionReviewCount + completedCount;
+
+  return {
+    totalCount: input.orders.length,
+    pendingPaymentCount,
+    readyForSelectionCount,
+    selectionReviewCount,
+    completedCount,
+    otherInProgressCount: Math.max(input.orders.length - categorizedCount, 0),
+  };
+}
+
+export function buildHomeTodoItems(input: HomeDashboardInput): HomeTodoItem[] {
+  return input.orders
+    .flatMap<HomeTodoItem>((order) => {
+      const eligibility = input.eligibilitiesByOrderId?.[order.id];
+      const latestSelection = input.latestSelectionsByOrderId?.[order.id];
+      const description = buildTodoDescription(order);
+
+      if (isPendingPaymentStatus(order.status)) {
+        return [{
+          key: `${order.id}-payment`,
+          orderId: order.id,
+          priority: 10,
+          title: '等待您提交付款',
+          description,
+          actionLabel: '去付款',
+          to: `/exhibitor/orders/${order.id}/payment`,
+          disabled: false,
+        }];
+      }
+
+      if (isReadyForSelection(order, eligibility)) {
+        return [{
+          key: `${order.id}-selection`,
+          orderId: order.id,
+          priority: 20,
+          title: '可以选择展位了',
+          description,
+          actionLabel: '去选位',
+          to: `/exhibitor/orders/${order.id}/selection`,
+          disabled: false,
+        }];
+      }
+
+      if (isSelectionReviewing(latestSelection)) {
+        return [{
+          key: `${order.id}-selection-review`,
+          orderId: order.id,
+          priority: 30,
+          title: '选位正在审核',
+          description,
+          actionLabel: '看进度',
+          to: `/exhibitor/orders/${order.id}`,
+          disabled: false,
+        }];
+      }
+
+      if (order.status === 'PENDING_SALES_CONFIRM') {
+        return [{
+          key: `${order.id}-sales-confirm`,
+          orderId: order.id,
+          priority: 40,
+          title: '等待销售确认',
+          description,
+          actionLabel: '看进度',
+          to: `/exhibitor/orders/${order.id}`,
+          disabled: false,
+        }];
+      }
+
+      if (order.status === 'PENDING_CONTRACT') {
+        return [{
+          key: `${order.id}-contract`,
+          orderId: order.id,
+          priority: 50,
+          title: '等待合同确认',
+          description,
+          actionLabel: '看进度',
+          to: `/exhibitor/orders/${order.id}`,
+          disabled: false,
+        }];
+      }
+
+      return [];
+    })
+    .sort((left, right) => left.priority - right.priority);
+}
+
+export function buildOrderContextHeader(input: OrderContextHeaderInput): OrderContextHeader {
+  return {
+    title: formatMobileText(input.eventName),
+    subtitle: `订单 ${formatShortId(input.orderId)}`,
+    metrics: [
+      { label: '订单金额', value: formatMobileAmount(input.totalAmount) },
+      { label: '订单面积', value: formatArea(input.areaSqm) },
+      { label: '展位类型', value: formatMobileText(input.boothTypeLabel) },
+    ],
+  };
 }
 
 export function buildSelectedBoothSummary(booths: SelectedBoothSource[]): SelectedBoothSummary {

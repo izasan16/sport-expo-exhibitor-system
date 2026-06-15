@@ -8,16 +8,18 @@ import {
   canSubmitBoothSelection,
   compareAreaToOrder,
   filterBoothsForOrderType,
+  EXHIBITOR_MOBILE_EXPERIENCE,
   getExhibitorLoadErrorCopy,
   getPaymentFormLayout,
   getPaymentOrderDescriptionColumns,
   getOrderNextAction,
+  getOrderCardInteraction,
   getOrderStepIndex,
   getResponsiveCardSplit,
   getResponsiveStepsDirection,
+  shouldUseMobileExhibitorView,
   isOrderPayable,
   isOrderSelectable,
-  pickLatestActiveOrder,
   sortBoothsForMap,
 } from './pageLogic';
 import type { ParticipationOrder } from '../../app/domain';
@@ -30,6 +32,7 @@ describe('exhibitor page logic', () => {
     expect(
       buildOrderCreateBody({
         eventId: 'event-1',
+        registrationId: '',
         zoneId: '',
         areaTierId: 'tier-1',
         boothType: 'STANDARD',
@@ -37,9 +40,29 @@ describe('exhibitor page logic', () => {
     ).toEqual({
       eventId: 'event-1',
       exhibitorId: DEMO_EXHIBITOR_ID,
+      registrationId: null,
       zoneId: null,
       areaTierId: 'tier-1',
       boothType: 'STANDARD',
+    });
+  });
+
+  it('includes registrationId in the participation order payload when selected', () => {
+    expect(
+      buildOrderCreateBody({
+        eventId: 'event-1',
+        registrationId: 'registration-1',
+        zoneId: 'zone-1',
+        areaTierId: 'tier-1',
+        boothType: 'CUSTOM',
+      }),
+    ).toEqual({
+      eventId: 'event-1',
+      exhibitorId: DEMO_EXHIBITOR_ID,
+      registrationId: 'registration-1',
+      zoneId: 'zone-1',
+      areaTierId: 'tier-1',
+      boothType: 'CUSTOM',
     });
   });
 
@@ -72,11 +95,11 @@ describe('exhibitor page logic', () => {
     });
   });
 
-  it('builds the public booth selection submit body with exhibitorRemark and without exhibitorId', () => {
+  it('builds the public booth selection submit body with remark and without exhibitorId', () => {
     expect(buildBoothSelectionBody('order-1', ['booth-2', 'booth-1'], '靠近主通道')).toEqual({
       orderId: 'order-1',
       boothIds: ['booth-2', 'booth-1'],
-      exhibitorRemark: '靠近主通道',
+      remark: '靠近主通道',
     });
   });
 
@@ -146,6 +169,8 @@ describe('exhibitor page logic', () => {
   });
 
   it('chooses compact mobile layout settings for exhibitor pages', () => {
+    expect(EXHIBITOR_MOBILE_EXPERIENCE).toBe(true);
+    expect(shouldUseMobileExhibitorView()).toBe(true);
     expect(getResponsiveStepsDirection(true)).toBe('vertical');
     expect(getResponsiveStepsDirection(false)).toBe('horizontal');
     expect(getResponsiveCardSplit(true)).toBeUndefined();
@@ -192,13 +217,6 @@ describe('exhibitor page logic', () => {
     updatedAt: '2026-06-14T10:00:00+08:00',
   };
 
-  it('picks latest active order before completed orders', () => {
-    const completed = { ...baseOrder, id: 'completed-order', status: 'COMPLETED' as const, createdAt: '2026-06-15T10:00:00+08:00' };
-    const pending = { ...baseOrder, id: 'pending-order', status: 'PAID' as const, createdAt: '2026-06-13T10:00:00+08:00' };
-
-    expect(pickLatestActiveOrder([completed, pending])?.id).toBe('pending-order');
-  });
-
   it('derives order steps and next actions', () => {
     expect(getOrderStepIndex('PENDING_SALES_CONFIRM')).toBe(1);
     expect(getOrderStepIndex('PENDING_PAYMENT')).toBe(3);
@@ -207,6 +225,13 @@ describe('exhibitor page logic', () => {
       .toMatchObject({ label: '提交付款', to: `/exhibitor/orders/${baseOrder.id}/payment` });
     expect(getOrderNextAction({ order: { ...baseOrder, status: 'PAID' }, eligibilityStatus: 'AVAILABLE' }))
       .toMatchObject({ label: '选择展位', to: `/exhibitor/orders/${baseOrder.id}/selection` });
+  });
+
+  it('makes the mobile order card itself the detail entry without duplicate detail buttons', () => {
+    expect(getOrderCardInteraction(baseOrder)).toEqual({
+      tapTarget: `/exhibitor/orders/${baseOrder.id}`,
+      showDetailButton: false,
+    });
   });
 
   it('formats business values for product UI', () => {

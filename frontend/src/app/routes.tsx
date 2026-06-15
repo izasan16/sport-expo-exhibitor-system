@@ -17,6 +17,10 @@ const ContractListPage = lazy(() => import('../pages/admin/contracts/ContractLis
 const PaymentConfirmPage = lazy(() => import('../pages/admin/payments/PaymentConfirmPage'));
 const SelectionReviewPage = lazy(() => import('../pages/admin/selections/SelectionReviewPage'));
 const ExhibitorHomePage = lazy(() => import('../pages/exhibitor/HomePage'));
+const ExhibitorProfilePage = lazy(() => import('../pages/exhibitor/profile/ExhibitorProfilePage'));
+const RegistrationListPage = lazy(() => import('../pages/exhibitor/registrations/RegistrationListPage'));
+const RegistrationCreatePage = lazy(() => import('../pages/exhibitor/registrations/RegistrationCreatePage'));
+const RegistrationDetailPage = lazy(() => import('../pages/exhibitor/registrations/RegistrationDetailPage'));
 const OrderCreatePage = lazy(() => import('../pages/exhibitor/orders/OrderCreatePage'));
 const MyOrdersPage = lazy(() => import('../pages/exhibitor/orders/MyOrdersPage'));
 const ExhibitorOrderDetailPage = lazy(
@@ -54,6 +58,10 @@ export const routes: RouteObject[] = [
     element: <ExhibitorLayout />,
     children: [
       { index: true, element: lazyPage(<ExhibitorHomePage />) },
+      { path: 'profile', element: lazyPage(<ExhibitorProfilePage />) },
+      { path: 'registrations', element: lazyPage(<RegistrationListPage />) },
+      { path: 'registrations/new', element: lazyPage(<RegistrationCreatePage />) },
+      { path: 'registrations/:registrationId', element: lazyPage(<RegistrationDetailPage />) },
       { path: 'orders/new', element: lazyPage(<OrderCreatePage />) },
       { path: 'orders', element: lazyPage(<MyOrdersPage />) },
       { path: 'orders/:orderId', element: lazyPage(<ExhibitorOrderDetailPage />) },

@@ -1,24 +1,29 @@
-import { PageContainer, ProCard, ProList } from '@ant-design/pro-components';
-import { Button, Empty, Result, Skeleton, Space, Statistic, Steps, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { Button, Card, Empty, List, Result, Skeleton, Space, Statistic, Steps, Typography } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../app/demoActors';
-import { formatEventDisplay } from '../../app/display';
-import type { BoothSelection, PaymentRecord, ParticipationOrder, SelectionEligibility } from '../../app/domain';
-import { formatArea, formatShortId } from '../../app/formatters';
+import { formatBoothType, formatEventDisplay, formatRegistrationStatus } from '../../app/display';
+import type { BoothSelection, ParticipationOrder, Registration, SelectionEligibility } from '../../app/domain';
+import { formatArea } from '../../app/formatters';
 import { loadSelectionEligibility } from '../../app/apiLoaders';
 import { apiGet } from '../../app/request';
-import { useIsMobile } from '../../app/responsive';
-import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
 import { useEvents } from '../../app/useEvents';
-import { buildHomeFlowSteps, formatMobileAmount, formatMobileText, formatMobileTime } from './mobileViewModels';
+import {
+  buildHomeDashboardSummary,
+  buildHomeFlowSteps,
+  buildHomeTodoItems,
+  formatMobileAmount,
+  formatMobileTime,
+} from './mobileViewModels';
+import {
+  getLatestRegistration,
+  getPrimaryRegistrationForHome,
+  getRegistrationHomeAction,
+} from './registrationViewModels';
 import {
   getExhibitorLoadErrorCopy,
-  getOrderNextAction,
-  getOrderStepIndex,
-  getResponsiveCardSplit,
   getResponsiveStepsDirection,
-  pickLatestActiveOrder,
+  shouldUseMobileExhibitorView,
 } from './pageLogic';
 
 function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right: T) {
@@ -28,25 +33,33 @@ function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right
 export default function HomePage() {
   const navigate = useNavigate();
   const { events } = useEvents();
-  const isMobile = useIsMobile();
+  const isMobile = shouldUseMobileExhibitorView();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<ParticipationOrder[]>([]);
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [selections, setSelections] = useState<BoothSelection[]>([]);
-  const [eligibility, setEligibility] = useState<SelectionEligibility>();
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [latestSelectionsByOrderId, setLatestSelectionsByOrderId] = useState<Record<string, BoothSelection | undefined>>({});
+  const [eligibilitiesByOrderId, setEligibilitiesByOrderId] = useState<Record<string, SelectionEligibility | undefined>>({});
   const [loadError, setLoadError] = useState(false);
 
-  const activeOrder = pickLatestActiveOrder(orders);
-  const latestSelection = selections[0];
-  const orderStatusMeta = activeOrder?.status ? getOrderStatusMeta(activeOrder.status) : { label: '未填写', color: 'default' };
-  const activeOrderEvent = activeOrder?.eventId ? formatEventDisplay(activeOrder.eventId, events) : '未填写';
-  const cardSplit = getResponsiveCardSplit(isMobile);
   const stepsDirection = getResponsiveStepsDirection(isMobile);
-  const nextAction = getOrderNextAction({
-    order: activeOrder,
-    eligibilityStatus: eligibility?.status,
-    latestSelectionStatus: latestSelection?.status,
-  });
+  const homeOrders = useMemo(
+    () => orders.map((order) => ({
+      ...order,
+      eventName: formatEventDisplay(order.eventId, events),
+    })),
+    [events, orders],
+  );
+  const dashboardSummary = useMemo(
+    () => buildHomeDashboardSummary({ orders: homeOrders, eligibilitiesByOrderId, latestSelectionsByOrderId }),
+    [eligibilitiesByOrderId, homeOrders, latestSelectionsByOrderId],
+  );
+  const todoItems = useMemo(
+    () => buildHomeTodoItems({ orders: homeOrders, eligibilitiesByOrderId, latestSelectionsByOrderId }),
+    [eligibilitiesByOrderId, homeOrders, latestSelectionsByOrderId],
+  );
+  const latestRegistration = useMemo(() => getLatestRegistration(registrations), [registrations]);
+  const primaryRegistration = useMemo(() => getPrimaryRegistrationForHome(registrations), [registrations]);
+  const registrationAction = useMemo(() => getRegistrationHomeAction(primaryRegistration), [primaryRegistration]);
 
   useEffect(() => {
     let alive = true;
@@ -54,31 +67,44 @@ export default function HomePage() {
       setLoading(true);
       setLoadError(false);
       try {
-        const loadedOrders = await apiGet<ParticipationOrder[]>(`/api/participation-orders?exhibitorId=${DEMO_EXHIBITOR_ID}`);
-        if (!alive) return;
-        setOrders(loadedOrders);
-        const selectedOrder = pickLatestActiveOrder(loadedOrders);
-        if (!selectedOrder) {
-          setPayments([]);
-          setSelections([]);
-          setEligibility(undefined);
-          return;
-        }
-        const [loadedPayments, loadedSelections, loadedEligibility] = await Promise.all([
-          apiGet<PaymentRecord[]>(`/api/payments?orderId=${selectedOrder.id}`),
-          apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${selectedOrder.id}`),
-          loadSelectionEligibility(selectedOrder.id),
+        const [loadedOrders, loadedRegistrations] = await Promise.all([
+          apiGet<ParticipationOrder[]>(`/api/participation-orders?exhibitorId=${DEMO_EXHIBITOR_ID}`),
+          apiGet<Registration[]>(`/api/registrations?exhibitorId=${DEMO_EXHIBITOR_ID}`),
         ]);
         if (!alive) return;
-        setPayments([...loadedPayments].sort(byCreatedAtDesc));
-        setSelections([...loadedSelections].sort(byCreatedAtDesc));
-        setEligibility(loadedEligibility);
+        setOrders(loadedOrders);
+        setRegistrations(loadedRegistrations);
+        if (!loadedOrders.length) {
+          setLatestSelectionsByOrderId({});
+          setEligibilitiesByOrderId({});
+          return;
+        }
+        const relatedResults = await Promise.all(
+          loadedOrders.map(async (order) => {
+            try {
+              const [loadedSelections, loadedEligibility] = await Promise.all([
+                apiGet<BoothSelection[]>(`/api/booth-selections?orderId=${order.id}`),
+                loadSelectionEligibility(order.id),
+              ]);
+              return {
+                orderId: order.id,
+                latestSelection: [...loadedSelections].sort(byCreatedAtDesc)[0],
+                eligibility: loadedEligibility,
+              };
+            } catch {
+              return { orderId: order.id, latestSelection: undefined, eligibility: undefined };
+            }
+          }),
+        );
+        if (!alive) return;
+        setLatestSelectionsByOrderId(Object.fromEntries(relatedResults.map((item) => [item.orderId, item.latestSelection])));
+        setEligibilitiesByOrderId(Object.fromEntries(relatedResults.map((item) => [item.orderId, item.eligibility])));
       } catch {
         if (!alive) return;
         setOrders([]);
-        setPayments([]);
-        setSelections([]);
-        setEligibility(undefined);
+        setRegistrations([]);
+        setLatestSelectionsByOrderId({});
+        setEligibilitiesByOrderId({});
         setLoadError(true);
       } finally {
         if (alive) setLoading(false);
@@ -90,113 +116,197 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <PageContainer title="首页">
+      <div className="exhibitor-page">
         <Skeleton active paragraph={{ rows: 8 }} />
-      </PageContainer>
+      </div>
     );
   }
 
   if (loadError) {
     const copy = getExhibitorLoadErrorCopy('home');
     return (
-      <PageContainer title="首页">
-        <ProCard>
+      <div className="exhibitor-page">
+        <Card>
           <Result
             status="error"
             title={copy.title}
             subTitle={copy.subTitle}
             extra={<Button type="primary" onClick={() => window.location.reload()}>{copy.actionText}</Button>}
           />
-        </ProCard>
-      </PageContainer>
+        </Card>
+      </div>
     );
   }
 
-  if (!activeOrder) {
+  if (!orders.length) {
     return (
-      <PageContainer title="首页">
+      <div className="exhibitor-page">
+        <div className="exhibitor-page-heading">
+          <Typography.Title level={4}>我的参展概览</Typography.Title>
+          <Typography.Text type="secondary">第一次参展也没关系，按流程一步步完成就行。</Typography.Text>
+        </div>
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <ProCard title="参展流程">
+          <Card title="参展流程">
             <Steps
               current={0}
               direction={stepsDirection}
               items={buildHomeFlowSteps()}
             />
-          </ProCard>
-          <ProCard>
-            <Empty description="您还没有参展订单">
-              <Button type="primary" onClick={() => navigate('/exhibitor/orders/new')}>我要参展</Button>
+          </Card>
+          <Card title="报名状态">
+            <Space direction="vertical" size={10} style={{ width: '100%' }}>
+              <Typography.Text strong>
+                {latestRegistration ? formatRegistrationStatus(latestRegistration.status) : '尚未提交报名'}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {latestRegistration
+                  ? `${formatEventDisplay(latestRegistration.eventId, events)} · ${latestRegistration.categoryName || latestRegistration.category || '未选择类别'}`
+                  : '先提交报名，审核通过后即可创建参展订单。'}
+              </Typography.Text>
+              <Button
+                type="primary"
+                block
+                disabled={registrationAction.disabled}
+                onClick={() => navigate(registrationAction.to)}
+              >
+                {registrationAction.label}
+              </Button>
+            </Space>
+          </Card>
+          <Card>
+            <Empty
+              description={
+                <Space direction="vertical" size={4}>
+                  <Typography.Text>您还没有参展订单</Typography.Text>
+                  <Typography.Text type="secondary">报名审核通过后，可以创建订单并在这里查看进度。</Typography.Text>
+                </Space>
+              }
+            >
+              <Button type="primary" onClick={() => navigate(registrationAction.to)}>{registrationAction.label}</Button>
             </Empty>
-          </ProCard>
+          </Card>
         </Space>
-      </PageContainer>
+      </div>
     );
   }
 
   return (
-    <PageContainer title="首页">
+    <div className="exhibitor-page">
+      <div className="exhibitor-page-heading">
+        <Typography.Title level={4}>我的参展概览</Typography.Title>
+        <Typography.Text type="secondary">所有订单的状态和待办都在这里汇总。</Typography.Text>
+      </div>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <ProCard split={cardSplit}>
-          <ProCard title={`订单 ${formatShortId(activeOrder.id)}`}>
-            <Space direction="vertical" size={12}>
-              <StatusTag meta={orderStatusMeta} />
-              <Typography.Text>展会 {formatMobileText(activeOrderEvent)}</Typography.Text>
-              <Typography.Text>面积 {formatArea(activeOrder.areaSqm)} · {formatMobileText(activeOrder.boothType)}</Typography.Text>
-              <Button type="primary" disabled={nextAction.disabled} onClick={() => navigate(nextAction.to)}>
-                {nextAction.label}
-              </Button>
-            </Space>
-          </ProCard>
-          <ProCard>
-            <Statistic title="订单金额" value={formatMobileAmount(activeOrder.totalAmount)} />
-          </ProCard>
-        </ProCard>
-        <ProCard title="参展进度">
+        <Card title="进行中的订单">
+          <div className="exhibitor-home-stats">
+            <Statistic title="待付款" value={dashboardSummary.pendingPaymentCount} suffix="笔" />
+            <Statistic title="待选位" value={dashboardSummary.readyForSelectionCount} suffix="笔" />
+            <Statistic title="审核中" value={dashboardSummary.selectionReviewCount} suffix="笔" />
+            <Statistic title="已完成" value={dashboardSummary.completedCount} suffix="笔" />
+          </div>
+          <Typography.Text type="secondary">
+            共 {dashboardSummary.totalCount} 笔订单，其他进行中 {dashboardSummary.otherInProgressCount} 笔
+          </Typography.Text>
+        </Card>
+
+        <Card title="报名状态">
+          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+            <Typography.Text strong>
+              {latestRegistration ? formatRegistrationStatus(latestRegistration.status) : '尚未提交报名'}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {latestRegistration
+                ? `${formatEventDisplay(latestRegistration.eventId, events)} · ${latestRegistration.categoryName || latestRegistration.category || '未选择类别'}`
+                : '先提交报名，审核通过后即可创建参展订单。'}
+            </Typography.Text>
+            <Button
+              type="primary"
+              block
+              disabled={registrationAction.disabled}
+              onClick={() => navigate(registrationAction.to)}
+            >
+              {registrationAction.label}
+            </Button>
+          </Space>
+        </Card>
+
+        <Card
+          title="待办事项"
+          extra={<Button type="link" onClick={() => navigate('/exhibitor/orders')}>全部订单</Button>}
+        >
+          {todoItems.length ? (
+            <List
+              dataSource={todoItems}
+              renderItem={(todo) => (
+                <List.Item style={{ paddingInline: 0 }}>
+                  <Card
+                    className="exhibitor-task-card"
+                    onClick={() => navigate(todo.to)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        navigate(todo.to);
+                      }
+                    }}
+                  >
+                    <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
+                        <Typography.Text strong>{todo.title}</Typography.Text>
+                        <Typography.Text type="secondary">更新 {formatMobileTime(orders.find((order) => order.id === todo.orderId)?.updatedAt)}</Typography.Text>
+                      </Space>
+                      <Typography.Text type="secondary">{todo.description}</Typography.Text>
+                      <Button type="primary" block disabled={todo.disabled} onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(todo.to);
+                      }}>
+                        {todo.actionLabel}
+                      </Button>
+                    </Space>
+                  </Card>
+                </List.Item>
+              )}
+            />
+          ) : (
+            <Empty description="暂无待处理事项">
+              <Button onClick={() => navigate('/exhibitor/orders')}>查看全部订单</Button>
+            </Empty>
+          )}
+        </Card>
+
+        <Card title="参展流程">
           <Steps
-            current={getOrderStepIndex(activeOrder.status)}
+            current={0}
             direction={stepsDirection}
             items={buildHomeFlowSteps()}
           />
-        </ProCard>
-        <ProCard split={cardSplit}>
-          <ProCard title="最近付款">
-            <ProList<PaymentRecord>
-              rowKey="id"
-              dataSource={payments.slice(0, 3)}
-              locale={{ emptyText: '暂无付款记录' }}
-              metas={{
-                title: { render: (_, record) => formatMobileAmount(record.amount) },
-                description: {
-                  render: (_, record) => (
-                    <Space>
-                      <StatusTag meta={record.status ? getPaymentStatusMeta(record.status) : { label: '未填写', color: 'default' }} />
-                      <Typography.Text type="secondary">{formatMobileTime(record.createdAt)}</Typography.Text>
-                    </Space>
-                  ),
-                },
-              }}
-            />
-          </ProCard>
-          <ProCard title="最近选位">
-            <ProList<BoothSelection>
-              rowKey="id"
-              dataSource={selections.slice(0, 3)}
-              locale={{ emptyText: '暂无选位记录' }}
-              metas={{
-                title: { render: (_, record) => `选位 ${formatShortId(record.id)}` },
-                description: {
-                  render: (_, record) => (
-                    <Space>
-                      <StatusTag meta={record.status ? getSelectionStatusMeta(record.status) : { label: '未填写', color: 'default' }} />
-                      <Typography.Text type="secondary">{formatMobileTime(record.createdAt)}</Typography.Text>
-                    </Space>
-                  ),
-                },
-              }}
-            />
-          </ProCard>
-        </ProCard>
+        </Card>
+
+        <Card title="最近订单">
+          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+            {[...orders].sort(byCreatedAtDesc).slice(0, 3).map((order) => (
+              <Card
+                key={order.id}
+                className="exhibitor-order-summary-card"
+                onClick={() => navigate(`/exhibitor/orders/${order.id}`)}
+                role="button"
+                tabIndex={0}
+              >
+                <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start">
+                    <Typography.Text strong>{formatEventDisplay(order.eventId, events)}</Typography.Text>
+                    <Typography.Text className="exhibitor-order-amount">{formatMobileAmount(order.totalAmount)}</Typography.Text>
+                  </Space>
+                  <Typography.Text type="secondary">
+                    {formatArea(order.areaSqm)} · {formatBoothType(order.boothType)} · 更新 {formatMobileTime(order.updatedAt)}
+                  </Typography.Text>
+                </Space>
+              </Card>
+            ))}
+          </Space>
+        </Card>
       </Space>
-    </PageContainer>
+    </div>
   );
 }
