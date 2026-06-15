@@ -19,6 +19,9 @@ public class Notification {
     @Column(name = "title") private String title;
     @Column(name = "content") private String content;
     @Column(name = "type") private String type;
+    @Column(name = "related_type") private String relatedType;
+    @Column(name = "related_id") private UUID relatedId;
+    @Column(name = "related_order_id") private UUID relatedOrderId;
     @Column(name = "read_at") private OffsetDateTime readAt;
     @Column(name = "created_at") private OffsetDateTime createdAt;
 
@@ -27,6 +30,12 @@ public class Notification {
 
     public Notification(UUID id, UUID eventId, String recipientType, UUID recipientId, String title,
                         String content, String type, OffsetDateTime readAt, OffsetDateTime createdAt) {
+        this(id, eventId, recipientType, recipientId, title, content, type, null, null, null, readAt, createdAt);
+    }
+
+    public Notification(UUID id, UUID eventId, String recipientType, UUID recipientId, String title,
+                        String content, String type, String relatedType, UUID relatedId, UUID relatedOrderId,
+                        OffsetDateTime readAt, OffsetDateTime createdAt) {
         this.id = id;
         this.eventId = eventId;
         this.recipientType = recipientType;
@@ -34,6 +43,9 @@ public class Notification {
         this.title = title;
         this.content = content;
         this.type = type;
+        this.relatedType = relatedType;
+        this.relatedId = relatedId;
+        this.relatedOrderId = relatedOrderId;
         this.readAt = readAt;
         this.createdAt = createdAt;
     }
@@ -45,6 +57,9 @@ public class Notification {
     public String getTitle() { return title; }
     public String getContent() { return content; }
     public String getType() { return type; }
+    public String getRelatedType() { return relatedType; }
+    public UUID getRelatedId() { return relatedId; }
+    public UUID getRelatedOrderId() { return relatedOrderId; }
     public OffsetDateTime getReadAt() { return readAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 

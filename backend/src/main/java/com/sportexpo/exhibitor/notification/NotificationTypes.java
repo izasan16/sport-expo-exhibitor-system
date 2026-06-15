@@ -9,6 +9,9 @@ public final class NotificationTypes {
     public static final String SELECTION_APPROVED = "SELECTION_APPROVED";
     public static final String SELECTION_REJECTED = "SELECTION_REJECTED";
     public static final String SELECTION_TIMEOUT_RELEASED = "SELECTION_TIMEOUT_RELEASED";
+    public static final String REGISTRATION_SUBMITTED = "REGISTRATION_SUBMITTED";
+    public static final String REGISTRATION_APPROVED = "REGISTRATION_APPROVED";
+    public static final String REGISTRATION_REJECTED = "REGISTRATION_REJECTED";
 
     private NotificationTypes() {
     }

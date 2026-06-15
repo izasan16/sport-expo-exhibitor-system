@@ -83,6 +83,36 @@ public class Registration {
         this.updatedBy = reviewerId;
     }
 
+    public void updateEditableFields(String category, UUID zoneId, BigDecimal intentAreaSqm, String contactName,
+                                     String contactPhone, String remark, UUID actorId) {
+        this.category = category;
+        this.zoneId = zoneId;
+        this.intentAreaSqm = intentAreaSqm;
+        this.contactName = contactName;
+        this.contactPhone = contactPhone;
+        this.remark = remark;
+        this.updatedAt = OffsetDateTime.now();
+        this.updatedBy = actorId;
+    }
+
+    public void submit(UUID actorId) {
+        this.status = BusinessStatuses.REGISTRATION_SUBMITTED;
+        this.submittedAt = OffsetDateTime.now();
+        this.reviewComment = null;
+        this.reviewedBy = null;
+        this.reviewedAt = null;
+        this.updatedAt = OffsetDateTime.now();
+        this.updatedBy = actorId;
+    }
+
+    public void approve(UUID reviewerId) {
+        this.status = BusinessStatuses.REGISTRATION_APPROVED;
+        this.reviewedBy = reviewerId;
+        this.reviewedAt = OffsetDateTime.now();
+        this.updatedAt = OffsetDateTime.now();
+        this.updatedBy = reviewerId;
+    }
+
     public UUID getId() { return id; }
     public UUID getEventId() { return eventId; }
     public UUID getExhibitorId() { return exhibitorId; }

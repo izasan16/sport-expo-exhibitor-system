@@ -36,4 +36,25 @@ class NotificationServiceTest extends TestDatabaseSupport {
 
         assertThat(read.readAt()).isNotNull();
     }
+
+    @Test
+    void createsNotificationWithRelatedObjectFields() {
+        var event = fixture.createEvent();
+
+        var created = notificationService.create(
+                event.id(),
+                "EXHIBITOR",
+                DemoActors.DEMO_EXHIBITOR_ID,
+                "报名审核通过",
+                "可以创建订单",
+                NotificationTypes.REGISTRATION_APPROVED,
+                "Registration",
+                DemoActors.DEMO_EXHIBITOR_ID,
+                null
+        );
+
+        assertThat(created.relatedType()).isEqualTo("Registration");
+        assertThat(created.relatedId()).isEqualTo(DemoActors.DEMO_EXHIBITOR_ID);
+        assertThat(created.relatedOrderId()).isNull();
+    }
 }

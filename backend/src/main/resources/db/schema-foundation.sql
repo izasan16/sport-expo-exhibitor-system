@@ -332,9 +332,16 @@ create table if not exists __schema__.notifications (
     title varchar(200) not null,
     content varchar(1000) not null,
     type varchar(80) not null,
+    related_type varchar(80),
+    related_id uuid,
+    related_order_id uuid,
     read_at timestamptz,
     created_at timestamptz not null
 );
+
+alter table __schema__.notifications add column if not exists related_type varchar(80);
+alter table __schema__.notifications add column if not exists related_id uuid;
+alter table __schema__.notifications add column if not exists related_order_id uuid;
 
 create index if not exists idx_booths_event_status on __schema__.booths(event_id, status);
 create index if not exists idx_participation_orders_status_created_at
@@ -354,6 +361,7 @@ create index if not exists idx_booth_locks_selection_id on __schema__.booth_lock
 create index if not exists idx_release_tasks_event_status on __schema__.booth_release_tasks(event_id, status);
 create index if not exists idx_audit_logs_object on __schema__.audit_logs(object_type, object_id);
 create index if not exists idx_notifications_recipient on __schema__.notifications(recipient_id, created_at desc);
+create index if not exists idx_notifications_related on __schema__.notifications(related_type, related_id);
 
 create unique index if not exists uidx_area_tiers_event_zone_area
     on __schema__.area_tiers(event_id, coalesce(zone_id, '00000000-0000-0000-0000-000000000000'::uuid), area_sqm);

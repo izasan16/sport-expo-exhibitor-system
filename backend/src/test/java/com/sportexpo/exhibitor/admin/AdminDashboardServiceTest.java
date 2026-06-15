@@ -6,6 +6,15 @@ import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
 import com.sportexpo.exhibitor.payment.PaymentService;
 import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
+import com.sportexpo.exhibitor.registration.RegistrationService;
+import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
+import com.sportexpo.exhibitor.event.EventService;
+import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
+import com.sportexpo.exhibitor.eventcategory.EventCategoryService;
+import com.sportexpo.exhibitor.eventcategory.dto.EventCategoryRequest;
+import com.sportexpo.exhibitor.exhibitor.ExhibitorService;
+import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorRequest;
+import com.sportexpo.exhibitor.common.DemoActors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +30,10 @@ class AdminDashboardServiceTest extends TestDatabaseSupport {
     @Autowired TestBusinessFixture fixture;
     @Autowired PaymentService paymentService;
     @Autowired AdminDashboardService dashboardService;
+    @Autowired EventService eventService;
+    @Autowired ExhibitorService exhibitorService;
+    @Autowired EventCategoryService eventCategoryService;
+    @Autowired RegistrationService registrationService;
 
     @Test
     void aggregatesPendingWorkbenchCountsAndTopItems() {
@@ -66,5 +79,27 @@ class AdminDashboardServiceTest extends TestDatabaseSupport {
                         expectedLatestIds.get(1),
                         expectedLatestIds.get(0)
                 ));
+    }
+
+    @Test
+    void dashboardIncludesPendingRegistrationReviewCountAndTopItems() {
+        var before = dashboardService.getDashboard();
+        var event = eventService.create(new CreateEventRequest("报名工作台测试展", 2026));
+        var exhibitor = exhibitorService.create(new ExhibitorRequest(
+                "待审展商", "CREDIT-" + java.util.UUID.randomUUID(), "王老板", "13800000000",
+                "demo@example.com", "上海市", "ACTIVE"
+        ), DemoActors.DEMO_ADMIN_ID);
+        eventCategoryService.create(new EventCategoryRequest(event.id(), "SPORTS_EQUIPMENT", "体育用品", true, 10),
+                DemoActors.DEMO_ADMIN_ID);
+        var registration = registrationService.create(new RegistrationRequest(
+                event.id(), exhibitor.id(), "SPORTS_EQUIPMENT", null, new BigDecimal("18.00"),
+                "王老板", "13800000000", "报名参展"
+        ), DemoActors.DEMO_EXHIBITOR_ID);
+        registrationService.submit(registration.id(), DemoActors.DEMO_EXHIBITOR_ID);
+
+        var dashboard = dashboardService.getDashboard();
+
+        assertThat(dashboard.pendingRegistrationReviewCount()).isEqualTo(before.pendingRegistrationReviewCount() + 1);
+        assertThat(dashboard.pendingRegistrationReviews()).anyMatch(item -> item.id().equals(registration.id()));
     }
 }

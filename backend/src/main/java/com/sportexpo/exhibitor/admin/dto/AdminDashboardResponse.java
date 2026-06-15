@@ -2,6 +2,7 @@ package com.sportexpo.exhibitor.admin.dto;
 
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
 import com.sportexpo.exhibitor.payment.dto.PaymentResponse;
+import com.sportexpo.exhibitor.registration.dto.RegistrationResponse;
 import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
 
 import java.time.OffsetDateTime;
@@ -12,9 +13,11 @@ public record AdminDashboardResponse(
         long pendingSalesConfirmCount,
         long pendingFinanceConfirmCount,
         long pendingSelectionReviewCount,
+        long pendingRegistrationReviewCount,
         long todayNewOrderCount,
         List<ParticipationOrderResponse> pendingSalesConfirmOrders,
         List<PaymentResponse> pendingFinanceConfirmPayments,
-        List<BoothSelectionResponse> pendingSelectionReviews
+        List<BoothSelectionResponse> pendingSelectionReviews,
+        List<RegistrationResponse> pendingRegistrationReviews
 ) {
 }

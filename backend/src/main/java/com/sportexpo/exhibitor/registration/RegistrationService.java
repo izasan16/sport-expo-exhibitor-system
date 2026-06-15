@@ -6,6 +6,9 @@ import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.eventcategory.EventCategoryRepository;
 import com.sportexpo.exhibitor.exhibitor.ExhibitorRepository;
+import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.notification.NotificationService;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
 import com.sportexpo.exhibitor.registration.dto.RegistrationResponse;
 import org.springframework.stereotype.Service;
@@ -30,15 +33,17 @@ public class RegistrationService {
     private final ExhibitorRepository exhibitorRepository;
     private final EventRepository eventRepository;
     private final EventCategoryRepository eventCategoryRepository;
+    private final NotificationService notificationService;
     private final AuditService auditService;
 
     public RegistrationService(RegistrationRepository repository, ExhibitorRepository exhibitorRepository,
                                EventRepository eventRepository, EventCategoryRepository eventCategoryRepository,
-                               AuditService auditService) {
+                               NotificationService notificationService, AuditService auditService) {
         this.repository = repository;
         this.exhibitorRepository = exhibitorRepository;
         this.eventRepository = eventRepository;
         this.eventCategoryRepository = eventCategoryRepository;
+        this.notificationService = notificationService;
         this.auditService = auditService;
     }
 
@@ -62,6 +67,86 @@ public class RegistrationService {
         return toResponse(registration);
     }
 
+    @Transactional
+    public RegistrationResponse update(UUID id, RegistrationRequest request, UUID actorId) {
+        var registration = findEntityForUpdate(id);
+        if (!BusinessStatuses.REGISTRATION_DRAFT.equals(registration.getStatus())
+                && !BusinessStatuses.REGISTRATION_REJECTED.equals(registration.getStatus())) {
+            throw new BusinessException("Registration cannot be edited from current status");
+        }
+        if (!registration.getEventId().equals(request.eventId())) {
+            throw new BusinessException("Registration event cannot be changed");
+        }
+        if (!registration.getExhibitorId().equals(request.exhibitorId())) {
+            throw new BusinessException("Registration exhibitor cannot be changed");
+        }
+        eventCategoryRepository.findByEventIdAndCodeAndEnabled(request.eventId(), request.category(), true)
+                .orElseThrow(() -> new BusinessException("Registration category is not enabled for this event"));
+        registration.updateEditableFields(request.category(), request.zoneId(), request.intentAreaSqm(),
+                request.contactName(), request.contactPhone(), request.remark(), actorId);
+        auditService.record(registration.getEventId(), actorId, "REGISTRATION_UPDATE", "Registration",
+                registration.getId(), registration.getStatus(), registration.getStatus(), "update registration");
+        return toResponse(registration);
+    }
+
+    @Transactional
+    public RegistrationResponse submit(UUID id, UUID actorId) {
+        var registration = findEntityForUpdate(id);
+        return submitLocked(registration, actorId);
+    }
+
+    @Transactional
+    public RegistrationResponse resubmit(UUID id, UUID actorId) {
+        var registration = findEntityForUpdate(id);
+        return resubmitLocked(registration, actorId);
+    }
+
+    @Transactional
+    public RegistrationResponse submitOrResubmit(UUID id, UUID actorId) {
+        var registration = findEntityForUpdate(id);
+        if (BusinessStatuses.REGISTRATION_DRAFT.equals(registration.getStatus())) {
+            return submitLocked(registration, actorId);
+        }
+        if (BusinessStatuses.REGISTRATION_REJECTED.equals(registration.getStatus())) {
+            return resubmitLocked(registration, actorId);
+        }
+        throw new BusinessException("Registration cannot be submitted from current status");
+    }
+
+    @Transactional
+    public RegistrationResponse approve(UUID id, UUID actorId) {
+        var registration = findEntityForUpdate(id);
+        if (!BusinessStatuses.REGISTRATION_SUBMITTED.equals(registration.getStatus())) {
+            throw new BusinessException("Registration cannot be approved from current status");
+        }
+        var oldStatus = registration.getStatus();
+        registration.approve(actorId);
+        auditService.record(registration.getEventId(), actorId, "REGISTRATION_APPROVE", "Registration",
+                registration.getId(), oldStatus, registration.getStatus(), "approve registration");
+        notifyExhibitor(registration, NotificationTypes.REGISTRATION_APPROVED, "报名审核通过", "您可以创建参展订单");
+        return toResponse(registration);
+    }
+
+    @Transactional
+    public RegistrationResponse reject(UUID id, UUID actorId, String reason) {
+        var registration = findEntityForUpdate(id);
+        if (!BusinessStatuses.REGISTRATION_SUBMITTED.equals(registration.getStatus())) {
+            throw new BusinessException("Registration cannot be rejected from current status");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("Reject reason is required");
+        }
+        if (reason.length() > 500) {
+            throw new BusinessException("Reject reason is too long");
+        }
+        var oldStatus = registration.getStatus();
+        registration.markRejected(actorId, reason);
+        auditService.record(registration.getEventId(), actorId, "REGISTRATION_REJECT", "Registration",
+                registration.getId(), oldStatus, registration.getStatus(), reason);
+        notifyExhibitor(registration, NotificationTypes.REGISTRATION_REJECTED, "报名被驳回", reason);
+        return toResponse(registration);
+    }
+
     @Transactional(readOnly = true)
     public RegistrationResponse get(UUID id) {
         return repository.findById(id).map(this::toResponse)
@@ -77,6 +162,49 @@ public class RegistrationService {
 
     private RegistrationResponse toResponse(Registration registration) {
         return toResponse(registration, loadCategoryNames(List.of(registration)));
+    }
+
+    private Registration findEntity(UUID id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new BusinessException("Registration does not exist"));
+    }
+
+    private Registration findEntityForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new BusinessException("Registration does not exist"));
+    }
+
+    private void notifyAdmin(Registration registration, String type, String title, String content) {
+        notificationService.create(registration.getEventId(), "ADMIN", DemoActors.DEMO_ADMIN_ID, title, content, type,
+                "Registration", registration.getId(), null);
+    }
+
+    private void notifyExhibitor(Registration registration, String type, String title, String content) {
+        notificationService.create(registration.getEventId(), "EXHIBITOR", registration.getExhibitorId(), title, content,
+                type, "Registration", registration.getId(), null);
+    }
+
+    private RegistrationResponse submitLocked(Registration registration, UUID actorId) {
+        if (!BusinessStatuses.REGISTRATION_DRAFT.equals(registration.getStatus())) {
+            throw new BusinessException("Registration cannot be submitted from current status");
+        }
+        registration.submit(actorId);
+        auditService.record(registration.getEventId(), actorId, "REGISTRATION_SUBMIT", "Registration",
+                registration.getId(), BusinessStatuses.REGISTRATION_DRAFT, registration.getStatus(), "submit registration");
+        notifyAdmin(registration, NotificationTypes.REGISTRATION_SUBMITTED, "有新的报名待审核", "展商提交了参展报名");
+        return toResponse(registration);
+    }
+
+    private RegistrationResponse resubmitLocked(Registration registration, UUID actorId) {
+        if (!BusinessStatuses.REGISTRATION_REJECTED.equals(registration.getStatus())) {
+            throw new BusinessException("Registration cannot be submitted from current status");
+        }
+        registration.submit(actorId);
+        auditService.record(registration.getEventId(), actorId, "REGISTRATION_RESUBMIT", "Registration",
+                registration.getId(), BusinessStatuses.REGISTRATION_REJECTED, registration.getStatus(),
+                "resubmit registration and clear review fields");
+        notifyAdmin(registration, NotificationTypes.REGISTRATION_SUBMITTED, "报名重新提交待审核", "展商重新提交了参展报名");
+        return toResponse(registration);
     }
 
     private RegistrationResponse toResponse(Registration registration, Map<CategoryKey, String> categoryNames) {

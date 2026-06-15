@@ -8,6 +8,9 @@ import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
 import com.sportexpo.exhibitor.payment.Payment;
 import com.sportexpo.exhibitor.payment.PaymentRepository;
 import com.sportexpo.exhibitor.payment.dto.PaymentResponse;
+import com.sportexpo.exhibitor.registration.Registration;
+import com.sportexpo.exhibitor.registration.RegistrationRepository;
+import com.sportexpo.exhibitor.registration.dto.RegistrationResponse;
 import com.sportexpo.exhibitor.selection.BoothLock;
 import com.sportexpo.exhibitor.selection.BoothLockRepository;
 import com.sportexpo.exhibitor.selection.BoothSelection;
@@ -24,13 +27,16 @@ public class AdminDashboardService {
     private final PaymentRepository paymentRepository;
     private final BoothSelectionRepository selectionRepository;
     private final BoothLockRepository lockRepository;
+    private final RegistrationRepository registrationRepository;
 
     public AdminDashboardService(ParticipationOrderRepository orderRepository, PaymentRepository paymentRepository,
-                                 BoothSelectionRepository selectionRepository, BoothLockRepository lockRepository) {
+                                 BoothSelectionRepository selectionRepository, BoothLockRepository lockRepository,
+                                 RegistrationRepository registrationRepository) {
         this.orderRepository = orderRepository;
         this.paymentRepository = paymentRepository;
         this.selectionRepository = selectionRepository;
         this.lockRepository = lockRepository;
+        this.registrationRepository = registrationRepository;
     }
 
     @Transactional(readOnly = true)
@@ -44,6 +50,7 @@ public class AdminDashboardService {
                 orderRepository.countByStatus(BusinessStatuses.ORDER_PENDING_SALES_CONFIRM),
                 paymentRepository.countByStatus(BusinessStatuses.PAYMENT_PENDING_FINANCE_CONFIRM),
                 selectionRepository.countByStatus(BusinessStatuses.SELECTION_PENDING_REVIEW),
+                registrationRepository.countByStatus(BusinessStatuses.REGISTRATION_SUBMITTED),
                 orderRepository.countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(todayStart, tomorrowStart),
                 orderRepository.findTop5ByStatusOrderByCreatedAtDesc(BusinessStatuses.ORDER_PENDING_SALES_CONFIRM)
                         .stream()
@@ -54,6 +61,10 @@ public class AdminDashboardService {
                         .map(this::toResponse)
                         .toList(),
                 selectionRepository.findTop5ByStatusOrderByCreatedAtDesc(BusinessStatuses.SELECTION_PENDING_REVIEW)
+                        .stream()
+                        .map(this::toResponse)
+                        .toList(),
+                registrationRepository.findTop5ByStatusOrderBySubmittedAtDesc(BusinessStatuses.REGISTRATION_SUBMITTED)
                         .stream()
                         .map(this::toResponse)
                         .toList()
@@ -122,6 +133,28 @@ public class AdminDashboardService {
                 selection.getUpdatedAt(),
                 selection.getCreatedBy(),
                 selection.getUpdatedBy()
+        );
+    }
+
+    private RegistrationResponse toResponse(Registration registration) {
+        return new RegistrationResponse(
+                registration.getId(),
+                registration.getEventId(),
+                registration.getExhibitorId(),
+                registration.getStatus(),
+                registration.getCategory(),
+                null,
+                registration.getZoneId(),
+                registration.getIntentAreaSqm(),
+                registration.getContactName(),
+                registration.getContactPhone(),
+                registration.getRemark(),
+                registration.getReviewComment(),
+                registration.getReviewedBy(),
+                registration.getReviewedAt(),
+                registration.getSubmittedAt(),
+                registration.getCreatedAt(),
+                registration.getUpdatedAt()
         );
     }
 }

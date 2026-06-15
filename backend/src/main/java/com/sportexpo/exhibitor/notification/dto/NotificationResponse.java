@@ -4,5 +4,6 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record NotificationResponse(UUID id, UUID eventId, String recipientType, UUID recipientId, String title,
-                                   String content, String type, OffsetDateTime readAt, OffsetDateTime createdAt) {
+                                   String content, String type, String relatedType, UUID relatedId,
+                                   UUID relatedOrderId, OffsetDateTime readAt, OffsetDateTime createdAt) {
 }

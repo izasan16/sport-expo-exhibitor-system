@@ -20,6 +20,13 @@ public class NotificationService {
     @Transactional
     public NotificationResponse create(UUID eventId, String recipientType, UUID recipientId, String title,
                                        String content, String type) {
+        return create(eventId, recipientType, recipientId, title, content, type, null, null, null);
+    }
+
+    @Transactional
+    public NotificationResponse create(UUID eventId, String recipientType, UUID recipientId, String title,
+                                       String content, String type, String relatedType, UUID relatedId,
+                                       UUID relatedOrderId) {
         var now = OffsetDateTime.now();
         var notification = repository.save(new Notification(
                 UUID.randomUUID(),
@@ -29,6 +36,9 @@ public class NotificationService {
                 title,
                 content,
                 type,
+                relatedType,
+                relatedId,
+                relatedOrderId,
                 null,
                 now
         ));
@@ -67,6 +77,9 @@ public class NotificationService {
                 notification.getTitle(),
                 notification.getContent(),
                 notification.getType(),
+                notification.getRelatedType(),
+                notification.getRelatedId(),
+                notification.getRelatedOrderId(),
                 notification.getReadAt(),
                 notification.getCreatedAt()
         );

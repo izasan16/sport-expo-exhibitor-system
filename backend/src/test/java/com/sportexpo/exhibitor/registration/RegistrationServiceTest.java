@@ -2,6 +2,7 @@ package com.sportexpo.exhibitor.registration;
 
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.common.BusinessException;
+import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
@@ -10,6 +11,8 @@ import com.sportexpo.exhibitor.eventcategory.dto.EventCategoryRequest;
 import com.sportexpo.exhibitor.exhibitor.ExhibitorService;
 import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorRequest;
 import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
+import com.sportexpo.exhibitor.notification.NotificationRepository;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +35,8 @@ class RegistrationServiceTest extends TestDatabaseSupport {
     RegistrationService registrationService;
     @Autowired
     RegistrationRepository registrationRepository;
+    @Autowired
+    NotificationRepository notificationRepository;
 
     @Test
     void rejectsRegistrationCategoryOutsideEventConfiguration() {
@@ -84,6 +89,67 @@ class RegistrationServiceTest extends TestDatabaseSupport {
         assertThat(filtered).hasSize(1);
         assertThat(filtered.get(0).id()).isEqualTo(registration.id());
         assertThat(filtered.get(0).categoryName()).isEqualTo("体育用品");
+    }
+
+    @Test
+    void submitApproveAndRejectRegistrationCreateNotifications() {
+        var setup = setupRegistrationFixture();
+        var draft = registrationService.create(request(setup.eventId(), setup.exhibitorId(), "SPORTS_EQUIPMENT"),
+                DemoActors.DEMO_EXHIBITOR_ID);
+
+        var submitted = registrationService.submit(draft.id(), DemoActors.DEMO_EXHIBITOR_ID);
+
+        assertThat(submitted.status()).isEqualTo(BusinessStatuses.REGISTRATION_SUBMITTED);
+        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(DemoActors.DEMO_ADMIN_ID))
+                .anyMatch(notification -> notification.getType().equals(NotificationTypes.REGISTRATION_SUBMITTED)
+                        && notification.getRelatedType().equals("Registration")
+                        && notification.getRelatedId().equals(draft.id()));
+
+        var approved = registrationService.approve(draft.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(approved.status()).isEqualTo(BusinessStatuses.REGISTRATION_APPROVED);
+        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(setup.exhibitorId()))
+                .anyMatch(notification -> notification.getType().equals(NotificationTypes.REGISTRATION_APPROVED)
+                        && notification.getRelatedType().equals("Registration")
+                        && notification.getRelatedId().equals(draft.id()));
+
+        var secondDraft = registrationService.create(request(setup.eventId(), setup.exhibitorId(), "SPORTS_EQUIPMENT"),
+                DemoActors.DEMO_EXHIBITOR_ID);
+        registrationService.submit(secondDraft.id(), DemoActors.DEMO_EXHIBITOR_ID);
+        var rejected = registrationService.reject(secondDraft.id(), DemoActors.DEMO_ADMIN_ID, "资质材料不完整");
+
+        assertThat(rejected.status()).isEqualTo(BusinessStatuses.REGISTRATION_REJECTED);
+        assertThat(rejected.reviewComment()).isEqualTo("资质材料不完整");
+        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(setup.exhibitorId()))
+                .anyMatch(notification -> notification.getType().equals(NotificationTypes.REGISTRATION_REJECTED)
+                        && notification.getRelatedType().equals("Registration")
+                        && notification.getRelatedId().equals(secondDraft.id()));
+    }
+
+    @Test
+    void rejectedRegistrationCanBeEditedThenResubmittedAndReviewFieldsAreCleared() {
+        var setup = setupRegistrationFixture();
+        var draft = registrationService.create(request(setup.eventId(), setup.exhibitorId(), "SPORTS_EQUIPMENT"),
+                DemoActors.DEMO_EXHIBITOR_ID);
+        registrationService.submit(draft.id(), DemoActors.DEMO_EXHIBITOR_ID);
+        registrationService.reject(draft.id(), DemoActors.DEMO_ADMIN_ID, "资质材料不完整");
+
+        var saved = registrationService.update(draft.id(), new RegistrationRequest(
+                setup.eventId(), setup.exhibitorId(), "SPORTS_EQUIPMENT", null, new BigDecimal("36.00"),
+                "李经理", "13900000000", "补充资质后重新提交"
+        ), DemoActors.DEMO_EXHIBITOR_ID);
+
+        assertThat(saved.status()).isEqualTo(BusinessStatuses.REGISTRATION_REJECTED);
+        assertThat(saved.intentAreaSqm()).isEqualByComparingTo("36.00");
+        assertThat(saved.contactName()).isEqualTo("李经理");
+
+        var resubmitted = registrationService.resubmit(draft.id(), DemoActors.DEMO_EXHIBITOR_ID);
+
+        assertThat(resubmitted.status()).isEqualTo(BusinessStatuses.REGISTRATION_SUBMITTED);
+        assertThat(resubmitted.reviewComment()).isNull();
+        assertThat(resubmitted.reviewedBy()).isNull();
+        assertThat(resubmitted.reviewedAt()).isNull();
+        assertThat(resubmitted.submittedAt()).isNotNull();
     }
 
     private RegistrationFixture setupRegistrationFixture() {
