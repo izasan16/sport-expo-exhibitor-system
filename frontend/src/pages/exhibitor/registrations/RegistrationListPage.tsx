@@ -8,6 +8,7 @@ import type { Registration } from '../../../app/domain';
 import { formatArea, formatFriendlyTime } from '../../../app/formatters';
 import { apiGet } from '../../../app/request';
 import { useEvents } from '../../../app/useEvents';
+import { getRegistrationListPrimaryAction } from '../registrationViewModels';
 
 function getRegistrationStatusColor(status: Registration['status']) {
   if (status === 'APPROVED') return 'green';
@@ -49,6 +50,7 @@ export default function RegistrationListPage() {
     () => [...registrations].sort((left, right) => (Date.parse(right.updatedAt) || 0) - (Date.parse(left.updatedAt) || 0)),
     [registrations],
   );
+  const primaryAction = getRegistrationListPrimaryAction(sortedRegistrations);
 
   if (loading) {
     return (
@@ -76,7 +78,7 @@ export default function RegistrationListPage() {
   return (
     <PageContainer
       title="报名进度"
-      extra={<Button type="primary" onClick={() => navigate('/exhibitor/registrations/new')}>提交报名</Button>}
+      extra={<Button type="primary" onClick={() => navigate(primaryAction.to)}>{primaryAction.label}</Button>}
     >
       <ProCard>
         {sortedRegistrations.length ? (
@@ -108,7 +110,7 @@ export default function RegistrationListPage() {
           />
         ) : (
           <Empty description="还没有报名记录">
-            <Button type="primary" onClick={() => navigate('/exhibitor/registrations/new')}>提交报名</Button>
+            <Button type="primary" onClick={() => navigate(primaryAction.to)}>{primaryAction.label}</Button>
           </Empty>
         )}
       </ProCard>

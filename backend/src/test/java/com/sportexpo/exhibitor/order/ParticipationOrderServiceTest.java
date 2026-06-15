@@ -12,6 +12,7 @@ import com.sportexpo.exhibitor.eventcategory.dto.EventCategoryRequest;
 import com.sportexpo.exhibitor.exhibitor.ExhibitorService;
 import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorRequest;
 import com.sportexpo.exhibitor.notification.NotificationService;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.pricing.AreaTierService;
 import com.sportexpo.exhibitor.pricing.PriceRuleService;
@@ -35,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 
 @SpringBootTest
@@ -127,13 +129,30 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     }
 
     @Test
+    void confirmSalesCreatesChineseExhibitorNotification() {
+        var order = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
+
+        orderService.confirmSales(order.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(notificationService.list(order.exhibitorId()))
+                .filteredOn(notification -> notification.type().equals(NotificationTypes.ORDER_SALES_CONFIRMED))
+                .filteredOn(notification -> order.id().equals(notification.relatedOrderId()))
+                .anySatisfy(notification -> {
+                    assertThat(notification.title()).isEqualTo("订单已确认");
+                    assertThat(notification.content()).isEqualTo("您的参展订单已由销售确认，请继续完成合同确认。");
+                    assertThat(notification.relatedOrderId()).isEqualTo(order.id());
+                });
+    }
+
+    @Test
     void batchConfirmSalesKeepsBusinessReasonsButHidesUnexpectedRuntimeMessages() {
         var ready = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
         var alreadyConfirmed = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
         orderService.confirmSales(alreadyConfirmed.id(), DemoActors.DEMO_ADMIN_ID);
         doThrow(new IllegalStateException("internal notification outage"))
                 .when(notificationService)
-                .create(eq(ready.eventId()), anyString(), eq(ready.exhibitorId()), anyString(), anyString(), anyString());
+                .create(eq(ready.eventId()), anyString(), eq(ready.exhibitorId()), anyString(), anyString(), anyString(),
+                        isNull(), isNull(), eq(ready.id()));
 
         var result = orderService.batchConfirmSales(
                 List.of(alreadyConfirmed.id(), ready.id()),

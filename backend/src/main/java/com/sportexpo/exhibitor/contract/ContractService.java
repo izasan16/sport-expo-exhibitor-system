@@ -78,8 +78,8 @@ public class ContractService {
         auditService.record(order.getEventId(), actorId, "ORDER_CONTRACT_EFFECTIVE", "ParticipationOrder",
                 order.getId(), BusinessStatuses.ORDER_PENDING_CONTRACT, order.getStatus(), "contract effective");
         notificationService.create(contract.getEventId(), "EXHIBITOR", order.getExhibitorId(),
-                "Contract signed", "Your offline contract has been marked as signed.",
-                NotificationTypes.CONTRACT_SIGNED);
+                "合同已确认", "您的线下合同已确认签署，请继续完成付款。",
+                NotificationTypes.CONTRACT_SIGNED, null, null, order.getId());
         return toResponse(contract);
     }
 

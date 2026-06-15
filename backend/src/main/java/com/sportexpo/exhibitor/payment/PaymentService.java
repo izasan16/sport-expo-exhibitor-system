@@ -113,8 +113,8 @@ public class PaymentService {
         auditService.record(payment.getEventId(), actorId, "PAYMENT_CONFIRM", "Payment",
                 payment.getId(), oldPaymentStatus, payment.getStatus(), "confirm payment");
         notificationService.create(payment.getEventId(), "EXHIBITOR", order.getExhibitorId(),
-                "Payment confirmed", "Your payment has been confirmed by finance.",
-                NotificationTypes.PAYMENT_CONFIRMED);
+                "付款已确认", "您的付款已由财务确认，可以继续办理后续参展流程。",
+                NotificationTypes.PAYMENT_CONFIRMED, null, null, order.getId());
         return toResponse(payment);
     }
 
@@ -140,7 +140,7 @@ public class PaymentService {
         payment.markFailed(actorId, trimmedReason, now);
         paymentRepository.save(payment);
         notificationService.create(payment.getEventId(), "EXHIBITOR", order.getExhibitorId(),
-                "Payment failed", trimmedReason, NotificationTypes.PAYMENT_FAILED);
+                "付款确认失败", trimmedReason, NotificationTypes.PAYMENT_FAILED, null, null, order.getId());
         auditService.record(payment.getEventId(), actorId, "PAYMENT_FAIL", "Payment",
                 payment.getId(), oldPaymentStatus, payment.getStatus(), trimmedReason);
         return toResponse(payment);

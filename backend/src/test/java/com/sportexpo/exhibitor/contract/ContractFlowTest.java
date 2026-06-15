@@ -5,6 +5,8 @@ import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.notification.NotificationRepository;
+import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.ParticipationOrderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,7 @@ class ContractFlowTest extends TestDatabaseSupport {
     @Autowired ContractService contractService;
     @Autowired ContractRepository contractRepository;
     @Autowired ContractVersionRepository contractVersionRepository;
+    @Autowired NotificationRepository notificationRepository;
     @Autowired JdbcTemplate jdbcTemplate;
     @Value("${app.db.schema}") String schema;
 
@@ -47,6 +50,13 @@ class ContractFlowTest extends TestDatabaseSupport {
         assertThat(orderService.get(order.id()).status()).isEqualTo(BusinessStatuses.ORDER_PENDING_PAYMENT);
         assertThat(contractVersionRepository.findByContractIdOrderByVersionNoAsc(contract.getId()).get(0).getSignStatus())
                 .isEqualTo(BusinessStatuses.CONTRACT_VERSION_MARKED_SIGNED);
+        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(order.exhibitorId()))
+                .filteredOn(notification -> notification.getType().equals(NotificationTypes.CONTRACT_SIGNED))
+                .filteredOn(notification -> order.id().equals(notification.getRelatedOrderId()))
+                .anySatisfy(notification -> {
+                    assertThat(notification.getType()).isEqualTo(NotificationTypes.CONTRACT_SIGNED);
+                    assertThat(notification.getRelatedOrderId()).isEqualTo(order.id());
+                });
     }
 
     @Test

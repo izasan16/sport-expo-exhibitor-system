@@ -98,6 +98,31 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
+    void submitCreatesWorkbenchNotificationForAdminInsteadOfExhibitor() {
+        var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
+        var booth = fixture.createBooth(order.eventId(), "A001", "9.00", "STANDARD");
+
+        selectionService.submit(new CreateBoothSelectionRequest(
+                order.id(), order.exhibitorId(), List.of(booth.id())));
+
+        assertThat(notificationService.list(DemoActors.DEMO_ADMIN_ID))
+                .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_SUBMITTED))
+                .filteredOn(notification -> notification.eventId().equals(order.eventId()))
+                .filteredOn(notification -> order.id().equals(notification.relatedOrderId()))
+                .hasSize(1)
+                .first()
+                .satisfies(notification -> {
+                    assertThat(notification.recipientId()).isEqualTo(DemoActors.DEMO_ADMIN_ID);
+                    assertThat(notification.title()).isEqualTo("新选位申请");
+                    assertThat(notification.relatedOrderId()).isEqualTo(order.id());
+                });
+        assertThat(notificationService.list(order.exhibitorId()))
+                .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_SUBMITTED))
+                .filteredOn(notification -> notification.eventId().equals(order.eventId()))
+                .isEmpty();
+    }
+
+    @Test
     void rejectsSelectionWhenBoothTypeDoesNotMatchOrderBoothType() {
         var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
         var booth = fixture.createBooth(order.eventId(), "A001", "9.00", "CUSTOM");
@@ -161,6 +186,24 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
+    void publicSubmitAcceptsRemarkFieldAsDocumentedApi() throws Exception {
+        var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
+        var booth = fixture.createBooth(order.eventId(), "A001", "9.00", "STANDARD");
+
+        mockMvc.perform(post("/api/booth-selections")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "orderId": "%s",
+                                  "boothIds": ["%s"],
+                                  "remark": "希望靠近主通道"
+                                }
+                                """.formatted(order.id(), booth.id())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.exhibitorRemark").value("希望靠近主通道"));
+    }
+
+    @Test
     void approveSelectionConfirmsBoothsAndClosesEligibility() {
         var pending = fixture.createPendingSelection("9.00", "STANDARD");
         var boothId = pending.boothIds().get(0);
@@ -178,6 +221,10 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var eligibility = eligibilityRepository.findByOrderId(pending.orderId()).orElseThrow();
         assertThat(eligibility.getStatus()).isEqualTo(BusinessStatuses.ELIGIBILITY_CLOSED);
         assertThat(eligibility.getPauseReason()).isNull();
+        assertThat(notificationService.list(pending.exhibitorId()))
+                .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_APPROVED))
+                .filteredOn(notification -> pending.orderId().equals(notification.relatedOrderId()))
+                .anySatisfy(notification -> assertThat(notification.relatedOrderId()).isEqualTo(pending.orderId()));
     }
 
     @Test
@@ -199,6 +246,10 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var eligibility = eligibilityRepository.findByOrderId(pending.orderId()).orElseThrow();
         assertThat(eligibility.getStatus()).isEqualTo(BusinessStatuses.ELIGIBILITY_AVAILABLE);
         assertThat(eligibility.getPauseReason()).isNull();
+        assertThat(notificationService.list(pending.exhibitorId()))
+                .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_REJECTED))
+                .filteredOn(notification -> pending.orderId().equals(notification.relatedOrderId()))
+                .anySatisfy(notification -> assertThat(notification.relatedOrderId()).isEqualTo(pending.orderId()));
     }
 
     @Test
@@ -265,11 +316,13 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         assertThat(notificationService.list(pending.exhibitorId()))
                 .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_TIMEOUT_RELEASED))
                 .filteredOn(notification -> notification.eventId().equals(pending.eventId()))
+                .filteredOn(notification -> pending.orderId().equals(notification.relatedOrderId()))
                 .hasSize(1)
                 .first()
                 .satisfies(notification -> {
                     assertThat(notification.recipientId()).isEqualTo(pending.exhibitorId());
                     assertThat(notification.eventId()).isEqualTo(pending.eventId());
+                    assertThat(notification.relatedOrderId()).isEqualTo(pending.orderId());
                 });
     }
 

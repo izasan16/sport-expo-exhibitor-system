@@ -5,11 +5,10 @@ import { Button, Collapse, Empty, List, message, Progress, Result, Skeleton, Spa
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadSelectionEligibility } from '../../../app/apiLoaders';
-import { formatAreaTierDisplay, formatEventDisplay, formatExhibitorDisplay, formatSupportedPaymentMethod, type AreaTierLookupSource } from '../../../app/display';
+import { formatAreaTierDisplay, formatBoothType, formatEventDisplay, formatExhibitorDisplay, formatSupportedPaymentMethod, type AreaTierLookupSource } from '../../../app/display';
 import type { BoothSelection, ContractRecord, ParticipationOrder, PaymentRecord, SelectionEligibility } from '../../../app/domain';
 import { formatArea, formatShortId } from '../../../app/formatters';
 import { apiGet } from '../../../app/request';
-import { useIsMobile } from '../../../app/responsive';
 import {
   getContractStatusMeta,
   getEligibilityStatusMeta,
@@ -28,7 +27,7 @@ import {
   formatMobileText,
   formatMobileTime,
 } from '../mobileViewModels';
-import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, isOrderPayable } from '../pageLogic';
+import { getExhibitorLoadErrorCopy, getOrderNextAction, getOrderStepIndex, isOrderPayable, shouldUseMobileExhibitorView } from '../pageLogic';
 
 function byCreatedAtDesc<T extends { createdAt?: string | null }>(left: T, right: T) {
   return (Date.parse(right.createdAt ?? '') || 0) - (Date.parse(left.createdAt ?? '') || 0);
@@ -46,7 +45,7 @@ export default function ExhibitorOrderDetailPage() {
   const [areaTiers, setAreaTiers] = useState<AreaTierLookupSource[]>([]);
   const [loadError, setLoadError] = useState(false);
   const { events } = useEvents();
-  const isMobile = useIsMobile();
+  const isMobile = shouldUseMobileExhibitorView();
 
   useEffect(() => {
     let alive = true;
@@ -126,7 +125,7 @@ export default function ExhibitorOrderDetailPage() {
       { title: '展商', dataIndex: 'exhibitorId', render: (_, record) => (record.exhibitorId ? formatExhibitorDisplay(record.exhibitorId) : '未填写') },
       { title: '展区/分区', dataIndex: 'zoneId', renderText: (value) => value || '不限分区' },
       { title: '面积档位', dataIndex: 'areaTierId', render: (_, record) => (record.areaTierId ? formatAreaTierDisplay(record.areaTierId, areaTiers) : '未填写') },
-      { title: '展位类型', dataIndex: 'boothType', render: (_, record) => formatMobileText(record.boothType) },
+      { title: '展位类型', dataIndex: 'boothType', render: (_, record) => formatBoothType(record.boothType) },
       { title: '面积', dataIndex: 'areaSqm', render: (_, record) => formatArea(record.areaSqm) },
       { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={record.status ? getOrderStatusMeta(record.status) : { label: '未填写', color: 'default' }} /> },
       { title: '面积费', dataIndex: 'areaFee', render: (_, record) => formatMobileAmount(record.areaFee) },
@@ -191,6 +190,26 @@ export default function ExhibitorOrderDetailPage() {
       title: '展位数',
       dataIndex: 'boothIds',
       render: (_, record) => `${record.boothIds.length} 个`,
+    },
+    {
+      title: '已选展位',
+      dataIndex: 'boothIds',
+      render: (_, record) => (record.boothIds?.length ? record.boothIds.map(formatShortId).join(' / ') : '暂无展位信息'),
+    },
+    {
+      title: '展商备注',
+      dataIndex: 'exhibitorRemark',
+      render: (_, record) => formatMobileOptional(record.exhibitorRemark),
+    },
+    {
+      title: '审核意见',
+      dataIndex: 'reviewComment',
+      render: (_, record) => formatMobileOptional(record.reviewComment),
+    },
+    {
+      title: '推荐展位',
+      dataIndex: 'recommendedBooths',
+      render: (_, record) => formatMobileOptional(record.recommendedBooths),
     },
     {
       title: '提交时间',
@@ -269,7 +288,7 @@ export default function ExhibitorOrderDetailPage() {
               <StatusTag meta={orderStatusMeta} />
               <Typography.Text>{eventDisplay}</Typography.Text>
               <Typography.Text type="secondary">
-                {formatArea(order.areaSqm)} · {formatMobileText(order.boothType)} · {formatMobileAmount(order.totalAmount)}
+                {formatArea(order.areaSqm)} · {formatBoothType(order.boothType)} · {formatMobileAmount(order.totalAmount)}
               </Typography.Text>
               <Typography.Text type="secondary">
                 当前等待说明：{nextAction.reason || nextAction.label || '暂无'}
@@ -303,7 +322,7 @@ export default function ExhibitorOrderDetailPage() {
                     <Typography.Text>展商：{exhibitorDisplay}</Typography.Text>
                     <Typography.Text>展区/分区：{order.zoneId ? formatShortId(order.zoneId) : '不限分区'}</Typography.Text>
                     <Typography.Text>面积档位：{order.areaTierId ? formatAreaTierDisplay(order.areaTierId, areaTiers) : '未填写'}</Typography.Text>
-                    <Typography.Text>展位类型：{formatMobileText(order.boothType)}</Typography.Text>
+                    <Typography.Text>展位类型：{formatBoothType(order.boothType)}</Typography.Text>
                     <Typography.Text>面积：{formatArea(order.areaSqm)}</Typography.Text>
                     <Typography.Text>总金额：{formatMobileAmount(order.totalAmount)}</Typography.Text>
                     <Typography.Text type="secondary">创建时间：{formatMobileTime(order.createdAt)}</Typography.Text>
@@ -380,6 +399,10 @@ export default function ExhibitorOrderDetailPage() {
                             <StatusTag meta={selection.status ? getSelectionStatusMeta(selection.status) : { label: '未填写', color: 'default' }} />
                             <Typography.Text>面积：{formatArea(selection.totalAreaSqm)}</Typography.Text>
                             <Typography.Text>展位数：{selection.boothIds?.length ?? 0} 个</Typography.Text>
+                            <Typography.Text>已选展位：{selection.boothIds?.length ? selection.boothIds.map(formatShortId).join(' / ') : '暂无展位信息'}</Typography.Text>
+                            <Typography.Text>展商备注：{formatMobileOptional(selection.exhibitorRemark)}</Typography.Text>
+                            <Typography.Text>审核意见：{formatMobileOptional(selection.reviewComment)}</Typography.Text>
+                            <Typography.Text>推荐展位：{formatMobileOptional(selection.recommendedBooths)}</Typography.Text>
                             <Typography.Text type="secondary">提交时间：{formatMobileTime(selection.createdAt)}</Typography.Text>
                             <Typography.Text type="secondary">审核时间：{formatMobileTime(selection.reviewedAt)}</Typography.Text>
                           </Space>
@@ -447,7 +470,7 @@ export default function ExhibitorOrderDetailPage() {
             <Statistic title="面积" value={formatArea(order.areaSqm)} />
           </ProCard>
           <ProCard>
-            <Statistic title="展位类型" value={formatMobileText(order.boothType)} />
+            <Statistic title="展位类型" value={formatBoothType(order.boothType)} />
           </ProCard>
           <ProCard>
             <Statistic title="订单金额" value={formatMobileAmount(order.totalAmount)} />

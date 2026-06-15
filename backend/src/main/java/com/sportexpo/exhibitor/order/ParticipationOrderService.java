@@ -228,8 +228,8 @@ public class ParticipationOrderService {
         auditService.record(contract.getEventId(), actorId, "CONTRACT_GENERATE", "Contract",
                 contract.getId(), null, contract.getStatus(), "generate contract");
         notificationService.create(order.getEventId(), "EXHIBITOR", order.getExhibitorId(),
-                "Order sales confirmed", "Your participation order has been confirmed by sales.",
-                NotificationTypes.ORDER_SALES_CONFIRMED);
+                "订单已确认", "您的参展订单已由销售确认，请继续完成合同确认。",
+                NotificationTypes.ORDER_SALES_CONFIRMED, null, null, order.getId());
         return toResponse(order);
     }
 

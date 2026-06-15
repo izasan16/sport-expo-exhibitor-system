@@ -5,6 +5,7 @@ import com.sportexpo.exhibitor.booth.Booth;
 import com.sportexpo.exhibitor.booth.BoothRepository;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
+import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
@@ -153,9 +154,9 @@ public class BoothSelectionService {
 
         auditService.record(order.getEventId(), request.exhibitorId(), "BOOTH_SELECTION_SUBMIT",
                 "BoothSelection", selection.getId(), null, selection.getStatus(), "submit booth selection");
-        notificationService.create(order.getEventId(), "EXHIBITOR", order.getExhibitorId(),
-                "Selection submitted", "Your booth selection has been submitted for review.",
-                NotificationTypes.SELECTION_SUBMITTED);
+        notificationService.create(order.getEventId(), "ADMIN", DemoActors.DEMO_ADMIN_ID,
+                "新选位申请", "有展商提交了新的展位选择申请，请及时审核。",
+                NotificationTypes.SELECTION_SUBMITTED, null, null, order.getId());
         return toResponse(selection, sortedBoothIds);
     }
 
@@ -186,8 +187,8 @@ public class BoothSelectionService {
                 "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
                 selection.getStatus(), "approve booth selection");
         notificationService.create(selection.getEventId(), "EXHIBITOR", selection.getExhibitorId(),
-                "Selection approved", "Your booth selection has been approved.",
-                NotificationTypes.SELECTION_APPROVED);
+                "选位已通过", "您的展位选择已通过审核。",
+                NotificationTypes.SELECTION_APPROVED, null, null, selection.getOrderId());
         return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
     }
 
@@ -222,7 +223,7 @@ public class BoothSelectionService {
                 "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
                 selection.getStatus(), reason);
         notificationService.create(selection.getEventId(), "EXHIBITOR", selection.getExhibitorId(),
-                "Selection rejected", reason, NotificationTypes.SELECTION_REJECTED);
+                "选位已驳回", reason, NotificationTypes.SELECTION_REJECTED, null, null, selection.getOrderId());
         return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
     }
 
@@ -274,8 +275,8 @@ public class BoothSelectionService {
                 "BoothSelection", selection.getId(), BusinessStatuses.SELECTION_PENDING_REVIEW,
                 selection.getStatus(), comment);
         notificationService.create(selection.getEventId(), "EXHIBITOR", selection.getExhibitorId(),
-                "Selection timeout released", "Your booth selection lock expired and has been released.",
-                NotificationTypes.SELECTION_TIMEOUT_RELEASED);
+                "选位已超时释放", "您的展位锁定已超时释放，请重新选择展位。",
+                NotificationTypes.SELECTION_TIMEOUT_RELEASED, null, null, selection.getOrderId());
         return toResponse(selection, locks.stream().map(BoothLock::getBoothId).sorted().toList());
     }
 

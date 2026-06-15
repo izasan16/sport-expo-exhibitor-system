@@ -37,7 +37,7 @@ public class BoothSelectionController {
                 request.orderId(),
                 DemoActors.DEMO_EXHIBITOR_ID,
                 request.boothIds(),
-                request.exhibitorRemark()
+                request.remark()
         );
         return ApiResponse.ok(service.submit(demoRequest));
     }

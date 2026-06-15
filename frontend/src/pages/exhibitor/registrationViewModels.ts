@@ -15,6 +15,11 @@ export type RegistrationHomeAction = {
   reason: string;
 };
 
+export type RegistrationListPrimaryAction = {
+  label: string;
+  to: string;
+};
+
 export function getRegistrationHomeAction(registration?: RegistrationActionSource): RegistrationHomeAction {
   if (!registration) {
     return {
@@ -72,4 +77,21 @@ export function getPrimaryRegistrationForHome<T extends RegistrationActionSource
   registrations: T[],
 ) {
   return registrations.find((registration) => registration.status === 'APPROVED') ?? getLatestRegistration(registrations);
+}
+
+export function getRegistrationListPrimaryAction<T extends RegistrationActionSource & { createdAt?: string | null; updatedAt?: string | null }>(
+  registrations: T[],
+): RegistrationListPrimaryAction {
+  const latestRejected = getLatestRegistration(registrations.filter((registration) => registration.status === 'REJECTED'));
+  if (latestRejected) {
+    return {
+      label: '修改并重新提交',
+      to: `/exhibitor/registrations/${latestRejected.id}`,
+    };
+  }
+
+  return {
+    label: '提交报名',
+    to: '/exhibitor/registrations/new',
+  };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatRegistrationStatus,
+  getRegistrationListPrimaryAction,
   getPrimaryRegistrationForHome,
   getRegistrationHomeAction,
 } from './registrationViewModels';
@@ -36,5 +37,19 @@ describe('exhibitor registration view models', () => {
       { id: 'pending-new', status: 'SUBMITTED', updatedAt: '2026-06-15T10:00:00+08:00' },
       { id: 'approved-old', status: 'APPROVED', updatedAt: '2026-06-14T10:00:00+08:00' },
     ])).toMatchObject({ id: 'approved-old', status: 'APPROVED' });
+  });
+
+  it('guides rejected same-event registrations back to editing instead of new registration', () => {
+    expect(getRegistrationListPrimaryAction([
+      { id: 'rejected-current', status: 'REJECTED', updatedAt: '2026-06-15T10:00:00+08:00' },
+    ])).toEqual({
+      label: '修改并重新提交',
+      to: '/exhibitor/registrations/rejected-current',
+    });
+
+    expect(getRegistrationListPrimaryAction([])).toEqual({
+      label: '提交报名',
+      to: '/exhibitor/registrations/new',
+    });
   });
 });

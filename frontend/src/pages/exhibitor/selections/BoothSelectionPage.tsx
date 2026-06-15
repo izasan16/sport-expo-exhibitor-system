@@ -5,16 +5,20 @@ import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { loadSelectionEligibility } from '../../../app/apiLoaders';
+import { formatBoothType, formatEventDisplay } from '../../../app/display';
 import type { Booth, ParticipationOrder, SelectionEligibility } from '../../../app/domain';
 import { formatArea } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
-import { useIsMobile } from '../../../app/responsive';
 import { getBoothStatusMeta, StatusTag } from '../../../app/status';
+import { useEvents } from '../../../app/useEvents';
+import MobileOrderContextHeader from '../MobileOrderContextHeader';
+import { buildOrderContextHeader } from '../mobileViewModels';
 import {
   buildBoothSelectionBody,
   canSubmitBoothSelection,
   compareAreaToOrder,
   filterBoothsForOrderType,
+  shouldUseMobileExhibitorView,
   sortBoothsForMap,
 } from '../pageLogic';
 
@@ -37,7 +41,8 @@ export default function BoothSelectionPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reloadSignal, setReloadSignal] = useState(0);
-  const isMobile = useIsMobile();
+  const isMobile = shouldUseMobileExhibitorView();
+  const { events } = useEvents();
 
   useEffect(() => {
     let alive = true;
@@ -108,11 +113,20 @@ export default function BoothSelectionPage() {
       areaMatches: areaComparison.matches,
       selectedCount: selectedKeys.length,
     });
+  const orderContext = order
+    ? buildOrderContextHeader({
+        orderId: order.id,
+        eventName: formatEventDisplay(order.eventId, events),
+        totalAmount: order.totalAmount,
+        areaSqm: order.areaSqm,
+        boothTypeLabel: formatBoothType(order.boothType),
+      })
+    : undefined;
 
   const columns: ProColumns<Booth>[] = [
     { title: '展位号', dataIndex: 'boothNo' },
     { title: '面积', dataIndex: 'areaSqm', render: (_, record) => formatArea(record.areaSqm) },
-    { title: '展位类型', dataIndex: 'boothType' },
+    { title: '展位类型', dataIndex: 'boothType', render: (_, record) => formatBoothType(record.boothType) },
     { title: '状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={getBoothStatusMeta(record.status)} /> },
   ];
 
@@ -216,6 +230,16 @@ export default function BoothSelectionPage() {
   return (
     <PageContainer title="选择展位">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {orderContext ? (
+          <MobileOrderContextHeader
+            title={orderContext.title}
+            subtitle={orderContext.subtitle}
+            backText="返回订单详情"
+            onBack={() => navigate(`/exhibitor/orders/${order!.id}`)}
+            metrics={orderContext.metrics}
+          />
+        ) : null}
+
         <Space size={32} wrap>
           <Statistic title="订单面积" value={areaComparison.orderDisplay} precision={2} suffix="㎡" />
           <Statistic title="已选面积" value={areaComparison.selectedDisplay} precision={2} suffix="㎡" />
@@ -260,7 +284,7 @@ export default function BoothSelectionPage() {
                   <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
                     <Space direction="vertical" size={4}>
                       <Typography.Text strong>{booth.boothNo}</Typography.Text>
-                      <Typography.Text>{formatArea(booth.areaSqm)} · {booth.boothType}</Typography.Text>
+                      <Typography.Text>{formatArea(booth.areaSqm)} · {formatBoothType(booth.boothType)}</Typography.Text>
                       <StatusTag meta={getBoothStatusMeta(booth.status)} />
                     </Space>
                     <Checkbox
@@ -286,7 +310,7 @@ export default function BoothSelectionPage() {
                 >
                   <List.Item.Meta
                     title={booth.boothNo}
-                    description={`${formatArea(booth.areaSqm)} · ${booth.boothType}`}
+                    description={`${formatArea(booth.areaSqm)} · ${formatBoothType(booth.boothType)}`}
                   />
                 </List.Item>
               )}

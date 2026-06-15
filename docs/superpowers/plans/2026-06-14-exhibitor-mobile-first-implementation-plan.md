@@ -433,7 +433,9 @@ git commit -m "feat: add mobile responsive foundation"
 
 Empty state shows `Steps` with six items: 提交订单、销售确认、合同确认、付款确认、选择展位、审核完成. Primary button navigates to `/exhibitor/orders/new`.
 
-All home cards and summaries must use null-safe helpers. If a legacy order lacks event display data, show `未填写` for event name and keep the page interactive.
+Home with orders must be a dashboard, not a latest-order detail card. Build status counters from all loaded orders and build todo items from all loaded orders. The page must not call `pickLatestActiveOrder` for primary rendering. Todo priority is: payment, selection, selection review, sales confirm, contract confirm, then generic progress. Every todo item displays event name, short order id, amount or area, and a primary action.
+
+All home cards and summaries must use null-safe helpers. If a legacy order lacks event display data, show `未填写` for event name and keep the page interactive. If there are orders but no actionable todo items, show `暂无待处理事项` and a `查看全部订单` button.
 
 - [ ] **Step 2: Orders mobile view uses card list**
 
@@ -457,6 +459,8 @@ Payment method select uses only `OFFLINE_TRANSFER`, `OFFLINE_CASH`, `OFFLINE_CHE
 
 If `failureReason` is null because the payment was created before this field existed, show `暂无失败原因` only for failed payments and hide the failure reason row for other statuses.
 
+The payment page must render a mobile page context header before the form. It contains a back button to `/exhibitor/orders/{orderId}`, event name, `订单 {shortId}`, payable amount, confirmed amount, and remaining amount. Do not rely on the form title alone.
+
 - [ ] **Step 6: Selection mobile view uses List + Checkbox**
 
 Use `List + Checkbox` for booths. Selected list has cancel buttons. Cancel must uncheck the same booth and recalculate area immediately. Desktop `ProTable` and mobile `List` must share the exact same `selectedKeys` state, for example:
@@ -466,6 +470,8 @@ const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([])
 ```
 
 Pass `selectedKeys` into `ProTable` `rowSelection.selectedRowKeys`, and use `selectedKeys.includes(booth.id)` for mobile `Checkbox.checked`. Both desktop and mobile handlers must call the same `setSelectedKeys` path.
+
+The selection page must render a mobile page context header before area statistics. It contains a back button to `/exhibitor/orders/{orderId}`, event name, `订单 {shortId}`, order amount, order area, and booth type.
 
 - [ ] **Step 7: Selection submit includes remark**
 

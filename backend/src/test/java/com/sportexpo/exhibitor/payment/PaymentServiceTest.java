@@ -53,6 +53,24 @@ class PaymentServiceTest extends TestDatabaseSupport {
     }
 
     @Test
+    void confirmCreatesChineseExhibitorNotification() {
+        var order = fixture.createPendingPaymentOrder("9.00", "1200.00", "STANDARD");
+        var payment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10800.00"), "OFFLINE_TRANSFER"));
+
+        paymentService.confirm(payment.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(order.exhibitorId()))
+                .filteredOn(notification -> notification.getType().equals(NotificationTypes.PAYMENT_CONFIRMED))
+                .filteredOn(notification -> order.id().equals(notification.getRelatedOrderId()))
+                .anySatisfy(notification -> {
+                    assertThat(notification.getType()).isEqualTo(NotificationTypes.PAYMENT_CONFIRMED);
+                    assertThat(notification.getTitle()).isEqualTo("付款已确认");
+                    assertThat(notification.getContent()).isEqualTo("您的付款已由财务确认，可以继续办理后续参展流程。");
+                    assertThat(notification.getRelatedOrderId()).isEqualTo(order.id());
+                });
+    }
+
+    @Test
     void concurrentFinanceConfirmationsConvergeToPaid() throws Exception {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
         var p1 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10000.00"), "OFFLINE_TRANSFER"));
@@ -151,10 +169,14 @@ class PaymentServiceTest extends TestDatabaseSupport {
         assertThat(paymentRepository.findById(payment.id()).orElseThrow().getFailureReason())
                 .isEqualTo("户名不符");
         assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(order.exhibitorId()))
+                .filteredOn(notification -> notification.getType().equals(NotificationTypes.PAYMENT_FAILED))
+                .filteredOn(notification -> order.id().equals(notification.getRelatedOrderId()))
                 .anySatisfy(notification -> {
                     assertThat(notification.getEventId()).isEqualTo(order.eventId());
                     assertThat(notification.getType()).isEqualTo(NotificationTypes.PAYMENT_FAILED);
+                    assertThat(notification.getTitle()).isEqualTo("付款确认失败");
                     assertThat(notification.getContent()).isEqualTo("户名不符");
+                    assertThat(notification.getRelatedOrderId()).isEqualTo(order.id());
                 });
 
         var otherPayment = paymentService.create(new CreatePaymentRequest(

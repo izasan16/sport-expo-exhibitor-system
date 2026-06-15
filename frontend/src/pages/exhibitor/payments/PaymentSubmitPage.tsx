@@ -3,19 +3,26 @@ import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-compo
 import { Button, Empty, List, message, Result, Skeleton, Space, Statistic, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { formatSupportedPaymentMethod } from '../../../app/display';
+import { formatBoothType, formatEventDisplay, formatSupportedPaymentMethod } from '../../../app/display';
 import type { ParticipationOrder, PaymentRecord } from '../../../app/domain';
 import { formatShortId } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
-import { useIsMobile } from '../../../app/responsive';
 import { getOrderStatusMeta, getPaymentStatusMeta, StatusTag } from '../../../app/status';
-import { formatMobileAmount, formatMobileText, formatMobileTime } from '../mobileViewModels';
+import { useEvents } from '../../../app/useEvents';
+import MobileOrderContextHeader from '../MobileOrderContextHeader';
+import {
+  buildOrderContextHeader,
+  buildPaymentProgressSummary,
+  formatMobileAmount,
+  formatMobileTime,
+} from '../mobileViewModels';
 import {
   getExhibitorLoadErrorCopy,
   getPaymentFormLayout,
   getPaymentOrderDescriptionColumns,
   getResponsiveCardSplit,
   isOrderPayable,
+  shouldUseMobileExhibitorView,
 } from '../pageLogic';
 
 type PaymentValues = {
@@ -45,11 +52,12 @@ export default function PaymentSubmitPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const orderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
-  const isMobile = useIsMobile();
+  const isMobile = shouldUseMobileExhibitorView();
   const [loading, setLoading] = useState(Boolean(orderId));
   const [order, setOrder] = useState<ParticipationOrder>();
   const [payments, setPayments] = useState<PaymentRecordWithFailure[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const { events } = useEvents();
 
   useEffect(() => {
     let alive = true;
@@ -93,7 +101,7 @@ export default function PaymentSubmitPage() {
     () => [
       { title: '订单', dataIndex: 'id', render: (_, record) => `订单 ${formatShortId(record.id)}` },
       { title: '订单状态', dataIndex: 'status', render: (_, record) => <StatusTag meta={record.status ? getOrderStatusMeta(record.status) : { label: '未填写', color: 'default' }} /> },
-      { title: '展位类型', dataIndex: 'boothType', render: (_, record) => formatMobileText(record.boothType) },
+      { title: '展位类型', dataIndex: 'boothType', render: (_, record) => formatBoothType(record.boothType) },
       { title: '总金额', dataIndex: 'totalAmount', render: (_, record) => formatMobileAmount(record.totalAmount) },
     ],
     [],
@@ -131,6 +139,19 @@ export default function PaymentSubmitPage() {
   const cardSplit = getResponsiveCardSplit(isMobile);
   const paymentFormLayout = getPaymentFormLayout(isMobile);
   const orderDescriptionColumns = getPaymentOrderDescriptionColumns(isMobile);
+  const paymentProgress = useMemo(
+    () => buildPaymentProgressSummary(order?.totalAmount, payments),
+    [order?.totalAmount, payments],
+  );
+  const orderContext = order
+    ? buildOrderContextHeader({
+        orderId: order.id,
+        eventName: formatEventDisplay(order.eventId, events),
+        totalAmount: order.totalAmount,
+        areaSqm: order.areaSqm,
+        boothTypeLabel: formatBoothType(order.boothType),
+      })
+    : undefined;
 
   if (!orderId) {
     return (
@@ -220,6 +241,20 @@ export default function PaymentSubmitPage() {
   return (
     <PageContainer title="提交付款">
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        {orderContext ? (
+          <MobileOrderContextHeader
+            title={orderContext.title}
+            subtitle={orderContext.subtitle}
+            backText="返回订单详情"
+            onBack={() => navigate(`/exhibitor/orders/${order!.id}`)}
+            metrics={[
+              { label: '应付金额', value: paymentProgress.totalDisplay },
+              { label: '已付金额', value: paymentProgress.confirmedDisplay },
+              { label: '剩余金额', value: paymentProgress.remainingDisplay },
+            ]}
+          />
+        ) : null}
+
         <ProCard split={cardSplit}>
           <ProCard title="订单信息">
             <ProDescriptions<ParticipationOrder> column={orderDescriptionColumns} dataSource={order} columns={orderColumns} />
