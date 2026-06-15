@@ -14,6 +14,7 @@ import {
   formatMobileTime,
   formatNotificationType,
   formatShortId,
+  getNotificationTarget,
   summarizeWithAddedBooth,
   summarizeWithRemovedBooth,
 } from './mobileViewModels';
@@ -246,6 +247,18 @@ describe('exhibitor mobile view models', () => {
     expect(formatNotificationType('SELECTION_APPROVED')).toBe('选位已通过');
     expect(formatNotificationType('SELECTION_REJECTED')).toBe('选位已驳回');
     expect(formatNotificationType('SELECTION_TIMEOUT_RELEASED')).toBe('选位超时释放');
+  });
+
+  it('maps registration notifications to registration detail links', () => {
+    expect(getNotificationTarget({
+      type: 'REGISTRATION_APPROVED',
+      relatedType: 'Registration',
+      relatedId: 'registration-1',
+    })).toBe('/exhibitor/registrations/registration-1');
+    expect(getNotificationTarget({
+      type: 'PAYMENT_CONFIRMED',
+      relatedOrderId: 'order-1',
+    })).toBe('/exhibitor/orders/order-1');
   });
 
   it('formats short ids safely at boundaries', () => {

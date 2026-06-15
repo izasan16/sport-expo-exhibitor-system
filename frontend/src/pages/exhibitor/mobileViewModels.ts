@@ -2,6 +2,9 @@ import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../.
 export { formatShortId } from '../../app/formatters';
 
 export type NotificationType =
+  | 'REGISTRATION_SUBMITTED'
+  | 'REGISTRATION_APPROVED'
+  | 'REGISTRATION_REJECTED'
   | 'ORDER_SALES_CONFIRMED'
   | 'CONTRACT_SIGNED'
   | 'PAYMENT_CONFIRMED'
@@ -125,6 +128,13 @@ export type PaymentProgressSummary = {
   remainingDisplay: string;
 };
 
+export type NotificationTargetSource = {
+  type?: string | null;
+  relatedType?: string | null;
+  relatedId?: string | null;
+  relatedOrderId?: string | null;
+};
+
 const homeFlowSteps: FlowStep[] = [
   { title: '提交订单' },
   { title: '销售确认' },
@@ -135,6 +145,9 @@ const homeFlowSteps: FlowStep[] = [
 ];
 
 const notificationTypeLabels: Record<NotificationType, string> = {
+  REGISTRATION_SUBMITTED: '报名已提交',
+  REGISTRATION_APPROVED: '报名已通过',
+  REGISTRATION_REJECTED: '报名已驳回',
   ORDER_SALES_CONFIRMED: '销售已确认',
   CONTRACT_SIGNED: '合同已签署',
   PAYMENT_CONFIRMED: '付款已确认',
@@ -412,6 +425,18 @@ export function buildPaymentProgressSummary(
 
 export function formatNotificationType(type: NotificationType | string) {
   return notificationTypeLabels[type as NotificationType] ?? type;
+}
+
+export function getNotificationTarget(notification: NotificationTargetSource) {
+  if (notification.relatedType === 'Registration' && notification.relatedId) {
+    return `/exhibitor/registrations/${notification.relatedId}`;
+  }
+
+  if (notification.relatedOrderId) {
+    return `/exhibitor/orders/${notification.relatedOrderId}`;
+  }
+
+  return undefined;
 }
 
 export function formatMobileText(value?: string | null) {

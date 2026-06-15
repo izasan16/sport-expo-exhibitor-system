@@ -1,9 +1,15 @@
 import { PageContainer, ProCard } from '@ant-design/pro-components';
 import { Button, Empty, List, message, Result, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DEMO_EXHIBITOR_ID } from '../../../app/demoActors';
 import { apiGet, apiPost } from '../../../app/request';
-import { formatMobileText, formatMobileTime, formatNotificationType } from '../mobileViewModels';
+import {
+  formatMobileText,
+  formatMobileTime,
+  formatNotificationType,
+  getNotificationTarget,
+} from '../mobileViewModels';
 import { filterNotificationsByReadState, getExhibitorLoadErrorCopy } from '../pageLogic';
 
 type NotificationRecord = {
@@ -14,6 +20,9 @@ type NotificationRecord = {
   title?: string | null;
   content?: string | null;
   type?: string | null;
+  relatedType?: string | null;
+  relatedId?: string | null;
+  relatedOrderId?: string | null;
   readAt?: string | null;
   createdAt?: string | null;
 };
@@ -27,6 +36,7 @@ export default function NotificationCenterPage() {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [reloadSignal, setReloadSignal] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let alive = true;
@@ -111,11 +121,16 @@ export default function NotificationCenterPage() {
             locale={{ emptyText: <Empty description="暂无" /> }}
             renderItem={(notification) => {
               const isRead = Boolean(notification.readAt);
+              const target = getNotificationTarget(notification);
               return (
                 <List.Item style={{ paddingInline: 0 }}>
                   <ProCard
                     title={formatMobileText(notification.title)}
                     extra={<Tag color={isRead ? 'default' : 'blue'}>{isRead ? '已读' : '未读'}</Tag>}
+                    onClick={() => {
+                      if (target) navigate(target);
+                    }}
+                    style={{ cursor: target ? 'pointer' : undefined }}
                   >
                     <Space direction="vertical" size={8} style={{ width: '100%' }}>
                       <Typography.Text>{formatMobileText(notification.content)}</Typography.Text>
@@ -128,12 +143,26 @@ export default function NotificationCenterPage() {
                       <Typography.Text type="secondary">
                         阅读时间：{notification.readAt ? formatMobileTime(notification.readAt) : '未读'}
                       </Typography.Text>
+                      {target ? (
+                        <Button
+                          size="small"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(target);
+                          }}
+                        >
+                          查看详情
+                        </Button>
+                      ) : null}
                       <Button
                         type="primary"
                         size="small"
                         disabled={isRead}
                         loading={markingId === notification.id}
-                        onClick={() => markRead(notification)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          markRead(notification);
+                        }}
                       >
                         标记已读
                       </Button>
