@@ -33,6 +33,16 @@ public final class BusinessStatuses {
     public static final String CONTRACT_VERSION_UNSIGNED = "UNSIGNED";
     public static final String CONTRACT_VERSION_MARKED_SIGNED = "MARKED_SIGNED";
 
+    public static final String EXHIBITOR_ACTIVE = "ACTIVE";
+    public static final String EXHIBITOR_SUSPENDED = "SUSPENDED";
+    public static final String EXHIBITOR_ARCHIVED = "ARCHIVED";
+
+    public static final String REGISTRATION_DRAFT = "DRAFT";
+    public static final String REGISTRATION_SUBMITTED = "SUBMITTED";
+    public static final String REGISTRATION_APPROVED = "APPROVED";
+    public static final String REGISTRATION_REJECTED = "REJECTED";
+    public static final String REGISTRATION_CANCELLED = "CANCELLED";
+
     public static final String LOCK_ACTIVE = "ACTIVE";
     public static final String LOCK_CONFIRMED = "CONFIRMED";
     public static final String LOCK_REJECTED = "REJECTED";

@@ -43,6 +43,68 @@ create table if not exists __schema__.zones (
     unique(event_id, code)
 );
 
+create table if not exists __schema__.exhibitors (
+    id uuid primary key,
+    company_name varchar(200) not null,
+    credit_code varchar(80),
+    contact_name varchar(100),
+    contact_phone varchar(40),
+    contact_email varchar(120),
+    address varchar(300),
+    status varchar(40) not null,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+
+create unique index if not exists ux_exhibitors_credit_code
+    on __schema__.exhibitors(credit_code)
+    where credit_code is not null;
+
+create table if not exists __schema__.event_categories (
+    id uuid primary key,
+    event_id uuid not null references __schema__.events(id),
+    code varchar(80) not null,
+    name varchar(120) not null,
+    enabled boolean not null default true,
+    sort_order int not null default 0,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    unique(event_id, code)
+);
+
+create table if not exists __schema__.registrations (
+    id uuid primary key,
+    event_id uuid not null references __schema__.events(id),
+    exhibitor_id uuid not null references __schema__.exhibitors(id),
+    status varchar(40) not null,
+    category varchar(120),
+    zone_id uuid references __schema__.zones(id),
+    intent_area_sqm numeric(14,2),
+    contact_name varchar(100),
+    contact_phone varchar(40),
+    remark varchar(500),
+    review_comment varchar(500),
+    reviewed_by uuid,
+    reviewed_at timestamptz,
+    submitted_at timestamptz,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+
+create unique index if not exists ux_registrations_in_progress_event_exhibitor
+    on __schema__.registrations(event_id, exhibitor_id)
+    where status in ('DRAFT', 'SUBMITTED');
+
+create index if not exists idx_registrations_event_exhibitor_status
+    on __schema__.registrations(event_id, exhibitor_id, status);
+
+create index if not exists idx_registrations_status_submitted
+    on __schema__.registrations(status, submitted_at desc);
+
 create table if not exists __schema__.booths (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
@@ -92,7 +154,7 @@ create table if not exists __schema__.participation_orders (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
     exhibitor_id uuid not null,
-    registration_id uuid,
+    registration_id uuid references __schema__.registrations(id),
     zone_id uuid references __schema__.zones(id),
     area_tier_id uuid not null references __schema__.area_tiers(id),
     area_sqm numeric(14,2) not null,
@@ -299,3 +361,40 @@ create unique index if not exists uidx_area_tiers_event_zone_area
 create unique index if not exists uidx_price_rules_event_zone_booth_type_enabled
     on __schema__.price_rules(event_id, coalesce(zone_id, '00000000-0000-0000-0000-000000000000'::uuid), booth_type)
     where enabled = true;
+
+insert into __schema__.exhibitors(id, company_name, status, created_at, updated_at, created_by, updated_by)
+values ('00000000-0000-0000-0000-000000000001', '演示展商', 'ACTIVE', now(), now(),
+        '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000002')
+on conflict (id) do update set company_name = excluded.company_name, status = excluded.status, updated_at = now();
+
+with demo_event as (
+    select id
+    from __schema__.events
+    where year = 2026 and status <> 'ARCHIVED'
+    order by created_at asc
+    limit 1
+)
+insert into __schema__.event_categories(id, event_id, code, name, enabled, sort_order, created_at, updated_at)
+select gen_random_uuid(), id, 'SPORTS_EQUIPMENT', '体育用品', true, 10, now(), now()
+from demo_event
+on conflict (event_id, code) do update set name = excluded.name, enabled = true, updated_at = now();
+
+with demo_event as (
+    select id
+    from __schema__.events
+    where year = 2026 and status <> 'ARCHIVED'
+    order by created_at asc
+    limit 1
+)
+insert into __schema__.registrations(id, event_id, exhibitor_id, status, category, contact_name, contact_phone,
+                                     submitted_at, reviewed_by, reviewed_at, created_at, updated_at, created_by, updated_by)
+select gen_random_uuid(), id, '00000000-0000-0000-0000-000000000001', 'APPROVED', 'SPORTS_EQUIPMENT',
+       '王老板', '13800000000', now(), '00000000-0000-0000-0000-000000000002', now(), now(), now(),
+       '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000002'
+from demo_event
+where not exists (
+    select 1 from __schema__.registrations r
+    where r.event_id = demo_event.id
+      and r.exhibitor_id = '00000000-0000-0000-0000-000000000001'
+      and r.status = 'APPROVED'
+);
