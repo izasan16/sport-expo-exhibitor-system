@@ -8,6 +8,7 @@ public record ParticipationOrderResponse(
         UUID id,
         UUID eventId,
         UUID exhibitorId,
+        UUID registrationId,
         UUID zoneId,
         UUID areaTierId,
         BigDecimal areaSqm,

@@ -9,6 +9,8 @@ import com.sportexpo.exhibitor.contract.ContractService;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.sportexpo.exhibitor.event.dto.EventResponse;
+import com.sportexpo.exhibitor.eventcategory.EventCategoryService;
+import com.sportexpo.exhibitor.eventcategory.dto.EventCategoryRequest;
 import com.sportexpo.exhibitor.order.ParticipationOrderService;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
@@ -18,6 +20,8 @@ import com.sportexpo.exhibitor.pricing.AreaTierService;
 import com.sportexpo.exhibitor.pricing.PriceRuleService;
 import com.sportexpo.exhibitor.pricing.dto.CreateAreaTierRequest;
 import com.sportexpo.exhibitor.pricing.dto.CreatePriceRuleRequest;
+import com.sportexpo.exhibitor.registration.RegistrationService;
+import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
 import com.sportexpo.exhibitor.selection.BoothSelectionService;
 import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
@@ -32,6 +36,8 @@ import java.util.UUID;
 @Component
 public class TestBusinessFixture {
     private final EventService eventService;
+    private final EventCategoryService eventCategoryService;
+    private final RegistrationService registrationService;
     private final AreaTierService areaTierService;
     private final PriceRuleService priceRuleService;
     private final ParticipationOrderService orderService;
@@ -43,13 +49,16 @@ public class TestBusinessFixture {
     private final JdbcTemplate jdbcTemplate;
     private final String schema;
 
-    public TestBusinessFixture(EventService eventService, AreaTierService areaTierService,
+    public TestBusinessFixture(EventService eventService, EventCategoryService eventCategoryService,
+                               RegistrationService registrationService, AreaTierService areaTierService,
                                PriceRuleService priceRuleService, ParticipationOrderService orderService,
                                ContractRepository contractRepository, ContractService contractService,
                                PaymentService paymentService, BoothService boothService,
                                BoothSelectionService selectionService, JdbcTemplate jdbcTemplate,
                                @Value("${app.db.schema}") String schema) {
         this.eventService = eventService;
+        this.eventCategoryService = eventCategoryService;
+        this.registrationService = registrationService;
         this.areaTierService = areaTierService;
         this.priceRuleService = priceRuleService;
         this.orderService = orderService;
@@ -83,9 +92,31 @@ public class TestBusinessFixture {
         if (!hasPriceRule) {
             priceRuleService.create(new CreatePriceRuleRequest(eventId, null, boothType, price, true));
         }
+        ensureApprovedRegistration(eventId);
         return orderService.create(new CreateParticipationOrderRequest(
-                eventId, DemoActors.DEMO_EXHIBITOR_ID, null, tier.id(), boothType
+                eventId, DemoActors.DEMO_EXHIBITOR_ID, null, null, tier.id(), boothType
         ));
+    }
+
+    private void ensureApprovedRegistration(UUID eventId) {
+        var hasCategory = eventCategoryService.list(eventId, true).stream()
+                .anyMatch(category -> "SPORTS_EQUIPMENT".equals(category.code()));
+        if (!hasCategory) {
+            eventCategoryService.create(new EventCategoryRequest(eventId, "SPORTS_EQUIPMENT", "体育用品", true, 10),
+                    DemoActors.DEMO_ADMIN_ID);
+        }
+        var hasApproved = registrationService.list(eventId, DemoActors.DEMO_EXHIBITOR_ID, "APPROVED").stream()
+                .findAny()
+                .isPresent();
+        if (hasApproved) {
+            return;
+        }
+        var draft = registrationService.create(new RegistrationRequest(
+                eventId, DemoActors.DEMO_EXHIBITOR_ID, "SPORTS_EQUIPMENT", null, new BigDecimal("18.00"),
+                "王老板", "13800000000", "测试报名"
+        ), DemoActors.DEMO_EXHIBITOR_ID);
+        registrationService.submit(draft.id(), DemoActors.DEMO_EXHIBITOR_ID);
+        registrationService.approve(draft.id(), DemoActors.DEMO_ADMIN_ID);
     }
 
     public ParticipationOrderResponse createPendingPaymentOrder(String areaSqm, String unitPrice, String boothType) {

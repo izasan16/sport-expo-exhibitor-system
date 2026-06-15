@@ -8,6 +8,7 @@ import com.sportexpo.exhibitor.contract.ContractRepository;
 import com.sportexpo.exhibitor.contract.ContractVersion;
 import com.sportexpo.exhibitor.contract.ContractVersionRepository;
 import com.sportexpo.exhibitor.event.EventRepository;
+import com.sportexpo.exhibitor.exhibitor.ExhibitorRepository;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.dto.BatchConfirmOrdersResponse;
@@ -17,6 +18,8 @@ import com.sportexpo.exhibitor.pricing.AreaTier;
 import com.sportexpo.exhibitor.pricing.AreaTierRepository;
 import com.sportexpo.exhibitor.pricing.PriceRule;
 import com.sportexpo.exhibitor.pricing.PriceRuleRepository;
+import com.sportexpo.exhibitor.registration.Registration;
+import com.sportexpo.exhibitor.registration.RegistrationRepository;
 import com.sportexpo.exhibitor.selection.SelectionEligibility;
 import com.sportexpo.exhibitor.selection.SelectionEligibilityRepository;
 import org.slf4j.Logger;
@@ -55,6 +58,8 @@ public class ParticipationOrderService {
 
     private final ParticipationOrderRepository repository;
     private final EventRepository eventRepository;
+    private final ExhibitorRepository exhibitorRepository;
+    private final RegistrationRepository registrationRepository;
     private final AreaTierRepository areaTierRepository;
     private final PriceRuleRepository priceRuleRepository;
     private final SelectionEligibilityRepository eligibilityRepository;
@@ -66,6 +71,8 @@ public class ParticipationOrderService {
 
     public ParticipationOrderService(ParticipationOrderRepository repository,
                                      EventRepository eventRepository,
+                                     ExhibitorRepository exhibitorRepository,
+                                     RegistrationRepository registrationRepository,
                                      AreaTierRepository areaTierRepository,
                                      PriceRuleRepository priceRuleRepository,
                                      SelectionEligibilityRepository eligibilityRepository,
@@ -76,6 +83,8 @@ public class ParticipationOrderService {
                                      PlatformTransactionManager transactionManager) {
         this.repository = repository;
         this.eventRepository = eventRepository;
+        this.exhibitorRepository = exhibitorRepository;
+        this.registrationRepository = registrationRepository;
         this.areaTierRepository = areaTierRepository;
         this.priceRuleRepository = priceRuleRepository;
         this.eligibilityRepository = eligibilityRepository;
@@ -91,6 +100,23 @@ public class ParticipationOrderService {
     public ParticipationOrderResponse create(CreateParticipationOrderRequest request) {
         eventRepository.findById(request.eventId())
                 .orElseThrow(() -> new BusinessException("Event does not exist"));
+        exhibitorRepository.findById(request.exhibitorId())
+                .filter(exhibitor -> BusinessStatuses.EXHIBITOR_ACTIVE.equals(exhibitor.getStatus()))
+                .orElseThrow(() -> new BusinessException("Exhibitor does not exist"));
+        var registration = resolveRegistration(request)
+                .orElseThrow(() -> new BusinessException("Registration does not exist"));
+        if (!registration.getEventId().equals(request.eventId())) {
+            throw new BusinessException("Registration does not belong to this event");
+        }
+        if (!registration.getExhibitorId().equals(request.exhibitorId())) {
+            throw new BusinessException("Registration does not belong to this exhibitor");
+        }
+        if (!BusinessStatuses.REGISTRATION_APPROVED.equals(registration.getStatus())) {
+            throw new BusinessException("Registration is not approved");
+        }
+        if (registration.getZoneId() != null && !Objects.equals(registration.getZoneId(), request.zoneId())) {
+            throw new BusinessException("Order zone is outside approved registration scope");
+        }
         var areaTier = areaTierRepository.findById(request.areaTierId())
                 .filter(tier -> tier.isEnabled() && tier.getEventId().equals(request.eventId()))
                 .orElseThrow(() -> new BusinessException("Enabled area tier does not exist"));
@@ -106,7 +132,7 @@ public class ParticipationOrderService {
                 UUID.randomUUID(),
                 request.eventId(),
                 request.exhibitorId(),
-                null,
+                registration.getId(),
                 request.zoneId(),
                 areaTier.getId(),
                 areaTier.getAreaSqm(),
@@ -238,6 +264,21 @@ public class ParticipationOrderService {
                 request.eventId(), null, request.boothType(), true);
     }
 
+    private Optional<Registration> resolveRegistration(CreateParticipationOrderRequest request) {
+        if (request.registrationId() != null) {
+            return registrationRepository.findById(request.registrationId());
+        }
+        var registrations = registrationRepository.findByEventIdAndExhibitorIdAndStatus(
+                request.eventId(), request.exhibitorId(), BusinessStatuses.REGISTRATION_APPROVED);
+        if (registrations.isEmpty()) {
+            return Optional.empty();
+        }
+        if (registrations.size() > 1) {
+            throw new BusinessException("Multiple approved registrations exist; choose one");
+        }
+        return Optional.of(registrations.get(0));
+    }
+
     private Specification<ParticipationOrder> orderFilters(UUID eventId, UUID exhibitorId, String status) {
         return (root, query, criteriaBuilder) -> {
             var predicate = criteriaBuilder.conjunction();
@@ -267,6 +308,7 @@ public class ParticipationOrderService {
                 order.getId(),
                 order.getEventId(),
                 order.getExhibitorId(),
+                order.getRegistrationId(),
                 order.getZoneId(),
                 order.getAreaTierId(),
                 order.getAreaSqm(),

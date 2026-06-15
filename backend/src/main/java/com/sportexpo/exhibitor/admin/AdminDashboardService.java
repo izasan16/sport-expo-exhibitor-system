@@ -76,6 +76,7 @@ public class AdminDashboardService {
                 order.getId(),
                 order.getEventId(),
                 order.getExhibitorId(),
+                order.getRegistrationId(),
                 order.getZoneId(),
                 order.getAreaTierId(),
                 order.getAreaSqm(),
