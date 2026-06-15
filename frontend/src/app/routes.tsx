@@ -16,6 +16,9 @@ const AdminOrderDetailPage = lazy(() => import('../pages/admin/orders/AdminOrder
 const ContractListPage = lazy(() => import('../pages/admin/contracts/ContractListPage'));
 const PaymentConfirmPage = lazy(() => import('../pages/admin/payments/PaymentConfirmPage'));
 const SelectionReviewPage = lazy(() => import('../pages/admin/selections/SelectionReviewPage'));
+const AdminExhibitorListPage = lazy(() => import('../pages/admin/exhibitors/AdminExhibitorListPage'));
+const AdminRegistrationListPage = lazy(() => import('../pages/admin/registrations/AdminRegistrationListPage'));
+const AdminRegistrationDetailPage = lazy(() => import('../pages/admin/registrations/AdminRegistrationDetailPage'));
 const ExhibitorHomePage = lazy(() => import('../pages/exhibitor/HomePage'));
 const ExhibitorProfilePage = lazy(() => import('../pages/exhibitor/profile/ExhibitorProfilePage'));
 const RegistrationListPage = lazy(() => import('../pages/exhibitor/registrations/RegistrationListPage'));
@@ -51,6 +54,9 @@ export const routes: RouteObject[] = [
       { path: 'contracts', element: lazyPage(<ContractListPage />) },
       { path: 'payments', element: lazyPage(<PaymentConfirmPage />) },
       { path: 'selections', element: lazyPage(<SelectionReviewPage />) },
+      { path: 'exhibitors', element: lazyPage(<AdminExhibitorListPage />) },
+      { path: 'registrations', element: lazyPage(<AdminRegistrationListPage />) },
+      { path: 'registrations/:registrationId', element: lazyPage(<AdminRegistrationDetailPage />) },
     ],
   },
   {

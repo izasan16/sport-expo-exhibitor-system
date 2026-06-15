@@ -1,12 +1,23 @@
 import { PageContainer, ProCard, ProList } from '@ant-design/pro-components';
-import { Alert, Button, Col, Row, Skeleton, Space, Statistic, Typography } from 'antd';
+import { Alert, Button, Col, Row, Skeleton, Space, Statistic, Tag, Typography } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ADMIN_DASHBOARD_REFRESH_EVENT, loadAdminDashboard } from '../../app/apiLoaders';
-import type { AdminDashboardResponse, BoothSelection, ParticipationOrder, PaymentRecord } from '../../app/domain';
-import { formatArea, formatMoney, formatShortId } from '../../app/formatters';
+import { formatEventDisplay, formatExhibitorDisplay, formatRegistrationStatus } from '../../app/display';
+import type { AdminDashboardResponse, BoothSelection, EventCategory, Exhibitor, ParticipationOrder, PaymentRecord, Registration } from '../../app/domain';
+import { formatArea, formatFriendlyTime, formatMoney, formatShortId } from '../../app/formatters';
+import { apiGet } from '../../app/request';
 import { getOrderStatusMeta, getPaymentStatusMeta, getSelectionStatusMeta, StatusTag } from '../../app/status';
+import { useEvents } from '../../app/useEvents';
 import { buildDashboardViewModel } from './dashboard/dashboardLogic';
+
+function getRegistrationStatusColor(status: Registration['status']) {
+  if (status === 'APPROVED') return 'green';
+  if (status === 'REJECTED') return 'red';
+  if (status === 'SUBMITTED') return 'blue';
+  if (status === 'CANCELLED') return 'default';
+  return 'gold';
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -15,6 +26,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [dashboard, setDashboard] = useState<AdminDashboardResponse>();
+  const [exhibitors, setExhibitors] = useState<Exhibitor[]>([]);
+  const [categories, setCategories] = useState<EventCategory[]>([]);
+  const { events } = useEvents();
 
   const loadDashboard = useCallback(async () => {
     const requestId = requestSeq.current + 1;
@@ -23,9 +37,23 @@ export default function DashboardPage() {
     setLoadFailed(false);
 
     try {
-      const loadedDashboard = await loadAdminDashboard();
+      const [loadedDashboard, loadedExhibitors] = await Promise.all([
+        loadAdminDashboard(),
+        apiGet<Exhibitor[]>('/api/exhibitors').catch(() => []),
+      ]);
       if (requestSeq.current !== requestId) return;
       setDashboard(loadedDashboard);
+      setExhibitors(loadedExhibitors);
+      const eventIds = [...new Set((loadedDashboard.pendingRegistrationReviews ?? [])
+        .map((registration) => registration.eventId)
+        .filter(Boolean))];
+      const loadedCategories = await Promise.all(
+        eventIds.map((eventId) => apiGet<EventCategory[]>(
+          `/api/event-categories?eventId=${encodeURIComponent(eventId)}&enabled=true`,
+        ).catch(() => [])),
+      );
+      if (requestSeq.current !== requestId) return;
+      setCategories(loadedCategories.flat());
     } catch {
       if (requestSeq.current !== requestId) return;
       setLoadFailed(true);
@@ -58,9 +86,14 @@ export default function DashboardPage() {
   }
 
   const viewModel = buildDashboardViewModel(dashboard ?? {});
+  const pendingRegistrations = viewModel.pendingRegistrationReviews.slice(0, 5);
   const pendingOrders = viewModel.pendingSalesConfirmOrders.slice(0, 5);
   const pendingPayments = viewModel.pendingFinanceConfirmPayments.slice(0, 5);
   const pendingSelections = viewModel.pendingSelectionReviews.slice(0, 5);
+  const exhibitorNameById = new Map(exhibitors.map((exhibitor) => [exhibitor.id, exhibitor.companyName]));
+  const categoryNameByEventAndCode = new Map(
+    categories.map((category) => [`${category.eventId}:${category.code}`, category.name]),
+  );
 
   return (
     <PageContainer title="工作台">
@@ -79,31 +112,85 @@ export default function DashboardPage() {
         ) : null}
 
         <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} xl={6}>
-            <ProCard>
-              <Statistic title="待销售确认" value={viewModel.counts.pendingSalesConfirm} />
-            </ProCard>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <ProCard>
-              <Statistic title="今日新增订单" value={viewModel.counts.todayNewOrder} />
-            </ProCard>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <ProCard>
-              <Statistic title="待财务确认" value={viewModel.counts.pendingFinanceConfirm} />
-            </ProCard>
-          </Col>
-          <Col xs={24} sm={12} xl={6}>
-            <ProCard>
-              <Statistic title="待选位审核" value={viewModel.counts.pendingSelectionReview} />
-            </ProCard>
-          </Col>
+          {viewModel.kpis.map((kpi) => (
+            <Col key={kpi.title} xs={24} sm={12} xl={8} xxl={4}>
+              <ProCard
+                hoverable={Boolean(kpi.to)}
+                onClick={kpi.to ? () => {
+                  if (kpi.to) navigate(kpi.to);
+                } : undefined}
+              >
+                <Statistic title={kpi.title} value={kpi.value} />
+              </ProCard>
+            </Col>
+          ))}
         </Row>
 
         <Typography.Text type="secondary">生成时间：{viewModel.generatedAtDisplay}</Typography.Text>
 
         <ProCard split="vertical">
+          <ProCard
+            title="报名审核待办"
+            extra={
+              <Button type="link" onClick={() => navigate('/admin/registrations?status=SUBMITTED')}>
+                查看全部
+              </Button>
+            }
+          >
+            <ProList<Registration>
+              rowKey="id"
+              dataSource={pendingRegistrations}
+              locale={{ emptyText: '暂无待审核报名' }}
+              metas={{
+                title: { render: (_, record) => formatEventDisplay(record.eventId, events) },
+                description: {
+                  render: (_, record) => (
+                    <Space size={8} wrap>
+                      <Typography.Text type="secondary">
+                        {exhibitorNameById.get(record.exhibitorId) || formatExhibitorDisplay(record.exhibitorId)}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        {record.categoryName
+                          || (record.category ? categoryNameByEventAndCode.get(`${record.eventId}:${record.category}`) : undefined)
+                          || record.category
+                          || '-'}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        {record.submittedAt ? formatShortId(record.id) : '未提交'}
+                      </Typography.Text>
+                    </Space>
+                  ),
+                },
+                subTitle: {
+                  render: (_, record) => (
+                    <Typography.Text type="secondary">
+                      {formatFriendlyTime(record.submittedAt || record.updatedAt)}
+                    </Typography.Text>
+                  ),
+                },
+                actions: {
+                  render: (_, record) => [
+                    <Button
+                      key="detail"
+                      type="link"
+                      size="small"
+                      onClick={() => navigate(`/admin/registrations/${record.id}`)}
+                    >
+                      审核
+                    </Button>,
+                  ],
+                },
+                avatar: {
+                  render: (_, record) => (
+                    <Tag color={getRegistrationStatusColor(record.status)}>
+                      {formatRegistrationStatus(record.status)}
+                    </Tag>
+                  ),
+                },
+              }}
+            />
+          </ProCard>
+
           <ProCard
             title="销售确认待办"
             extra={

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminDashboardResponse, ParticipationOrder } from '../../../app/domain';
-import { buildDashboardViewModel, countTodayOrders, formatDashboardGeneratedAt } from './dashboardLogic';
+import {
+  buildAdminDashboardKpis,
+  buildDashboardViewModel,
+  countTodayOrders,
+  formatDashboardGeneratedAt,
+} from './dashboardLogic';
 
 const baseOrder: ParticipationOrder = {
   id: 'order-1',
@@ -60,5 +65,16 @@ describe('dashboard logic', () => {
       pendingFinanceConfirmPayments: [],
       pendingSelectionReviews: [],
     });
+  });
+
+  it('shows pending registration review count and route target', () => {
+    expect(buildAdminDashboardKpis({
+      pendingRegistrationReviewCount: 3,
+      pendingSalesConfirmCount: 0,
+      pendingFinanceConfirmCount: 0,
+      pendingSelectionReviewCount: 0,
+    })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: '待审核报名', value: 3, to: '/admin/registrations?status=SUBMITTED' }),
+    ]));
   });
 });

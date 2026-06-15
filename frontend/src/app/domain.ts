@@ -172,10 +172,12 @@ export type Booth = {
 
 export type AdminDashboardResponse = {
   generatedAt?: string | null;
+  pendingRegistrationReviewCount?: number | null;
   pendingSalesConfirmCount?: number | null;
   pendingFinanceConfirmCount?: number | null;
   pendingSelectionReviewCount?: number | null;
   todayNewOrderCount?: number | null;
+  pendingRegistrationReviews?: Registration[];
   pendingSalesConfirmOrders?: ParticipationOrder[];
   pendingFinanceConfirmPayments?: PaymentRecord[];
   pendingSelectionReviews?: BoothSelection[];

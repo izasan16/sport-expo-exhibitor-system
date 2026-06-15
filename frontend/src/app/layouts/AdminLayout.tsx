@@ -15,6 +15,8 @@ export default function AdminLayout() {
             path: '/admin/business',
             name: '业务处理',
             routes: [
+              { path: '/admin/exhibitors', name: '展商管理' },
+              { path: '/admin/registrations', name: '报名审核' },
               { path: '/admin/orders', name: '订单管理' },
               { path: '/admin/contracts', name: '合同管理' },
               { path: '/admin/payments', name: '付款确认' },
