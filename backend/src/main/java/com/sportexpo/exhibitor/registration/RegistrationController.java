@@ -1,9 +1,9 @@
 package com.sportexpo.exhibitor.registration;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
 import com.sportexpo.exhibitor.registration.dto.RegistrationResponse;
+import com.sportexpo.exhibitor.security.CurrentUserService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.UUID;
@@ -21,12 +23,15 @@ import com.sportexpo.exhibitor.registration.dto.RejectRegistrationRequest;
 @RequestMapping("/api/registrations")
 public class RegistrationController {
     private final RegistrationService service;
+    private final CurrentUserService currentUserService;
 
-    public RegistrationController(RegistrationService service) {
+    public RegistrationController(RegistrationService service, CurrentUserService currentUserService) {
         this.service = service;
+        this.currentUserService = currentUserService;
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','EXHIBITOR')")
     public ApiResponse<List<RegistrationResponse>> list(@RequestParam(required = false) UUID eventId,
                                                         @RequestParam(required = false) UUID exhibitorId,
                                                         @RequestParam(required = false) String status) {
@@ -34,32 +39,59 @@ public class RegistrationController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','EXHIBITOR')")
     public ApiResponse<RegistrationResponse> get(@PathVariable UUID id) {
         return ApiResponse.ok(service.get(id));
     }
 
     @PostMapping
-    public ApiResponse<RegistrationResponse> create(@RequestBody RegistrationRequest request) {
-        return ApiResponse.ok(service.create(request, DemoActors.DEMO_EXHIBITOR_ID));
+    @PreAuthorize("hasAuthority('EXHIBITOR')")
+    public ApiResponse<RegistrationResponse> create(@RequestBody RegistrationRequest request,
+                                                    Authentication authentication) {
+        var currentUser = currentUserService.getCurrentUser(authentication);
+        return ApiResponse.ok(service.create(scopedRequest(request, currentUser.exhibitorId()), currentUser.userId()));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<RegistrationResponse> update(@PathVariable UUID id, @RequestBody RegistrationRequest request) {
-        return ApiResponse.ok(service.update(id, request, DemoActors.DEMO_EXHIBITOR_ID));
+    @PreAuthorize("hasAuthority('EXHIBITOR')")
+    public ApiResponse<RegistrationResponse> update(@PathVariable UUID id, @RequestBody RegistrationRequest request,
+                                                    Authentication authentication) {
+        var currentUser = currentUserService.getCurrentUser(authentication);
+        return ApiResponse.ok(service.update(id, scopedRequest(request, currentUser.exhibitorId()), currentUser.userId()));
     }
 
     @PostMapping("/{id}/submit")
-    public ApiResponse<RegistrationResponse> submit(@PathVariable UUID id) {
-        return ApiResponse.ok(service.submitOrResubmit(id, DemoActors.DEMO_EXHIBITOR_ID));
+    @PreAuthorize("hasAuthority('EXHIBITOR')")
+    public ApiResponse<RegistrationResponse> submit(@PathVariable UUID id, Authentication authentication) {
+        return ApiResponse.ok(service.submitOrResubmit(id, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PostMapping("/{id}/approve")
-    public ApiResponse<RegistrationResponse> approve(@PathVariable UUID id) {
-        return ApiResponse.ok(service.approve(id, DemoActors.DEMO_ADMIN_ID));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    public ApiResponse<RegistrationResponse> approve(@PathVariable UUID id, Authentication authentication) {
+        return ApiResponse.ok(service.approve(id, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PostMapping("/{id}/reject")
-    public ApiResponse<RegistrationResponse> reject(@PathVariable UUID id, @RequestBody RejectRegistrationRequest request) {
-        return ApiResponse.ok(service.reject(id, DemoActors.DEMO_ADMIN_ID, request.reason()));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    public ApiResponse<RegistrationResponse> reject(@PathVariable UUID id, @RequestBody RejectRegistrationRequest request,
+                                                    Authentication authentication) {
+        return ApiResponse.ok(service.reject(id, currentUserService.getCurrentUser(authentication).userId(), request.reason()));
+    }
+
+    private RegistrationRequest scopedRequest(RegistrationRequest request, UUID exhibitorId) {
+        if (exhibitorId == null) {
+            currentUserService.requireCurrentExhibitorId();
+        }
+        return new RegistrationRequest(
+                request.eventId(),
+                exhibitorId,
+                request.category(),
+                request.zoneId(),
+                request.intentAreaSqm(),
+                request.contactName(),
+                request.contactPhone(),
+                request.remark()
+        );
     }
 }

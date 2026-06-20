@@ -1,6 +1,7 @@
 package com.sportexpo.exhibitor.auth;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
+import com.sportexpo.exhibitor.security.CurrentUserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -12,9 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class AuthController {
     private final AuthService authService;
+    private final CurrentUserService currentUserService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, CurrentUserService currentUserService) {
         this.authService = authService;
+        this.currentUserService = currentUserService;
     }
 
     @PostMapping("/api/auth/login")
@@ -28,18 +31,13 @@ public class AuthController {
 
     @GetMapping("/api/auth/me")
     public ApiResponse<CurrentUserResponse> me(Authentication authentication) {
-        if (authentication == null || authentication.getPrincipal() == null) {
-            throw new AuthException(AuthErrorCodes.TOKEN_INVALID, "Invalid token");
-        }
-        if (authentication.getPrincipal() instanceof JwtPrincipal principal) {
-            return ApiResponse.ok(new CurrentUserResponse(
-                    principal.userId(),
-                    principal.username(),
-                    principal.roles(),
-                    principal.exhibitorId()
-            ));
-        }
-        throw new AuthException(AuthErrorCodes.TOKEN_INVALID, "Invalid token");
+        var currentUser = currentUserService.getCurrentUser(authentication);
+        return ApiResponse.ok(new CurrentUserResponse(
+                currentUser.userId(),
+                currentUser.username(),
+                currentUser.roles().stream().sorted().toList(),
+                currentUser.exhibitorId()
+        ));
     }
 
     @PostMapping("/api/auth/logout")

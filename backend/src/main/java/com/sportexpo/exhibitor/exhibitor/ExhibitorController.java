@@ -1,9 +1,11 @@
 package com.sportexpo.exhibitor.exhibitor;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorRequest;
 import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorResponse;
+import com.sportexpo.exhibitor.security.CurrentUserService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,38 +21,49 @@ import java.util.UUID;
 @RequestMapping("/api/exhibitors")
 public class ExhibitorController {
     private final ExhibitorService service;
+    private final CurrentUserService currentUserService;
 
-    public ExhibitorController(ExhibitorService service) {
+    public ExhibitorController(ExhibitorService service, CurrentUserService currentUserService) {
         this.service = service;
+        this.currentUserService = currentUserService;
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
     public ApiResponse<List<ExhibitorResponse>> list() {
         return ApiResponse.ok(service.list());
     }
 
     @GetMapping("/current")
-    public ApiResponse<ExhibitorResponse> current() {
-        return ApiResponse.ok(service.get(DemoActors.DEMO_EXHIBITOR_ID));
+    @PreAuthorize("hasAuthority('EXHIBITOR')")
+    public ApiResponse<ExhibitorResponse> current(Authentication authentication) {
+        return ApiResponse.ok(service.get(currentUserService.requireCurrentExhibitorId(authentication)));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES') or @dataScopeService.canAccessExhibitor(authentication, #id)")
     public ApiResponse<ExhibitorResponse> get(@PathVariable UUID id) {
         return ApiResponse.ok(service.get(id));
     }
 
     @PostMapping
-    public ApiResponse<ExhibitorResponse> create(@RequestBody ExhibitorRequest request) {
-        return ApiResponse.ok(service.create(request, DemoActors.DEMO_ADMIN_ID));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    public ApiResponse<ExhibitorResponse> create(@RequestBody ExhibitorRequest request, Authentication authentication) {
+        return ApiResponse.ok(service.create(request, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<ExhibitorResponse> update(@PathVariable UUID id, @RequestBody ExhibitorRequest request) {
-        return ApiResponse.ok(service.update(id, request, DemoActors.DEMO_ADMIN_ID));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    public ApiResponse<ExhibitorResponse> update(@PathVariable UUID id, @RequestBody ExhibitorRequest request,
+                                                 Authentication authentication) {
+        return ApiResponse.ok(service.update(id, request, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PutMapping("/current")
-    public ApiResponse<ExhibitorResponse> updateCurrent(@RequestBody ExhibitorRequest request) {
-        return ApiResponse.ok(service.update(DemoActors.DEMO_EXHIBITOR_ID, request, DemoActors.DEMO_EXHIBITOR_ID));
+    @PreAuthorize("hasAuthority('EXHIBITOR')")
+    public ApiResponse<ExhibitorResponse> updateCurrent(@RequestBody ExhibitorRequest request,
+                                                        Authentication authentication) {
+        var currentUser = currentUserService.getCurrentUser(authentication);
+        return ApiResponse.ok(service.update(currentUserService.requireCurrentExhibitorId(authentication), request, currentUser.userId()));
     }
 }

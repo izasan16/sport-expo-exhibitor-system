@@ -44,6 +44,11 @@ public class PaymentService {
 
     @Transactional
     public PaymentResponse create(CreatePaymentRequest request) {
+        return create(request, DemoActors.DEMO_EXHIBITOR_ID);
+    }
+
+    @Transactional
+    public PaymentResponse create(CreatePaymentRequest request, UUID actorId) {
         var order = orderRepository.findById(request.orderId())
                 .orElseThrow(() -> new BusinessException("Participation order does not exist"));
         if (!BusinessStatuses.ORDER_PENDING_PAYMENT.equals(order.getStatus())
@@ -69,10 +74,10 @@ public class PaymentService {
                 null,
                 now,
                 now,
-                DemoActors.DEMO_EXHIBITOR_ID,
-                DemoActors.DEMO_EXHIBITOR_ID
+                actorId,
+                actorId
         ));
-        auditService.record(payment.getEventId(), DemoActors.DEMO_EXHIBITOR_ID, "PAYMENT_CREATE", "Payment",
+        auditService.record(payment.getEventId(), actorId, "PAYMENT_CREATE", "Payment",
                 payment.getId(), null, payment.getStatus(), "create payment");
         return toResponse(payment);
     }

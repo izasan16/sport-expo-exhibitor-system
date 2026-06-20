@@ -2,6 +2,8 @@ package com.sportexpo.exhibitor.selection;
 
 import com.sportexpo.exhibitor.TestBusinessFixture;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
+import com.sportexpo.exhibitor.auth.AuthService;
+import com.sportexpo.exhibitor.auth.LoginRequest;
 import com.sportexpo.exhibitor.booth.BoothService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
@@ -42,6 +44,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     @Autowired EventRepository eventRepository;
     @Autowired NotificationService notificationService;
     @Autowired MockMvc mockMvc;
+    @Autowired AuthService authService;
 
     @Test
     void rejectsEmptyBoothIds() {
@@ -166,12 +169,13 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
-    void publicSubmitUsesDemoExhibitorIdentity() throws Exception {
+    void authenticatedSubmitUsesCurrentExhibitorIdentity() throws Exception {
         var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
         var booth = fixture.createBooth(order.eventId(), "A001", "9.00", "STANDARD");
         var attackerExhibitorId = UUID.randomUUID();
 
         mockMvc.perform(post("/api/booth-selections")
+                        .header("Authorization", "Bearer " + tokenFor("exhibitor01"))
                         .contentType("application/json")
                         .content("""
                                 {
@@ -186,11 +190,12 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
-    void publicSubmitAcceptsRemarkFieldAsDocumentedApi() throws Exception {
+    void authenticatedSubmitAcceptsRemarkFieldAsDocumentedApi() throws Exception {
         var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
         var booth = fixture.createBooth(order.eventId(), "A001", "9.00", "STANDARD");
 
         mockMvc.perform(post("/api/booth-selections")
+                        .header("Authorization", "Bearer " + tokenFor("exhibitor01"))
                         .contentType("application/json")
                         .content("""
                                 {
@@ -413,6 +418,10 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var completed = done.await(30, TimeUnit.SECONDS);
         pool.shutdownNow();
         return new ConcurrentSelectionResult(completed, successes, businessFailures, errors);
+    }
+
+    private String tokenFor(String username) {
+        return authService.login(new LoginRequest(username, "demo123")).accessToken();
     }
 
     private record ConcurrentSelectionResult(boolean completed, List<?> successes,

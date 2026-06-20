@@ -1,6 +1,8 @@
 package com.sportexpo.exhibitor.booth;
 
 import com.sportexpo.exhibitor.TestDatabaseSupport;
+import com.sportexpo.exhibitor.auth.AuthService;
+import com.sportexpo.exhibitor.auth.LoginRequest;
 import com.sportexpo.exhibitor.booth.dto.CreateBoothRequest;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
@@ -41,6 +43,9 @@ class BoothServiceTest extends TestDatabaseSupport {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Autowired
+    AuthService authService;
 
     @Test
     void createsBoothInEvent() {
@@ -88,10 +93,15 @@ class BoothServiceTest extends TestDatabaseSupport {
         );
 
         mockMvc.perform(post("/api/booths")
+                        .header("Authorization", "Bearer " + tokenFor("admin"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Event does not exist"));
+    }
+
+    private String tokenFor(String username) {
+        return authService.login(new LoginRequest(username, "demo123")).accessToken();
     }
 }

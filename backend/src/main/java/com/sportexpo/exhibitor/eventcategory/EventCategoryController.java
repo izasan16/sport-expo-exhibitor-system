@@ -1,9 +1,11 @@
 package com.sportexpo.exhibitor.eventcategory;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.eventcategory.dto.EventCategoryRequest;
 import com.sportexpo.exhibitor.eventcategory.dto.EventCategoryResponse;
+import com.sportexpo.exhibitor.security.CurrentUserService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,24 +22,31 @@ import java.util.UUID;
 @RequestMapping("/api/event-categories")
 public class EventCategoryController {
     private final EventCategoryService service;
+    private final CurrentUserService currentUserService;
 
-    public EventCategoryController(EventCategoryService service) {
+    public EventCategoryController(EventCategoryService service, CurrentUserService currentUserService) {
         this.service = service;
+        this.currentUserService = currentUserService;
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','EXHIBITOR')")
     public ApiResponse<List<EventCategoryResponse>> list(@RequestParam UUID eventId,
                                                          @RequestParam(required = false) Boolean enabled) {
         return ApiResponse.ok(service.list(eventId, enabled));
     }
 
     @PostMapping
-    public ApiResponse<EventCategoryResponse> create(@RequestBody EventCategoryRequest request) {
-        return ApiResponse.ok(service.create(request, DemoActors.DEMO_ADMIN_ID));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    public ApiResponse<EventCategoryResponse> create(@RequestBody EventCategoryRequest request,
+                                                     Authentication authentication) {
+        return ApiResponse.ok(service.create(request, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<EventCategoryResponse> update(@PathVariable UUID id, @RequestBody EventCategoryRequest request) {
-        return ApiResponse.ok(service.update(id, request, DemoActors.DEMO_ADMIN_ID));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    public ApiResponse<EventCategoryResponse> update(@PathVariable UUID id, @RequestBody EventCategoryRequest request,
+                                                     Authentication authentication) {
+        return ApiResponse.ok(service.update(id, request, currentUserService.getCurrentUser(authentication).userId()));
     }
 }
