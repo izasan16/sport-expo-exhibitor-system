@@ -37,6 +37,7 @@
 - 用户账号、密码哈希、登录、当前用户信息。
 - 用户角色：系统管理员、主办方管理员、销售、财务、服务人员、展商。
 - 后端接口鉴权，匿名接口仅限登录和健康检查。
+- 登录失败锁定和基础 IP 限流。
 - 前端登录页、登录态保存、401/403 处理。
 - 后台菜单按角色展示。
 - 展商端按展商账号绑定的 `exhibitor_id` 访问数据。
@@ -155,6 +156,8 @@
 - 展商用户必须绑定一个有效 `exhibitor_id`。
 - 内部用户不得绑定 `exhibitor_id` 作为权限依据。
 - 一个用户可以拥有多个角色，但本轮页面分流以最高优先级角色确定默认入口。
+- 用户可以配置 `default_role`。当用户拥有多个角色且配置了默认角色时，登录后优先进入默认角色工作台；未配置时按角色优先级进入。
+- 多角色用户登录后允许在前端手动切换工作台，切换只影响前端入口和菜单，不放大后端数据权限。
 
 角色优先级：
 
@@ -189,18 +192,46 @@ EXHIBITOR
 
 为避免泄露账号枚举信息，用户不存在和密码错误使用同一提示。
 
+登录防护规则：
+
+- 同一账号连续登录失败 5 次后锁定 15 分钟。
+- 锁定期间再次登录返回“账号暂时锁定，请稍后再试”。
+- 登录失败次数按账号维度记录，同时记录失败 IP。
+- 同一 IP 在短时间内大量失败时触发全局限流，本轮可先用内存或 Redis 计数器实现。
+- 登录成功后清空该账号失败计数。
+
 ### 5.3 JWT 规则
 
 - 使用 Bearer Token。
 - 请求头格式：`Authorization: Bearer <token>`。
 - Token 默认有效期 8 小时。
-- Token 载荷至少包含 `userId`、`username`、`roles`、`exhibitorId`。
+- Token 载荷只包含鉴权所需最小信息，不包含手机号、邮箱、密码哈希、联系人等敏感信息。
+- Token 载荷至少包含 `sub/userId`、`username`、`roles`、`exhibitorId`、`jti`、`iat`、`exp`。
+- `jti` 用于后续 token 黑名单、强制登出和审计追踪。
+- JWT secret 必须通过环境变量配置，不得硬编码到代码或配置文件默认值中。
+- JWT secret 长度不得低于 32 字节。
 - 后端每次请求仍需校验用户未被禁用。
 - 前端刷新页面后调用 `/api/auth/me` 恢复当前用户。
 - 401 自动跳转登录页。
 - 403 展示无权限页面或无权限提示。
 
 本轮 `logout` 由前端删除 token 完成；后续如需要强制踢下线，再引入 token 黑名单或 session 版本号。
+
+登录响应同时返回响应头：
+
+```http
+X-Token-Type: Bearer
+X-Expires-In: 28800
+```
+
+### 5.4 敏感操作安全
+
+本轮使用 JWT 存储在前端的方案，必须增加以下约束：
+
+- 前端不得把 token 写入 URL、日志或错误上报内容。
+- 前端配置基础 CSP，限制脚本来源，降低 XSS 后 token 被窃取风险。
+- 删除、作废、重置密码、服务订单作废、销售归属调整等敏感操作必须二次确认。
+- 当前方案不使用 Cookie，因此不引入 CSRF token；如果后续切换到 HttpOnly Cookie，则必须同步增加 CSRF 防护。
 
 ## 6. 销售归属与协作权限
 
@@ -223,6 +254,12 @@ COLLABORATOR
 - 只有 `SYSTEM_ADMIN` 和 `ORGANIZER_ADMIN` 可以分配、调整或移除销售关系。
 - 销售不能自行把展商分配给自己。
 - 移除销售关系后，该销售不再能访问该展商的新数据，但历史跟进记录保留。
+
+数据库约束：
+
+- `(exhibitor_id, sales_user_id, assignment_type)` 唯一，避免同一销售重复分配同一类型关系。
+- `PRIMARY` 负责人必须增加部分唯一约束：同一 `exhibitor_id` 在 `assignment_type = 'PRIMARY'` 时只能有一条记录。
+- 如果当前 schema 初始化器不支持部分唯一约束表达式，本轮必须在应用服务层使用事务和行级锁兜底校验，避免并发分配两个主负责人。
 
 ### 6.2 数据权限传播
 
@@ -259,6 +296,23 @@ SERVICE_STAFF:
 ```
 
 后端应集中实现数据权限服务，例如 `DataScopeService`，避免每个 controller 分散拼接权限条件。
+
+实现约束：
+
+- Controller 或 Service 方法使用 Spring Security 方法级鉴权，例如 `@PreAuthorize`。
+- 数据权限校验集中在 `DataScopeService`，提供 `canAccessExhibitor(user, exhibitorId)`、`filterAccessibleExhibitorIds(user, ids)`、`requireCanAccessOrder(user, orderId)` 等方法。
+- 列表查询必须在 repository 或 service 查询层带上数据范围条件，不允许先查全量再在前端过滤。
+- 本轮不启用 PostgreSQL Row-Level Security，避免与应用层权限、测试数据和 schema 初始化复杂度叠加；后续如有多租户或更高安全要求再评估 RLS。
+- 销售可访问展商 ID 可以使用 Redis 缓存，缓存 key 按 `sales_user_id` 维度存储；销售归属调整后必须主动失效该销售和相关展商的权限缓存。
+
+推荐方法级鉴权示例：
+
+```java
+@PreAuthorize("hasAnyRole('SYSTEM_ADMIN','ORGANIZER_ADMIN') or @dataScopeService.canAccessExhibitor(authentication, #exhibitorId)")
+public ExhibitorResponse getExhibitor(UUID exhibitorId) {
+    ...
+}
+```
 
 ### 6.3 销售跟进
 
@@ -407,7 +461,30 @@ EMAIL
 
 同一服务类型下字段编码唯一。
 
-### 8.2 字段校验
+### 8.2 字段值存储
+
+服务申请字段值采用 EAV 行存储，不把整张动态表单压成一个不可查询的大 JSON 字段。
+
+`service_application_values` 字段：
+
+- `id uuid primary key`
+- `application_id uuid not null`
+- `field_code varchar(100) not null`
+- `value_text text`
+- `value_json jsonb`
+- `created_at timestamptz not null`
+- `updated_at timestamptz not null`
+
+约束：
+
+- `(application_id, field_code)` 唯一。
+- `TEXT`、`TEXTAREA`、`NUMBER`、`DATE`、`PHONE`、`EMAIL` 存入 `value_text`，其中数字和日期使用标准字符串格式保存。
+- `SINGLE_SELECT` 存入 `value_text`。
+- `MULTI_SELECT` 存入 `value_json`，格式为字符串数组。
+- `FILE`、`IMAGE` 的附件元数据优先存入 `service_application_attachments`，必要时在 `value_json` 中保存引用列表。
+- 后端返回申请详情时必须按字段配置顺序组装表单值，前端不直接依赖 EAV 表结构。
+
+### 8.3 字段校验
 
 字段校验规则：
 
@@ -479,10 +556,29 @@ CANCELLED
 - 驳回必须填写原因。
 - 要求补充资料必须填写补充说明。
 - `REJECTED` 不允许直接再次提交，展商需要复制或重新创建申请；如产品需要原申请重提，必须保留上一轮审核意见。
+- 系统必须提供“基于被驳回申请创建新申请”能力，新申请自动复制原申请的字段值、附件引用和目标订单/展位，状态为 `DRAFT`，原申请保持 `REJECTED` 不变。
 - `NEED_SUPPLEMENT` 允许展商编辑字段值和附件后重新提交。
 - `COMPLETED` 后不可修改申请内容。
 
-### 9.3 审核通过后的处理
+### 9.3 目标展位存储
+
+按展位办理的服务申请支持一个或多个目标展位。为便于查询、权限校验和后续按展位统计，本轮使用关联表，不使用 `target_booth_ids jsonb`。
+
+新增 `service_application_booths`：
+
+- `id uuid primary key`
+- `application_id uuid not null`
+- `booth_id uuid not null`
+- `created_at timestamptz not null`
+
+约束：
+
+- `(application_id, booth_id)` 唯一。
+- 提交 `BOOTH` 粒度服务时，至少存在一条目标展位记录。
+- 目标展位必须属于该展商已确认的选位结果。
+- 更新草稿或补充资料时，目标展位集合以请求为准整体替换，并写审计摘要。
+
+### 9.4 审核通过后的处理
 
 免费服务：
 
@@ -510,12 +606,19 @@ CANCELLED
 审核通过
 -> 服务人员填写报价明细
 -> 系统生成 service_orders
+-> 系统写入报价有效期
 -> 展商查看报价和应付金额
 -> 展商提交服务付款
 -> 财务确认后进入执行
 ```
 
 本轮不做展商在线确认报价按钮；生成报价后默认展商可通过提交付款表示接受报价。
+
+报价有效期：
+
+- 后台报价服务必须填写 `quote_expires_at`。
+- 默认有效期为报价生成后 7 天，可由服务人员在 1 至 30 天范围内调整。
+- 超过有效期且未付款的服务订单不得继续提交付款，需服务人员重新报价或作废后重新生成。
 
 ## 10. 服务订单与服务付款
 
@@ -537,6 +640,7 @@ CANCELLED
 - 调整项。
 - 订单总价。
 - 已确认付款金额。
+- 报价有效期 `quote_expires_at`，仅后台报价服务必填。
 - 创建人、创建时间、更新人、更新时间。
 
 状态：
@@ -756,7 +860,10 @@ POST /api/service-applications/{id}/approve
 POST /api/service-applications/{id}/reject
 POST /api/service-applications/{id}/request-supplement
 POST /api/service-applications/{id}/complete
+POST /api/service-applications/{id}/copy-from-rejected
 ```
+
+本轮不提供服务申请批量提交和批量取消接口。服务申请包含动态字段、附件和目标订单/展位，批量操作容易造成误提交和附件归属错误，先保持单笔操作。
 
 创建或更新请求：
 
@@ -840,6 +947,35 @@ POST /api/service-payments/{id}/fail
 }
 ```
 
+### 11.7 错误码规范
+
+接口错误响应继续使用统一 `ApiResponse.error` 外壳，但本轮需要增加稳定业务错误码，便于前端做精确提示。
+
+HTTP 状态：
+
+- `401`：未登录、token 缺失、token 过期、token 篡改。
+- `403`：已登录但角色不足或数据权限不足。
+- `400`：业务规则校验失败。
+- `409`：唯一约束、状态冲突、并发冲突。
+
+错误码示例：
+
+| 错误码 | HTTP | 场景 |
+| --- | --- | --- |
+| `E_AUTH_BAD_CREDENTIALS` | 401 | 账号或密码错误 |
+| `E_AUTH_USER_DISABLED` | 403 | 用户被禁用 |
+| `E_AUTH_ACCOUNT_LOCKED` | 403 | 登录失败过多临时锁定 |
+| `E_AUTH_TOKEN_EXPIRED` | 401 | token 过期 |
+| `E_AUTH_TOKEN_INVALID` | 401 | token 无效或被篡改 |
+| `E_FORBIDDEN_ROLE` | 403 | 角色无权访问 |
+| `E_FORBIDDEN_DATA_SCOPE` | 403 | 数据权限不足 |
+| `E_SALES_ASSIGNMENT_CONFLICT` | 409 | 展商主销售冲突 |
+| `E_SERVICE_CONDITION_UNMET` | 400 | 服务开放条件未满足 |
+| `E_SERVICE_FIELD_INVALID` | 400 | 服务字段值不合法 |
+| `E_SERVICE_TARGET_REQUIRED` | 400 | 缺少目标订单或展位 |
+| `E_SERVICE_QUOTE_EXPIRED` | 400 | 服务报价已过期 |
+| `E_PAYMENT_STATUS_CONFLICT` | 409 | 付款状态已变化，不能重复确认 |
+
 ## 12. 前端体验
 
 ### 12.1 登录页
@@ -875,6 +1011,21 @@ POST /api/service-payments/{id}/fail
 - 目标订单和目标展位必须下拉或卡片选择，不能手敲 ID。
 - 服务申请详情展示状态、审核意见、补充资料原因、付款入口和执行状态。
 - 服务订单付款页显示服务名称、金额、订单短号和付款状态。
+
+字段类型与 Ant Design 组件映射：
+
+| 字段类型 | 前端组件 | 说明 |
+| --- | --- | --- |
+| `TEXT` | `Input` | 普通单行文本 |
+| `TEXTAREA` | `Input.TextArea` | 多行文本，显示字数限制 |
+| `NUMBER` | `InputNumber` | 使用后端配置的最小值、最大值和精度 |
+| `DATE` | `DatePicker` | 提交 ISO 日期字符串 |
+| `SINGLE_SELECT` | `Select` | 选项来自字段配置 |
+| `MULTI_SELECT` | `Select mode="multiple"` | 提交字符串数组 |
+| `FILE` | `Upload` | 文件服务抽象，先保存附件元数据 |
+| `IMAGE` | `Upload accept="image/*"` | 限制图片类型 |
+| `PHONE` | `Input` | 手机或联系电话校验 |
+| `EMAIL` | `Input` | 邮箱格式校验 |
 
 ### 12.3 后台服务管理
 
@@ -986,6 +1137,7 @@ sales_follow_ups
 service_types
 service_fields
 service_applications
+service_application_booths
 service_application_values
 service_application_attachments
 service_orders
@@ -997,6 +1149,9 @@ service_payments
 
 - `users.username` 唯一。
 - `users.password_hash` 非空。
+- `users.jwt_version` 或等效字段默认 0，为后续强制失效 token 预留。
+- `users.default_role` 可为空；非空时必须是该用户已拥有角色之一。
+- `users.failed_login_count`、`users.locked_until` 用于登录失败锁定。
 - `roles.code` 唯一。
 - `user_roles(user_id, role_id)` 唯一。
 - `exhibitor_sales_assignments(exhibitor_id, sales_user_id, assignment_type)` 唯一。
@@ -1004,9 +1159,37 @@ service_payments
 - `service_fields(service_type_id, code)` 唯一。
 - `service_applications` 必须关联 `event_id`、`exhibitor_id`、`service_type_id`。
 - `ORDER` 粒度服务申请必须有 `order_id`。
-- `BOOTH` 粒度服务申请必须有目标展位。
+- `BOOTH` 粒度服务申请必须在 `service_application_booths` 中有目标展位。
+- `service_application_values(application_id, field_code)` 唯一。
+- `service_application_booths(application_id, booth_id)` 唯一。
 - `service_orders` 必须关联 `service_application_id`。
 - 金额字段统一 `numeric(14,2)`。
+
+关键索引：
+
+```sql
+create index idx_sales_assignments_sales_user
+  on exhibitor_sales_assignments(sales_user_id, assignment_type);
+
+create index idx_sales_assignments_exhibitor
+  on exhibitor_sales_assignments(exhibitor_id, assignment_type);
+
+create unique index uk_exhibitor_primary_sales
+  on exhibitor_sales_assignments(exhibitor_id)
+  where assignment_type = 'PRIMARY';
+
+create index idx_orders_exhibitor_status
+  on participation_orders(exhibitor_id, status);
+
+create index idx_service_applications_exhibitor_status
+  on service_applications(exhibitor_id, status);
+
+create index idx_service_orders_exhibitor_status
+  on service_orders(exhibitor_id, status);
+
+create index idx_service_payments_order_status
+  on service_payments(service_order_id, status);
+```
 
 ### 14.3 种子账号
 
@@ -1023,6 +1206,24 @@ service_payments
 
 默认密码只用于本地和演示环境，生产部署必须要求首次登录修改。
 
+种子 SQL 必须使用确定性 UUID，避免重复初始化产生多套角色。密码哈希在实施时由 BCrypt 生成，不在文档中写明明文哈希。
+
+角色种子逻辑：
+
+```sql
+insert into roles (id, code, name, created_at, updated_at)
+values
+  ('00000000-0000-0000-0000-000000000101', 'SYSTEM_ADMIN', '系统管理员', now(), now()),
+  ('00000000-0000-0000-0000-000000000102', 'ORGANIZER_ADMIN', '主办方管理员', now(), now()),
+  ('00000000-0000-0000-0000-000000000103', 'SALES', '销售', now(), now()),
+  ('00000000-0000-0000-0000-000000000104', 'FINANCE', '财务', now(), now()),
+  ('00000000-0000-0000-0000-000000000105', 'SERVICE_STAFF', '服务人员', now(), now()),
+  ('00000000-0000-0000-0000-000000000106', 'EXHIBITOR', '展商', now(), now())
+on conflict (code) do nothing;
+```
+
+演示账号种子必须使用 `on conflict (username) do nothing`，并把 `exhibitor01` 绑定到现有 demo 展商 `00000000-0000-0000-0000-000000000001`。
+
 ## 15. 兼容现有功能
 
 现有 demo 数据需要平滑过渡：
@@ -1035,6 +1236,53 @@ service_payments
 - 如果历史数据缺少销售归属，管理员仍可查看；销售不可见，直到管理员分配。
 - 如果历史订单未绑定服务数据，不影响订单详情。
 
+### 15.1 现有数据升级口径
+
+本项目当前不使用 Flyway/Liquibase，schema 仍由受控初始化和版本化 SQL 脚本管理。第六轮实施时必须形成一次明确的 schema 升级脚本，不能只靠修改最终 baseline。
+
+升级顺序：
+
+```text
+1. 创建 users、roles、user_roles。
+2. 创建销售归属和跟进表。
+3. 创建服务中心相关表。
+4. 为现有业务表补充必要索引。
+5. 插入角色种子数据。
+6. 插入演示用户。
+7. 将 demo 展商绑定到 exhibitor01。
+8. 将历史 created_by / updated_by 为空的记录回填为 SYSTEM_BOOTSTRAP_USER_ID。
+9. 为 demo 展商分配 sales01 为 PRIMARY，便于销售账号演示。
+10. 执行后向兼容 smoke test。
+```
+
+历史数据规则：
+
+- 现有订单、报名、选位、付款不强制补销售归属；管理员始终可查看。
+- 需要销售演示的数据可把 demo 展商分配给 `sales01`。
+- 现有审计日志 actor 为空的历史记录不重写业务含义，只在缺失创建人/更新人字段时回填系统启动用户。
+- 服务中心新表为空不影响既有主链路。
+
+### 15.2 部署环境变量
+
+新增环境变量：
+
+```text
+JWT_SECRET
+JWT_EXPIRATION_SECONDS=28800
+JWT_ISSUER=sport-expo-exhibitor-system
+LOGIN_MAX_FAILURES=5
+LOGIN_LOCK_MINUTES=15
+LOGIN_IP_RATE_LIMIT_PER_MINUTE=30
+APP_CSP_ENABLED=true
+```
+
+部署要求：
+
+- `JWT_SECRET` 生产环境必须由部署平台注入，不得提交到仓库。
+- `JWT_SECRET` 不得使用默认值启动生产服务；缺失时后端应启动失败。
+- 升级前备份 PostgreSQL schema。
+- 升级后先使用管理员账号登录，再验证展商、销售、财务、服务人员账号。
+
 ## 16. 测试验收
 
 ### 16.1 后端测试
@@ -1044,10 +1292,13 @@ service_payments
 - 登录成功返回 token 和用户角色。
 - 密码错误登录失败。
 - 禁用用户不可登录。
+- JWT token 过期后返回 401 和 `E_AUTH_TOKEN_EXPIRED`。
+- JWT token 被篡改后返回 401 和 `E_AUTH_TOKEN_INVALID`。
 - 无 token 访问业务接口返回 401。
 - 角色不足访问接口返回 403。
 - 展商只能查看自己的订单、报名和服务申请。
 - 销售只能查看负责或协作展商的数据。
+- 销售归属调整后，旧销售的数据权限立即失效，新销售立即生效。
 - 管理员可以分配主销售和协作销售。
 - 一个展商不能有两个主销售。
 - 销售创建跟进记录成功。
@@ -1062,6 +1313,7 @@ service_payments
 - 后台报价服务生成服务订单明细。
 - 服务付款确认后服务订单进入已付款。
 - 服务付款失败记录失败原因。
+- 两笔服务付款并发确认时，服务订单付款聚合最终正确。
 - 服务订单付款不影响参展订单选位资格。
 
 ### 16.2 前端测试
@@ -1077,6 +1329,8 @@ service_payments
 - 目标订单和目标展位通过选择控件选择。
 - 服务申请详情显示审核意见。
 - 服务订单付款页显示服务名称和金额。
+- token 过期后前端跳转登录并保留当前路径用于重新登录后返回。
+- 网络中断时，服务申请表单保留当前已填写值，不清空页面状态。
 - 后台服务类型配置可创建字段。
 - 后台服务申请审核可通过、驳回、要求补充。
 - 销售工作台只显示自己客户待办。
@@ -1099,6 +1353,8 @@ service_payments
 - 服务人员可以配置服务类型和字段。
 - 服务人员可以审核服务申请。
 - 财务可以确认服务付款。
+- 长时间停留后 token 过期，下一次操作提示重新登录。
+- 网络中断后刷新失败时，页面展示重试入口，不丢失未提交表单内容。
 
 ## 17. 风险与后续衔接
 
