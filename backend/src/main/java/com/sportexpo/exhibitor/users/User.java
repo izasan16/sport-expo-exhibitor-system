@@ -101,6 +101,14 @@ public class User {
         return lockedUntil != null && lockedUntil.isAfter(now);
     }
 
+    public void clearExpiredLockAt(OffsetDateTime now) {
+        if (lockedUntil != null && !lockedUntil.isAfter(now)) {
+            failedLoginCount = 0;
+            lockedUntil = null;
+            updatedAt = now;
+        }
+    }
+
     public void recordFailedLogin(int maxFailures, Duration lockDuration, OffsetDateTime now) {
         failedLoginCount++;
         if (failedLoginCount >= maxFailures) {

@@ -27,14 +27,15 @@ public class AuthService {
 
     @Transactional(noRollbackFor = AuthException.class)
     public LoginResponse login(LoginRequest request) {
-        var user = userRepository.findByUsername(request.username())
+        var user = userRepository.findByUsernameForUpdate(request.username())
                 .orElseThrow(() -> badCredentials());
         var now = OffsetDateTime.now();
-        if (user.isLockedAt(now)) {
-            throw new AuthException(AuthErrorCodes.ACCOUNT_LOCKED, "Account locked");
-        }
         if (user.isDisabled()) {
             throw new AuthException(AuthErrorCodes.USER_DISABLED, "User disabled");
+        }
+        user.clearExpiredLockAt(now);
+        if (user.isLockedAt(now)) {
+            throw new AuthException(AuthErrorCodes.ACCOUNT_LOCKED, "Account locked");
         }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             user.recordFailedLogin(

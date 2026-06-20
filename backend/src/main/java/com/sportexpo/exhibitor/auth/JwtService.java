@@ -50,16 +50,26 @@ public class JwtService {
                     .parseSignedClaims(token)
                     .getPayload();
             var rawRoles = claims.get("roles");
-            if (!(rawRoles instanceof List<?> roleValues)) {
-                throw new AuthException(AuthErrorCodes.TOKEN_INVALID, "Invalid token");
+            if (claims.getId() == null || claims.getId().isBlank()) {
+                throw invalidToken();
+            }
+            var username = claims.get("username", String.class);
+            if (username == null || username.isBlank()) {
+                throw invalidToken();
+            }
+            if (!(rawRoles instanceof List<?> roleValues) || roleValues.isEmpty()) {
+                throw invalidToken();
             }
             var roles = roleValues.stream().map(Object::toString).toList();
+            if (roles.stream().anyMatch(String::isBlank)) {
+                throw invalidToken();
+            }
             var exhibitorId = claims.get("exhibitorId") == null
                     ? null
                     : UUID.fromString(claims.get("exhibitorId", String.class));
             return new JwtPrincipal(
                     UUID.fromString(claims.getSubject()),
-                    claims.get("username", String.class),
+                    username,
                     roles,
                     exhibitorId,
                     claims.getId(),
@@ -71,6 +81,10 @@ public class JwtService {
         } catch (JwtException | IllegalArgumentException | NullPointerException exception) {
             throw new AuthException(AuthErrorCodes.TOKEN_INVALID, "Invalid token");
         }
+    }
+
+    private AuthException invalidToken() {
+        return new AuthException(AuthErrorCodes.TOKEN_INVALID, "Invalid token");
     }
 
     public long expirationSeconds() {

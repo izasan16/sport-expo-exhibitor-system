@@ -26,6 +26,8 @@ class AuthServiceTest extends TestDatabaseSupport {
     @Autowired
     JwtService jwtService;
     @Autowired
+    AuthProperties authProperties;
+    @Autowired
     UserRepository userRepository;
     @Autowired
     RoleRepository roleRepository;
@@ -59,7 +61,7 @@ class AuthServiceTest extends TestDatabaseSupport {
 
         assertThat(response.accessToken()).isNotBlank();
         assertThat(response.tokenType()).isEqualTo("Bearer");
-        assertThat(response.expiresIn()).isEqualTo(28800);
+        assertThat(response.expiresIn()).isEqualTo(authProperties.getJwtExpirationSeconds());
         assertThat(response.userId()).isEqualTo(user.getId());
         assertThat(response.username()).isEqualTo(user.getUsername());
         assertThat(response.roles()).containsExactly("SYSTEM_ADMIN");
@@ -115,7 +117,35 @@ class AuthServiceTest extends TestDatabaseSupport {
                 .isEqualTo(AuthErrorCodes.USER_DISABLED);
     }
 
+    @Test
+    void disabledUserReturnsDisabledEvenWhenLocked() {
+        var user = createUser("auth-disabled-locked", "DISABLED", 5, OffsetDateTime.now().plusMinutes(5));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest(user.getUsername(), "demo123")))
+                .isInstanceOf(AuthException.class)
+                .extracting("code")
+                .isEqualTo(AuthErrorCodes.USER_DISABLED);
+    }
+
+    @Test
+    void expiredLockIsClearedBeforeRecordingNewBadPassword() {
+        var user = createUser("auth-expired-lock", "ACTIVE", 5, OffsetDateTime.now().minusMinutes(5));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest(user.getUsername(), "wrong")))
+                .isInstanceOf(AuthException.class)
+                .extracting("code")
+                .isEqualTo(AuthErrorCodes.BAD_CREDENTIALS);
+
+        var updated = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(updated.getFailedLoginCount()).isEqualTo(1);
+        assertThat(updated.getLockedUntil()).isNull();
+    }
+
     private User createUser(String usernamePrefix, String status) {
+        return createUser(usernamePrefix, status, 0, null);
+    }
+
+    private User createUser(String usernamePrefix, String status, int failedLoginCount, OffsetDateTime lockedUntil) {
         var now = OffsetDateTime.now();
         var username = usernamePrefix + "-" + UUID.randomUUID();
         var user = new User(
@@ -129,8 +159,8 @@ class AuthServiceTest extends TestDatabaseSupport {
                 null,
                 status,
                 "SYSTEM_ADMIN",
-                0,
-                null,
+                failedLoginCount,
+                lockedUntil,
                 null,
                 0,
                 now,
