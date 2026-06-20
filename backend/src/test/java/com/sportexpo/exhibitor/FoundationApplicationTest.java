@@ -57,4 +57,29 @@ class FoundationApplicationTest extends TestDatabaseSupport {
         assertThat(contractOrderColumn).isEqualTo(1);
         assertThat(pricingIndexes).isEqualTo(2);
     }
+
+    @Test
+    void initializesV6AuthSalesAndServiceTables() {
+        var tables = jdbcTemplate.queryForList("""
+                select table_name
+                from information_schema.tables
+                where table_schema = ?
+                """, String.class, schema);
+
+        assertThat(tables).contains(
+                "users",
+                "roles",
+                "user_roles",
+                "exhibitor_sales_assignments",
+                "sales_follow_ups",
+                "service_types",
+                "service_fields",
+                "service_applications",
+                "service_application_booths",
+                "service_application_values",
+                "service_orders",
+                "service_order_items",
+                "service_payments"
+        );
+    }
 }
