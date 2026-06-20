@@ -1,5 +1,7 @@
 package com.sportexpo.exhibitor.common;
 
+import com.sportexpo.exhibitor.auth.AuthErrorCodes;
+import com.sportexpo.exhibitor.auth.AuthException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,6 +17,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(exception.getMessage()));
     }
 
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthException(AuthException exception) {
+        return ResponseEntity
+                .status(statusFor(exception))
+                .body(ApiResponse.error(exception.getMessage(), exception.getCode()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException exception) {
         var message = exception.getBindingResult().getFieldErrors().stream()
@@ -24,5 +33,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(message));
+    }
+
+    private HttpStatus statusFor(AuthException exception) {
+        return switch (exception.getCode()) {
+            case AuthErrorCodes.ACCOUNT_LOCKED -> HttpStatus.LOCKED;
+            case AuthErrorCodes.USER_DISABLED -> HttpStatus.FORBIDDEN;
+            default -> HttpStatus.UNAUTHORIZED;
+        };
     }
 }
