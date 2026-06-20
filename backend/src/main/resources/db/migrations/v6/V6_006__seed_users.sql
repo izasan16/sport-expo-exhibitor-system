@@ -1,3 +1,4 @@
+-- Demo accounts are seeded only when app.db.seed-demo-data / APP_DB_SEED_DEMO_DATA is explicitly enabled.
 -- Default password for local demo accounts: demo123
 -- BCrypt cost: 10
 -- Hash generated once during implementation and intentionally not overwritten by ON CONFLICT.
@@ -48,7 +49,6 @@ on conflict (username) do update set
     email = excluded.email,
     user_type = excluded.user_type,
     exhibitor_id = excluded.exhibitor_id,
-    status = excluded.status,
     default_role = excluded.default_role,
     updated_at = now(),
     updated_by = excluded.updated_by;

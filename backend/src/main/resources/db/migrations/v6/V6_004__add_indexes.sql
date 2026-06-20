@@ -20,5 +20,8 @@ create index if not exists idx_service_orders_exhibitor_status
 create index if not exists idx_service_payments_order_status
     on __schema__.service_payments(service_order_id, status);
 
-create index if not exists idx_app_values_field_text
-    on __schema__.service_application_values(field_code, value_text);
+drop index if exists __schema__.idx_app_values_field_text;
+
+-- value_text is unbounded text, so only field_code is B-tree indexed.
+create index if not exists idx_app_values_field_code
+    on __schema__.service_application_values(field_code);

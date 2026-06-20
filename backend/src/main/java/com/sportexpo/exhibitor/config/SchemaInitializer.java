@@ -18,12 +18,15 @@ import java.util.List;
 
 @Component
 public class SchemaInitializer implements ApplicationRunner {
-    private static final List<String> V6_SCRIPTS = List.of(
+    private static final List<String> V6_BASELINE_SCRIPTS = List.of(
             "db/migrations/v6/V6_001__create_auth_tables.sql",
             "db/migrations/v6/V6_002__create_sales_tables.sql",
             "db/migrations/v6/V6_003__create_service_tables.sql",
             "db/migrations/v6/V6_004__add_indexes.sql",
-            "db/migrations/v6/V6_005__seed_roles.sql",
+            "db/migrations/v6/V6_005__seed_roles.sql"
+    );
+
+    private static final List<String> V6_DEMO_SCRIPTS = List.of(
             "db/migrations/v6/V6_006__seed_users.sql",
             "db/migrations/v6/V6_007__backfill_demo_data.sql"
     );
@@ -50,9 +53,18 @@ public class SchemaInitializer implements ApplicationRunner {
         }
         jdbcTemplate.execute("create schema if not exists " + schema);
         executeSqlResource("db/schema-foundation.sql");
-        for (var script : V6_SCRIPTS) {
+        for (var script : V6_BASELINE_SCRIPTS) {
             executeSqlResource(script);
         }
+        if (seedDemoData()) {
+            for (var script : V6_DEMO_SCRIPTS) {
+                executeSqlResource(script);
+            }
+        }
+    }
+
+    private boolean seedDemoData() {
+        return environment.getProperty("app.db.seed-demo-data", Boolean.class, false);
     }
 
     private void executeSqlResource(String location) throws Exception {

@@ -1,3 +1,4 @@
+drop index if exists __schema__.idx_app_values_field_code;
 drop index if exists __schema__.idx_app_values_field_text;
 drop index if exists __schema__.idx_service_payments_order_status;
 drop index if exists __schema__.idx_service_orders_exhibitor_status;
