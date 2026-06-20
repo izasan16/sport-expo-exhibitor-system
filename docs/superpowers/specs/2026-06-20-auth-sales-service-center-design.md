@@ -200,6 +200,12 @@ EXHIBITOR
 - 同一 IP 在短时间内大量失败时触发全局限流，本轮可先用内存或 Redis 计数器实现。
 - 登录成功后清空该账号失败计数。
 
+实现方式：
+
+- 账号失败次数和锁定时间使用数据库字段：`users.failed_login_count`、`users.locked_until`。
+- Redis 仅用于 IP 维度限流计数，key 为 `login:ip:{ip}`，TTL 为 1 分钟。
+- 不使用 Redis 保存账号锁定状态，避免 Redis 清空后绕过账号锁定。
+
 ### 5.3 JWT 规则
 
 - 使用 Bearer Token。
@@ -209,7 +215,10 @@ EXHIBITOR
 - Token 载荷至少包含 `sub/userId`、`username`、`roles`、`exhibitorId`、`jti`、`iat`、`exp`。
 - `jti` 用于后续 token 黑名单、强制登出和审计追踪。
 - JWT secret 必须通过环境变量配置，不得硬编码到代码或配置文件默认值中。
-- JWT secret 长度不得低于 32 字节。
+- 本轮使用 HS256 签名算法。
+- JWT secret 长度不得低于 32 字节，即 256 bit，满足 HS256 推荐强度。
+- JWT secret 可用 `openssl rand -base64 32` 生成。
+- 后续如进入多服务或第三方验证场景，可升级为 RS256 公私钥对；本轮不引入 RSA key 管理。
 - 后端每次请求仍需校验用户未被禁用。
 - 前端刷新页面后调用 `/api/auth/me` 恢复当前用户。
 - 401 自动跳转登录页。
@@ -229,9 +238,25 @@ X-Expires-In: 28800
 本轮使用 JWT 存储在前端的方案，必须增加以下约束：
 
 - 前端不得把 token 写入 URL、日志或错误上报内容。
+- 前端 token 存储位置统一为 `localStorage` 的 `access_token`。本轮不使用 Cookie 存储 token，因此不依赖 CSRF token。
+- `sessionStorage` 不作为本轮默认方案，避免浏览器刷新或新开页面后频繁丢失登录态。
 - 前端配置基础 CSP，限制脚本来源，降低 XSS 后 token 被窃取风险。
 - 删除、作废、重置密码、服务订单作废、销售归属调整等敏感操作必须二次确认。
 - 当前方案不使用 Cookie，因此不引入 CSRF token；如果后续切换到 HttpOnly Cookie，则必须同步增加 CSRF 防护。
+
+基础 CSP 配置：
+
+```text
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: https:;
+  connect-src 'self' https:;
+  frame-ancestors 'none';
+```
+
+开发环境如需 Vite HMR，可在开发配置中临时放宽 `connect-src`，生产构建不得放宽 `script-src` 到任意域名。
 
 ## 6. 销售归属与协作权限
 
@@ -260,6 +285,20 @@ COLLABORATOR
 - `(exhibitor_id, sales_user_id, assignment_type)` 唯一，避免同一销售重复分配同一类型关系。
 - `PRIMARY` 负责人必须增加部分唯一约束：同一 `exhibitor_id` 在 `assignment_type = 'PRIMARY'` 时只能有一条记录。
 - 如果当前 schema 初始化器不支持部分唯一约束表达式，本轮必须在应用服务层使用事务和行级锁兜底校验，避免并发分配两个主负责人。
+
+主负责人并发控制：
+
+```text
+begin transaction
+-> select existing assignments for exhibitor_id = ? for update
+-> 校验请求中最多一个 PRIMARY
+-> 删除或调整旧分配
+-> 插入新 PRIMARY 和 COLLABORATOR
+-> 依赖部分唯一索引兜底冲突
+-> 提交事务
+```
+
+如果两个管理员同时分配同一展商主销售，后提交的一方必须得到 `E_SALES_ASSIGNMENT_CONFLICT`，不能静默覆盖。
 
 ### 6.2 数据权限传播
 
@@ -304,6 +343,14 @@ SERVICE_STAFF:
 - 列表查询必须在 repository 或 service 查询层带上数据范围条件，不允许先查全量再在前端过滤。
 - 本轮不启用 PostgreSQL Row-Level Security，避免与应用层权限、测试数据和 schema 初始化复杂度叠加；后续如有多租户或更高安全要求再评估 RLS。
 - 销售可访问展商 ID 可以使用 Redis 缓存，缓存 key 按 `sales_user_id` 维度存储；销售归属调整后必须主动失效该销售和相关展商的权限缓存。
+
+缓存规则：
+
+- 销售可访问展商缓存 key：`sales:accessible_exhibitor_ids:{sales_user_id}`。
+- 缓存内容为展商 ID 列表，TTL 10 分钟。
+- `PUT /api/exhibitors/{id}/sales-assignments` 成功后，必须失效旧销售和新销售的缓存。
+- 失效范围包括旧主销售、旧协作销售、新主销售、新协作销售。
+- 权限缓存只作为查询优化，不作为唯一安全来源；缓存缺失时必须回源数据库。
 
 推荐方法级鉴权示例：
 
@@ -619,6 +666,10 @@ CANCELLED
 - 后台报价服务必须填写 `quote_expires_at`。
 - 默认有效期为报价生成后 7 天，可由服务人员在 1 至 30 天范围内调整。
 - 超过有效期且未付款的服务订单不得继续提交付款，需服务人员重新报价或作废后重新生成。
+- 服务人员可以在报价过期前主动延长有效期，必须填写延期原因。
+- 单次延期后的新有效期不得超过当前时间后 30 天。
+- 报价已经过期后不得直接延期，必须重新报价，避免旧价格长期有效。
+- 展商端服务订单详情必须显示报价截止时间和剩余有效天数；小于 2 天时显示临近过期提示。
 
 ## 10. 服务订单与服务付款
 
@@ -908,6 +959,7 @@ POST /api/service-applications/{id}/copy-from-rejected
 GET  /api/service-orders?eventId=&exhibitorId=&status=
 GET  /api/service-orders/{id}
 POST /api/service-orders/{id}/quote
+POST /api/service-orders/{id}/extend-quote
 POST /api/service-orders/{id}/void
 
 GET  /api/service-payments?serviceOrderId=&status=
@@ -931,6 +983,15 @@ POST /api/service-payments/{id}/fail
   "discountAmount": 0,
   "adjustmentAmount": 0,
   "reason": "按家具租赁标准报价"
+}
+```
+
+报价延期请求：
+
+```json
+{
+  "newExpiresAt": "2026-07-15T23:59:59+08:00",
+  "reason": "客户申请延期，服务人员确认价格仍有效"
 }
 ```
 
@@ -987,6 +1048,10 @@ HTTP 状态：
 - 登录失败显示业务提示。
 - 登录成功按角色跳转。
 - 已登录用户访问 `/login` 时跳转默认首页。
+- 多角色用户在顶部导航显示角色/工作台切换下拉。
+- 切换工作台不需要重新登录，只改变前端路由入口和菜单上下文。
+- 切换到内部角色进入 `/admin/dashboard`，切换到展商角色进入 `/exhibitor`。
+- 后端数据权限仍按当前用户所有角色和数据范围校验，不因前端切换而放大权限。
 
 ### 12.2 展商端服务中心
 
@@ -1026,6 +1091,25 @@ HTTP 状态：
 | `IMAGE` | `Upload accept="image/*"` | 限制图片类型 |
 | `PHONE` | `Input` | 手机或联系电话校验 |
 | `EMAIL` | `Input` | 邮箱格式校验 |
+
+校验规则示例：
+
+```ts
+const FIELD_VALIDATION = {
+  TEXT: {
+    maxLength: 200,
+    pattern: /^[\u4e00-\u9fa5a-zA-Z0-9\s.,，。()（）-]+$/,
+  },
+  PHONE: {
+    pattern: /^1[3-9]\d{9}$|^[0-9\-+()（）\s]{6,30}$/,
+    message: '请输入有效的联系电话',
+  },
+  EMAIL: {
+    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    message: '请输入有效的邮箱地址',
+  },
+};
+```
 
 ### 12.3 后台服务管理
 
@@ -1189,7 +1273,28 @@ create index idx_service_orders_exhibitor_status
 
 create index idx_service_payments_order_status
   on service_payments(service_order_id, status);
+
+create index idx_app_values_field_text
+  on service_application_values(field_code, value_text);
 ```
+
+如果需要对服务字段文本值做模糊搜索，例如按楣板公司名搜索，实施时可启用 PostgreSQL `pg_trgm` 扩展并增加 GIN 索引：
+
+```sql
+create extension if not exists pg_trgm;
+
+create index idx_app_values_text_gin
+  on service_application_values
+  using gin(value_text gin_trgm_ops);
+```
+
+该 GIN 索引不是所有环境必需项；只有当后台需要按动态字段文本模糊搜索时启用。
+
+PostgreSQL 版本要求：
+
+- 本轮目标 PostgreSQL 版本为 12+。
+- 部分唯一索引在 PostgreSQL 9.6+ 已支持；如实际环境低于 9.6，不支持本系统第六轮 schema 要求。
+- 即使数据库支持部分唯一索引，应用层仍必须保留事务校验，提供更友好的业务错误码。
 
 ### 14.3 种子账号
 
@@ -1224,6 +1329,14 @@ on conflict (code) do nothing;
 
 演示账号种子必须使用 `on conflict (username) do nothing`，并把 `exhibitor01` 绑定到现有 demo 展商 `00000000-0000-0000-0000-000000000001`。
 
+种子幂等规则：
+
+- 角色使用 `on conflict (code) do nothing`。
+- 用户使用 `on conflict (username) do update` 时不得覆盖 `password_hash`。
+- 重复运行种子脚本不得重置演示账号密码。
+- 用户角色使用 `on conflict (user_id, role_id) do nothing`。
+- demo 销售归属使用 `on conflict` 或先查后插，避免重复分配。
+
 ## 15. 兼容现有功能
 
 现有 demo 数据需要平滑过渡：
@@ -1240,6 +1353,28 @@ on conflict (code) do nothing;
 
 本项目当前不使用 Flyway/Liquibase，schema 仍由受控初始化和版本化 SQL 脚本管理。第六轮实施时必须形成一次明确的 schema 升级脚本，不能只靠修改最终 baseline。
 
+脚本目录：
+
+```text
+backend/src/main/resources/db/migrations/v6/
+  V6_001__create_auth_tables.sql
+  V6_002__create_sales_tables.sql
+  V6_003__create_service_tables.sql
+  V6_004__add_indexes.sql
+  V6_005__seed_roles.sql
+  V6_006__seed_users.sql
+  V6_007__backfill_demo_data.sql
+  R6_rollback.sql
+  V6_verify.sql
+```
+
+执行规则：
+
+- `V6_001` 至 `V6_007` 必须按顺序执行。
+- 每个脚本必须幂等，重复执行不得破坏已有密码、角色和业务数据。
+- `R6_rollback.sql` 仅允许在第六轮上线失败且尚未产生真实业务数据时使用；如果已经有服务申请或真实登录数据，必须走人工回滚方案。
+- `V6_verify.sql` 用于升级后检查表、索引、角色、种子账号和 demo 绑定是否存在。
+
 升级顺序：
 
 ```text
@@ -1253,6 +1388,32 @@ on conflict (code) do nothing;
 8. 将历史 created_by / updated_by 为空的记录回填为 SYSTEM_BOOTSTRAP_USER_ID。
 9. 为 demo 展商分配 sales01 为 PRIMARY，便于销售账号演示。
 10. 执行后向兼容 smoke test。
+```
+
+验证 SQL 至少检查：
+
+```sql
+select count(*) from roles where code in (
+  'SYSTEM_ADMIN',
+  'ORGANIZER_ADMIN',
+  'SALES',
+  'FINANCE',
+  'SERVICE_STAFF',
+  'EXHIBITOR'
+);
+
+select username from users where username in (
+  'admin',
+  'organizer',
+  'sales01',
+  'finance01',
+  'service01',
+  'exhibitor01'
+);
+
+select count(*) from user_roles;
+select count(*) from service_types;
+select count(*) from exhibitor_sales_assignments where assignment_type = 'PRIMARY';
 ```
 
 历史数据规则：
