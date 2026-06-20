@@ -10,11 +10,13 @@ class AuthPropertiesTest {
     private static final String CUSTOM_SECRET = "not-a-base64-secret-that-is-long-enough";
 
     @Test
-    void allowsDevDefaultSecretWhenNoActiveProfileIsSet() {
+    void rejectsDevDefaultSecretWhenNoActiveProfileIsSet() {
         var properties = validProperties();
         properties.setJwtSecret(AuthProperties.DEV_DEFAULT_JWT_SECRET);
 
-        assertThatCode(properties::validate).doesNotThrowAnyException();
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_SECRET must be changed");
     }
 
     @Test

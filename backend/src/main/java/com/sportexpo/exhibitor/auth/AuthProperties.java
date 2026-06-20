@@ -54,7 +54,7 @@ public class AuthProperties {
         }
         var activeProfiles = environment.getActiveProfiles();
         if (activeProfiles.length == 0) {
-            return false;
+            return true;
         }
         return Arrays.stream(activeProfiles)
                 .map(profile -> profile.toLowerCase().trim())

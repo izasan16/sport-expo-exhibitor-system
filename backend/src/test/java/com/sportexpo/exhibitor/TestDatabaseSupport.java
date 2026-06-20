@@ -1,9 +1,11 @@
 package com.sportexpo.exhibitor;
 
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+@ActiveProfiles("test")
 public abstract class TestDatabaseSupport {
     private static PostgreSQLContainer<?> postgres;
 

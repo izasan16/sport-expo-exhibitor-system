@@ -60,10 +60,10 @@ public class JwtService {
             if (!(rawRoles instanceof List<?> roleValues) || roleValues.isEmpty()) {
                 throw invalidToken();
             }
-            var roles = roleValues.stream().map(Object::toString).toList();
-            if (roles.stream().anyMatch(String::isBlank)) {
+            if (roleValues.stream().anyMatch(role -> !(role instanceof String value) || value.isBlank())) {
                 throw invalidToken();
             }
+            var roles = roleValues.stream().map(String.class::cast).toList();
             var exhibitorId = claims.get("exhibitorId") == null
                     ? null
                     : UUID.fromString(claims.get("exhibitorId", String.class));

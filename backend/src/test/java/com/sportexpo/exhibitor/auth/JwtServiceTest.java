@@ -56,6 +56,34 @@ class JwtServiceTest {
     }
 
     @Test
+    void parseRejectsTokenWithNonStringRoleValue() {
+        var service = new JwtService(properties());
+        var token = tokenBuilder()
+                .claim("roles", List.of(42))
+                .id(UUID.randomUUID().toString())
+                .compact();
+
+        assertThatThrownBy(() -> service.parse(token))
+                .isInstanceOf(AuthException.class)
+                .extracting("code")
+                .isEqualTo(AuthErrorCodes.TOKEN_INVALID);
+    }
+
+    @Test
+    void parseRejectsTokenWithBlankRoleValue() {
+        var service = new JwtService(properties());
+        var token = tokenBuilder()
+                .claim("roles", List.of("SYSTEM_ADMIN", " "))
+                .id(UUID.randomUUID().toString())
+                .compact();
+
+        assertThatThrownBy(() -> service.parse(token))
+                .isInstanceOf(AuthException.class)
+                .extracting("code")
+                .isEqualTo(AuthErrorCodes.TOKEN_INVALID);
+    }
+
+    @Test
     void parseRejectsExpiredTokenAsExpired() {
         var service = new JwtService(properties());
         var now = Instant.now();
