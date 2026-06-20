@@ -47,6 +47,7 @@ Frontend files to create:
 
 - `frontend/src/app/auth.ts`
 - `frontend/src/app/auth.test.ts`
+- `frontend/src/app/types/auth.ts`
 - `frontend/src/app/AuthProvider.tsx`
 - `frontend/src/app/ProtectedRoute.tsx`
 - `frontend/src/app/roleRouting.ts`
@@ -235,17 +236,147 @@ create table if not exists __schema__.sales_follow_ups (
 
 Create `V6_003__create_service_tables.sql` with:
 
-- `service_types`
-- `service_fields`
-- `service_applications`
-- `service_application_booths`
-- `service_application_values`
-- `service_application_attachments`
-- `service_orders`
-- `service_order_items`
-- `service_payments`
+```sql
+create table if not exists __schema__.service_types (
+    id uuid primary key,
+    event_id uuid not null references __schema__.events(id),
+    name varchar(160) not null,
+    category varchar(40) not null,
+    target_scope varchar(40) not null,
+    open_conditions text,
+    charge_mode varchar(40) not null,
+    fixed_price numeric(14,2),
+    requires_review boolean not null default true,
+    deadline_at timestamptz,
+    enabled boolean not null default true,
+    sort_order int not null default 0,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
 
-Use `numeric(14,2)` for money and quantity fields. Include `quote_expires_at` on `service_orders`.
+create table if not exists __schema__.service_fields (
+    id uuid primary key,
+    service_type_id uuid not null references __schema__.service_types(id),
+    code varchar(100) not null,
+    label varchar(160) not null,
+    field_type varchar(40) not null,
+    required boolean not null default false,
+    placeholder varchar(300),
+    default_value text,
+    options_json text,
+    validation_json text,
+    enabled boolean not null default true,
+    sort_order int not null default 0,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    unique (service_type_id, code)
+);
+
+create table if not exists __schema__.service_applications (
+    id uuid primary key,
+    event_id uuid not null references __schema__.events(id),
+    exhibitor_id uuid not null references __schema__.exhibitors(id),
+    service_type_id uuid not null references __schema__.service_types(id),
+    order_id uuid references __schema__.participation_orders(id),
+    status varchar(40) not null,
+    reviewer_user_id uuid references __schema__.users(id),
+    reviewed_at timestamptz,
+    review_comment varchar(500),
+    supplement_reason varchar(500),
+    exhibitor_remark varchar(500),
+    submitted_at timestamptz,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+
+create table if not exists __schema__.service_application_booths (
+    id uuid primary key,
+    application_id uuid not null references __schema__.service_applications(id),
+    booth_id uuid not null references __schema__.booths(id),
+    created_at timestamptz not null,
+    unique (application_id, booth_id)
+);
+
+create table if not exists __schema__.service_application_values (
+    id uuid primary key,
+    application_id uuid not null references __schema__.service_applications(id),
+    field_code varchar(100) not null,
+    value_text text,
+    value_json jsonb,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    unique (application_id, field_code)
+);
+
+create table if not exists __schema__.service_application_attachments (
+    id uuid primary key,
+    application_id uuid not null references __schema__.service_applications(id),
+    field_code varchar(100) not null,
+    file_id varchar(160) not null,
+    file_name varchar(255) not null,
+    content_type varchar(120),
+    file_size bigint,
+    created_at timestamptz not null,
+    created_by uuid
+);
+
+create table if not exists __schema__.service_orders (
+    id uuid primary key,
+    event_id uuid not null references __schema__.events(id),
+    exhibitor_id uuid not null references __schema__.exhibitors(id),
+    service_application_id uuid not null references __schema__.service_applications(id),
+    service_type_id uuid not null references __schema__.service_types(id),
+    order_id uuid references __schema__.participation_orders(id),
+    status varchar(40) not null,
+    service_fee numeric(14,2) not null default 0,
+    discount_amount numeric(14,2) not null default 0,
+    adjustment_amount numeric(14,2) not null default 0,
+    total_amount numeric(14,2) not null,
+    confirmed_amount numeric(14,2) not null default 0,
+    quote_expires_at timestamptz,
+    void_reason varchar(500),
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+
+create table if not exists __schema__.service_order_items (
+    id uuid primary key,
+    service_order_id uuid not null references __schema__.service_orders(id),
+    item_name varchar(160) not null,
+    quantity numeric(14,2) not null,
+    unit_price numeric(14,2) not null,
+    amount numeric(14,2) not null,
+    remark varchar(500),
+    created_at timestamptz not null
+);
+
+create table if not exists __schema__.service_payments (
+    id uuid primary key,
+    service_order_id uuid not null references __schema__.service_orders(id),
+    exhibitor_id uuid not null references __schema__.exhibitors(id),
+    amount numeric(14,2) not null,
+    method varchar(40) not null,
+    payer_name varchar(160),
+    paid_at timestamptz,
+    voucher_file_id varchar(160),
+    status varchar(40) not null,
+    failure_reason varchar(500),
+    confirmed_by uuid,
+    confirmed_at timestamptz,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+```
+
+Use `numeric(14,2)` for all money and quantity fields. Include `quote_expires_at` on `service_orders`.
 
 - [ ] **Step 7: Create indexes SQL**
 
@@ -287,7 +418,15 @@ Create role/user/backfill scripts:
 - `V6_006__seed_users.sql` must not overwrite `password_hash` on conflict.
 - `V6_007__backfill_demo_data.sql` assigns `sales01` as `PRIMARY` for demo exhibitor.
 
-Use a BCrypt hash generated during implementation. Use the same demo password for all demo accounts and document it in README only if the user approves before release.
+Use one fixed BCrypt hash for all demo accounts in `V6_006__seed_users.sql`. Do not generate the hash dynamically inside SQL or Java during seeding. Add a SQL comment:
+
+```sql
+-- Default password for local demo accounts: demo123
+-- BCrypt cost: 10
+-- Hash generated once during implementation and intentionally not overwritten by ON CONFLICT.
+```
+
+The seed script must use `on conflict (username) do update` only for non-password metadata, or `do nothing`; it must never overwrite `password_hash` on repeated runs.
 
 - [ ] **Step 9: Create rollback and verify SQL**
 
@@ -361,7 +500,7 @@ In `application.yml`, add:
 ```yaml
 app:
   auth:
-    jwt-secret: ${JWT_SECRET:dev-only-please-replace-with-32-byte-secret}
+    jwt-secret: ${JWT_SECRET:dGhpcy1pcy1vbmx5LWZvci1kZXYtZW52LXBsZWFzZS1yZXBsYWNlLWluLXByb2R1Y3Rpb24=}
     jwt-expiration-seconds: ${JWT_EXPIRATION_SECONDS:28800}
     jwt-issuer: ${JWT_ISSUER:sport-expo-exhibitor-system}
     login-max-failures: ${LOGIN_MAX_FAILURES:5}
@@ -369,6 +508,7 @@ app:
 ```
 
 Implementation note: allow the dev default locally, but production profile or Render deployment must set `JWT_SECRET`.
+The default value is base64 text longer than 32 bytes and is for local development only. Add startup validation that rejects secrets shorter than 32 bytes.
 
 - [ ] **Step 3: Extend `ApiResponse` with error code**
 
@@ -430,6 +570,26 @@ Required public methods:
 ```java
 public String issueToken(User user, List<String> roles);
 public JwtPrincipal parse(String token);
+```
+
+`parse` must distinguish expired and invalid tokens:
+
+```java
+try {
+    // parse signed claims and build JwtPrincipal
+} catch (ExpiredJwtException exception) {
+    throw new AuthException("E_AUTH_TOKEN_EXPIRED", "Token expired");
+} catch (JwtException | IllegalArgumentException exception) {
+    throw new AuthException("E_AUTH_TOKEN_INVALID", "Invalid token");
+}
+```
+
+Add `AuthProperties.validateJwtSecret()` or equivalent startup validation:
+
+```java
+if (jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+    throw new IllegalStateException("JWT_SECRET must be at least 32 bytes");
+}
 ```
 
 Claims:
@@ -572,6 +732,16 @@ Behavior:
 - Exhibitor returns its own `exhibitorId`.
 - Sales returns assigned exhibitor IDs.
 - Finance and service staff are allowed for their specific service methods, not broad customer ownership.
+- Admin users must not cache full exhibitor ID lists. Treat admin scope as unrestricted and apply no exhibitor filter for admin queries.
+- Sales accessible IDs may be cached through Spring Cache.
+
+Cache implementation rule:
+
+- Use Spring Cache abstraction.
+- Default local profile may use `ConcurrentMapCacheManager`.
+- Redis can be enabled later as a cache backend without changing service code.
+- Cache name: `sales:accessible_exhibitor_ids`.
+- Cache key: sales user ID.
 
 - [ ] **Step 6: Replace demo actor reads in write paths**
 
@@ -593,7 +763,32 @@ Backend services/controllers must use current user:
 
 Keep `DemoActors` only for seed constants or tests.
 
+Migration pattern:
+
+```java
+// Before:
+UUID createdBy = DemoActors.DEMO_ADMIN_ID;
+
+// After:
+CurrentUser currentUser = currentUserService.getCurrentUser(authentication);
+UUID createdBy = currentUser.userId();
+```
+
+```java
+// Before:
+UUID exhibitorId = DemoActors.DEMO_EXHIBITOR_ID;
+
+// After:
+UUID exhibitorId = currentUserService.requireCurrentExhibitorId(authentication);
+```
+
 - [ ] **Step 7: Run security tests and existing backend tests**
+
+Test isolation rule:
+
+- Prefer transaction rollback for service tests.
+- Use `@DirtiesContext` only when a test mutates shared authentication configuration or seed users in a way that cannot be rolled back cleanly.
+- External PostgreSQL tests must use `APP_DB_SCHEMA=exhibitor_sys_test`.
 
 Run:
 
@@ -663,6 +858,40 @@ List<ExhibitorSalesAssignment> findLockedByExhibitorId(UUID exhibitorId);
 - Catch unique conflict and throw `E_SALES_ASSIGNMENT_CONFLICT`.
 - Evict `sales:accessible_exhibitor_ids:{id}` for old and new sales IDs.
 - Write audit log.
+
+Implementation order:
+
+```java
+@Transactional
+public void updateAssignments(UUID exhibitorId, SalesAssignmentRequest request, UUID actorId) {
+    List<ExhibitorSalesAssignment> existing = assignmentRepository.findLockedByExhibitorId(exhibitorId);
+    Set<UUID> oldSalesIds = existing.stream()
+            .map(ExhibitorSalesAssignment::getSalesUserId)
+            .collect(Collectors.toSet());
+
+    validatePrimaryAndCollaboratorsAreEnabledSales(request);
+
+    assignmentRepository.deleteAll(existing);
+    assignmentRepository.flush();
+
+    List<ExhibitorSalesAssignment> replacements = buildAssignments(exhibitorId, request, actorId);
+    try {
+        assignmentRepository.saveAll(replacements);
+        assignmentRepository.flush();
+    } catch (DataIntegrityViolationException exception) {
+        throw new BusinessException("Cannot assign duplicate primary sales", "E_SALES_ASSIGNMENT_CONFLICT");
+    }
+
+    Set<UUID> newSalesIds = replacements.stream()
+            .map(ExhibitorSalesAssignment::getSalesUserId)
+            .collect(Collectors.toSet());
+    evictSalesScopeCaches(oldSalesIds, newSalesIds);
+    auditService.log(actorId, "SALES_ASSIGNMENT_UPDATED", "Exhibitor", exhibitorId, Map.of(
+            "oldSalesIds", oldSalesIds,
+            "newSalesIds", newSalesIds
+    ));
+}
+```
 
 - [ ] **Step 4: Create controller**
 
@@ -759,6 +988,12 @@ Enums:
 - `ServiceFieldType`
 
 Store `openConditions` as JSON text or `varchar` array; choose JSON text if the project has no array converter.
+Use JSON text for this codebase to avoid introducing PostgreSQL array converters. Add helper methods on `ServiceType` or in the service layer:
+
+```java
+List<String> openConditionCodes();
+void setOpenConditionCodes(List<String> codes);
+```
 
 - [ ] **Step 3: Implement service type APIs**
 
@@ -863,6 +1098,42 @@ Create `ServiceOpenConditionEvaluator`:
 - `CONTRACT_EFFECTIVE`: effective contract exists for target order.
 - `PAYMENT_CONFIRMED`: target participation order is paid.
 - `BOOTH_CONFIRMED`: confirmed booth selection exists for target order/booth.
+
+Evaluator behavior:
+
+```java
+public ServiceAvailability evaluate(ServiceType serviceType, UUID exhibitorId, UUID eventId, UUID orderId) {
+    List<String> conditions = serviceType.openConditionCodes();
+    if (conditions.isEmpty()) {
+        return hasApprovedRegistration(exhibitorId, eventId)
+                ? ServiceAvailability.available()
+                : ServiceAvailability.unavailable("需先完成报名审核");
+    }
+
+    for (String condition : conditions) {
+        boolean matched = switch (condition) {
+            case "REGISTRATION_APPROVED" -> hasApprovedRegistration(exhibitorId, eventId);
+            case "ORDER_CREATED" -> hasOrder(exhibitorId, eventId);
+            case "CONTRACT_EFFECTIVE" -> hasEffectiveContract(exhibitorId, eventId, orderId);
+            case "PAYMENT_CONFIRMED" -> hasPaidOrder(exhibitorId, eventId, orderId);
+            case "BOOTH_CONFIRMED" -> hasConfirmedBooth(exhibitorId, eventId, orderId);
+            default -> false;
+        };
+        if (!matched) {
+            return ServiceAvailability.unavailable(reasonFor(condition));
+        }
+    }
+    return ServiceAvailability.available();
+}
+```
+
+Reason mapping:
+
+- `REGISTRATION_APPROVED`: `需先完成报名审核`
+- `ORDER_CREATED`: `需先创建参展订单`
+- `CONTRACT_EFFECTIVE`: `需先完成合同确认`
+- `PAYMENT_CONFIRMED`: `需先完成付款确认`
+- `BOOTH_CONFIRMED`: `需先确认展位后办理`
 
 - [ ] **Step 4: Implement field value validator**
 
@@ -995,6 +1266,41 @@ When a fixed price service application is approved:
 - If paid, set application `IN_PROGRESS`.
 - Write audit and notification.
 
+Implementation order:
+
+```java
+@Transactional
+public ServicePaymentResponse confirm(UUID paymentId, UUID actorId) {
+    ServicePayment payment = paymentRepository.findByIdForUpdate(paymentId)
+            .orElseThrow(() -> new BusinessException("Service payment not found"));
+    ServiceOrder order = serviceOrderRepository.findByIdForUpdate(payment.getServiceOrderId())
+            .orElseThrow(() -> new BusinessException("Service order not found"));
+
+    if (!"PENDING_CONFIRM".equals(payment.getStatus())) {
+        throw new BusinessException("Payment already processed", "E_PAYMENT_STATUS_CONFLICT");
+    }
+
+    payment.markConfirmed(actorId, OffsetDateTime.now());
+    BigDecimal confirmedTotal = paymentRepository.sumConfirmedAmountByServiceOrderId(order.getId());
+    order.setConfirmedAmount(confirmedTotal);
+
+    if (confirmedTotal.compareTo(order.getTotalAmount()) >= 0) {
+        order.setStatus("PAID");
+        serviceApplicationService.markInProgress(order.getServiceApplicationId(), actorId);
+    } else if (confirmedTotal.compareTo(BigDecimal.ZERO) > 0) {
+        order.setStatus("PARTIALLY_PAID");
+    }
+
+    auditService.log(actorId, "SERVICE_PAYMENT_CONFIRMED", "ServicePayment", paymentId, Map.of(
+            "amount", payment.getAmount(),
+            "confirmedTotal", confirmedTotal,
+            "serviceOrderStatus", order.getStatus()
+    ));
+    notificationService.createServicePaymentConfirmed(order);
+    return ServicePaymentResponse.from(payment);
+}
+```
+
 - [ ] **Step 6: Implement fail payment**
 
 Failure requires reason max 500 characters, sets `FAILED`, writes `SERVICE_PAYMENT_FAILED`.
@@ -1045,6 +1351,7 @@ git commit -m "feat: add service orders and payments"
 - Modify: `frontend/src/pages/LoginPage.tsx`
 - Modify: `frontend/src/app/routes.tsx`
 - Create: `frontend/src/app/auth.ts`
+- Create: `frontend/src/app/types/auth.ts`
 - Create: `frontend/src/app/AuthProvider.tsx`
 - Create: `frontend/src/app/ProtectedRoute.tsx`
 - Create: `frontend/src/app/roleRouting.ts`
@@ -1064,6 +1371,37 @@ it('keeps return path after 401', () => {});
 ```
 
 - [ ] **Step 2: Implement auth storage**
+
+Create `frontend/src/app/types/auth.ts`:
+
+```ts
+export type RoleCode =
+  | 'SYSTEM_ADMIN'
+  | 'ORGANIZER_ADMIN'
+  | 'SALES'
+  | 'FINANCE'
+  | 'SERVICE_STAFF'
+  | 'EXHIBITOR';
+
+export type CurrentUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  roles: RoleCode[];
+  exhibitorId?: string | null;
+};
+
+export type LoginRequest = {
+  username: string;
+  password: string;
+};
+
+export type LoginResponse = {
+  accessToken: string;
+  expiresAt: string;
+  user: CurrentUser;
+};
+```
 
 Create `auth.ts`:
 
@@ -1091,6 +1429,32 @@ export function clearAccessToken() {
 - On 401, clear token and redirect to `/login?returnTo=<current path>`.
 - On 403, show “无权限访问”.
 - Parse `errorCode`.
+
+Core behavior:
+
+```ts
+const token = getAccessToken();
+const response = await fetch(withApiBaseUrl(url), {
+  ...options,
+  headers: {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  },
+});
+
+if (response.status === 401) {
+  clearAccessToken();
+  const returnTo = `${window.location.pathname}${window.location.search}`;
+  window.location.assign(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+  throw new Error('未登录或登录已过期');
+}
+
+if (response.status === 403) {
+  throw new Error('无权限访问');
+}
+```
 
 - [ ] **Step 4: Implement current user provider**
 
@@ -1536,6 +1900,34 @@ Verify mobile width:
 - [ ] **Step 7: Update README smoke flow**
 
 Add sixth-round credentials and smoke flow.
+
+README content to add:
+
+```markdown
+## Sixth-round smoke flow: accounts, sales, and service center
+
+### Demo accounts
+
+| Username | Password | Role | Notes |
+| --- | --- | --- | --- |
+| admin | demo123 | SYSTEM_ADMIN | Full system administration |
+| organizer | demo123 | ORGANIZER_ADMIN | Business operations |
+| sales01 | demo123 | SALES | Assigned to demo exhibitor |
+| finance01 | demo123 | FINANCE | Payment confirmation |
+| service01 | demo123 | SERVICE_STAFF | Service review and execution |
+| exhibitor01 | demo123 | EXHIBITOR | Bound to demo exhibitor |
+
+### Flow
+
+1. Log in as `service01`, open `/admin/service-types`, and verify service types exist.
+2. Log in as `exhibitor01` on mobile width, open `/exhibitor/services`, and submit a fascia application.
+3. Log in as `service01`, open `/admin/service-applications`, and approve the fascia application.
+4. Log in as `exhibitor01`, submit a furniture rental application.
+5. Log in as `service01`, approve it and ensure a service order is created.
+6. Log in as `exhibitor01`, submit offline service payment.
+7. Log in as `finance01`, confirm service payment.
+8. Verify the service order is `PAID` and the service application is `IN_PROGRESS`.
+```
 
 - [ ] **Step 8: Final git status**
 
