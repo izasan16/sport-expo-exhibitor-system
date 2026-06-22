@@ -8,6 +8,7 @@ import com.sportexpo.exhibitor.booth.BoothService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.common.SystemActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
@@ -108,14 +109,14 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         selectionService.submit(new CreateBoothSelectionRequest(
                 order.id(), order.exhibitorId(), List.of(booth.id())));
 
-        assertThat(notificationService.list(DemoActors.DEMO_ADMIN_ID))
+        assertThat(notificationService.list(SystemActors.SYSTEM_ACTOR_ID))
                 .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_SUBMITTED))
                 .filteredOn(notification -> notification.eventId().equals(order.eventId()))
                 .filteredOn(notification -> order.id().equals(notification.relatedOrderId()))
                 .hasSize(1)
                 .first()
                 .satisfies(notification -> {
-                    assertThat(notification.recipientId()).isEqualTo(DemoActors.DEMO_ADMIN_ID);
+                    assertThat(notification.recipientId()).isEqualTo(SystemActors.SYSTEM_ACTOR_ID);
                     assertThat(notification.title()).isEqualTo("新选位申请");
                     assertThat(notification.relatedOrderId()).isEqualTo(order.id());
                 });
@@ -315,7 +316,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var pending = fixture.createExpiredPendingSelection("9.00", "STANDARD");
 
         var releasedCount = selectionService.releaseExpiredSelections(
-                java.time.OffsetDateTime.now(), DemoActors.SYSTEM_ACTOR_ID);
+                java.time.OffsetDateTime.now(), SystemActors.SYSTEM_ACTOR_ID);
 
         assertThat(releasedCount).isEqualTo(1);
         assertThat(notificationService.list(pending.exhibitorId()))
@@ -337,7 +338,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var second = fixture.createExpiredPendingSelection("9.00", "STANDARD");
 
         var releasedCount = selectionService.releaseExpiredSelections(
-                java.time.OffsetDateTime.now(), DemoActors.SYSTEM_ACTOR_ID);
+                java.time.OffsetDateTime.now(), SystemActors.SYSTEM_ACTOR_ID);
 
         assertThat(releasedCount).isGreaterThanOrEqualTo(2);
         assertThat(selectionService.list(first.orderId(), null))

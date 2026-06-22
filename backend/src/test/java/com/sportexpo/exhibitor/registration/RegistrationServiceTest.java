@@ -4,6 +4,7 @@ import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.common.SystemActors;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.sportexpo.exhibitor.eventcategory.EventCategoryService;
@@ -130,7 +131,7 @@ class RegistrationServiceTest extends TestDatabaseSupport {
         var submitted = registrationService.submit(draft.id(), DemoActors.DEMO_EXHIBITOR_ID);
 
         assertThat(submitted.status()).isEqualTo(BusinessStatuses.REGISTRATION_SUBMITTED);
-        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(DemoActors.DEMO_ADMIN_ID))
+        assertThat(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(SystemActors.SYSTEM_ACTOR_ID))
                 .anyMatch(notification -> notification.getType().equals(NotificationTypes.REGISTRATION_SUBMITTED)
                         && notification.getRelatedType().equals("Registration")
                         && notification.getRelatedId().equals(draft.id()));

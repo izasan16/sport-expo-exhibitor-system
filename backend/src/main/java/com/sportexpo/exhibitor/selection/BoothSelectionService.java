@@ -5,7 +5,7 @@ import com.sportexpo.exhibitor.booth.Booth;
 import com.sportexpo.exhibitor.booth.BoothRepository;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
-import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.common.SystemActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
@@ -154,7 +154,7 @@ public class BoothSelectionService {
 
         auditService.record(order.getEventId(), request.exhibitorId(), "BOOTH_SELECTION_SUBMIT",
                 "BoothSelection", selection.getId(), null, selection.getStatus(), "submit booth selection");
-        notificationService.create(order.getEventId(), "ADMIN", DemoActors.DEMO_ADMIN_ID,
+        notificationService.create(order.getEventId(), "ADMIN", SystemActors.SYSTEM_ACTOR_ID,
                 "新选位申请", "有展商提交了新的展位选择申请，请及时审核。",
                 NotificationTypes.SELECTION_SUBMITTED, null, null, order.getId());
         return toResponse(selection, sortedBoothIds);

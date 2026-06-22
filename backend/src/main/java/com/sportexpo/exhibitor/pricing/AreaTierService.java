@@ -2,7 +2,6 @@ package com.sportexpo.exhibitor.pricing;
 
 import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.common.BusinessException;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.pricing.dto.AreaTierResponse;
 import com.sportexpo.exhibitor.pricing.dto.CreateAreaTierRequest;
@@ -25,7 +24,7 @@ public class AreaTierService {
     }
 
     @Transactional
-    public AreaTierResponse create(CreateAreaTierRequest request) {
+    public AreaTierResponse create(CreateAreaTierRequest request, UUID actorId) {
         eventRepository.findById(request.eventId())
                 .orElseThrow(() -> new BusinessException("Event does not exist"));
         if (repository.existsByEventIdAndZoneIdAndAreaSqm(request.eventId(), request.zoneId(), request.areaSqm())) {
@@ -38,7 +37,7 @@ public class AreaTierService {
                 request.areaSqm(),
                 request.enabled()
         ));
-        auditService.record(areaTier.getEventId(), DemoActors.DEMO_ADMIN_ID, "AREA_TIER_CREATE", "AreaTier",
+        auditService.record(areaTier.getEventId(), actorId, "AREA_TIER_CREATE", "AreaTier",
                 areaTier.getId(), null, null, "create area tier");
         return toResponse(areaTier);
     }

@@ -1,5 +1,6 @@
 package com.sportexpo.exhibitor.pricing;
 
+import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
@@ -24,8 +25,10 @@ class PricingServiceTest extends TestDatabaseSupport {
     void createsTierAndPriceRuleForEvent() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
 
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        var price = priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true),
+                DemoActors.DEMO_ADMIN_ID);
+        var price = priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true),
+                DemoActors.DEMO_ADMIN_ID);
 
         assertThat(tier.areaSqm()).isEqualByComparingTo("18.00");
         assertThat(price.unitPrice()).isEqualByComparingTo("1200.00");
@@ -36,9 +39,11 @@ class PricingServiceTest extends TestDatabaseSupport {
     @Test
     void rejectsDuplicateEnabledPriceRuleForSameEventZoneAndBoothType() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true),
+                DemoActors.DEMO_ADMIN_ID);
 
-        assertThatThrownBy(() -> priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1300.00"), true)))
+        assertThatThrownBy(() -> priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1300.00"), true),
+                DemoActors.DEMO_ADMIN_ID))
                 .hasMessageContaining("Enabled price rule already exists");
     }
 }

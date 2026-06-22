@@ -3,7 +3,6 @@ package com.sportexpo.exhibitor.payment;
 import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.ParticipationOrder;
@@ -40,11 +39,6 @@ public class PaymentService {
         this.eligibilityRepository = eligibilityRepository;
         this.auditService = auditService;
         this.notificationService = notificationService;
-    }
-
-    @Transactional
-    public PaymentResponse create(CreatePaymentRequest request) {
-        return create(request, DemoActors.DEMO_EXHIBITOR_ID);
     }
 
     @Transactional
