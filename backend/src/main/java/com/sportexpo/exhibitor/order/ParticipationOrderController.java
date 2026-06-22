@@ -6,6 +6,7 @@ import com.sportexpo.exhibitor.order.dto.BatchConfirmOrdersResponse;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
 import com.sportexpo.exhibitor.security.CurrentUserService;
+import com.sportexpo.exhibitor.security.DataScopeService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -25,10 +26,13 @@ import java.util.UUID;
 public class ParticipationOrderController {
     private final ParticipationOrderService service;
     private final CurrentUserService currentUserService;
+    private final DataScopeService dataScopeService;
 
-    public ParticipationOrderController(ParticipationOrderService service, CurrentUserService currentUserService) {
+    public ParticipationOrderController(ParticipationOrderService service, CurrentUserService currentUserService,
+                                        DataScopeService dataScopeService) {
         this.service = service;
         this.currentUserService = currentUserService;
+        this.dataScopeService = dataScopeService;
     }
 
     @PostMapping
@@ -49,6 +53,7 @@ public class ParticipationOrderController {
     @PostMapping("/{orderId}/confirm")
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
     public ApiResponse<ParticipationOrderResponse> confirm(@PathVariable UUID orderId, Authentication authentication) {
+        dataScopeService.requireCanAccessExhibitorIfScoped(authentication, service.get(orderId).exhibitorId());
         return ApiResponse.ok(service.confirmSales(orderId, currentUserService.getCurrentUser(authentication).userId()));
     }
 
@@ -56,6 +61,8 @@ public class ParticipationOrderController {
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
     public ApiResponse<BatchConfirmOrdersResponse> batchConfirm(@Valid @RequestBody BatchConfirmOrdersRequest request,
                                                                 Authentication authentication) {
+        request.orderIds().forEach(orderId ->
+                dataScopeService.requireCanAccessExhibitorIfScoped(authentication, service.get(orderId).exhibitorId()));
         return ApiResponse.ok(service.batchConfirmSales(request.orderIds(), currentUserService.getCurrentUser(authentication).userId()));
     }
 
@@ -63,13 +70,23 @@ public class ParticipationOrderController {
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','SERVICE_STAFF','EXHIBITOR')")
     public ApiResponse<List<ParticipationOrderResponse>> list(@RequestParam(required = false) UUID eventId,
                                                               @RequestParam(required = false) UUID exhibitorId,
-                                                              @RequestParam(required = false) String status) {
-        return ApiResponse.ok(service.list(eventId, exhibitorId, status));
+                                                              @RequestParam(required = false) String status,
+                                                              Authentication authentication) {
+        var orders = service.list(eventId, exhibitorId, status);
+        if (!dataScopeService.isExhibitorScoped(authentication)) {
+            return ApiResponse.ok(orders);
+        }
+        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
+        return ApiResponse.ok(orders.stream()
+                .filter(order -> allowedIds.contains(order.exhibitorId()))
+                .toList());
     }
 
     @GetMapping("/{orderId}")
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','SERVICE_STAFF','EXHIBITOR')")
-    public ApiResponse<ParticipationOrderResponse> get(@PathVariable UUID orderId) {
-        return ApiResponse.ok(service.get(orderId));
+    public ApiResponse<ParticipationOrderResponse> get(@PathVariable UUID orderId, Authentication authentication) {
+        var order = service.get(orderId);
+        dataScopeService.requireCanAccessExhibitorIfScoped(authentication, order.exhibitorId());
+        return ApiResponse.ok(order);
     }
 }

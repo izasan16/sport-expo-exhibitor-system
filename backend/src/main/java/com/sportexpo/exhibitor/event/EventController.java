@@ -4,6 +4,7 @@ import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.sportexpo.exhibitor.event.dto.EventResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,11 +23,13 @@ public class EventController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
     public ApiResponse<EventResponse> create(@Valid @RequestBody CreateEventRequest request) {
         return ApiResponse.ok(service.create(request));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','SERVICE_STAFF','EXHIBITOR')")
     public ApiResponse<List<EventResponse>> list() {
         return ApiResponse.ok(service.list());
     }

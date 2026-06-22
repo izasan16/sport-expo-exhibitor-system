@@ -138,7 +138,8 @@ public class TestBusinessFixture {
                                                               String boothType) {
         var order = createPendingPaymentOrderForEvent(eventId, areaSqm, unitPrice, boothType);
         var payment = paymentService.create(new CreatePaymentRequest(
-                order.id(), order.totalAmount(), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID);
+                order.id(), order.totalAmount(), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID,
+                DemoActors.DEMO_EXHIBITOR_ID);
         paymentService.confirm(payment.id(), DemoActors.DEMO_ADMIN_ID);
         return orderService.get(order.id());
     }

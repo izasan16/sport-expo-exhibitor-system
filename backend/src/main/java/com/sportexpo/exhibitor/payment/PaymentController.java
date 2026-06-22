@@ -4,7 +4,9 @@ import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
 import com.sportexpo.exhibitor.payment.dto.FailPaymentRequest;
 import com.sportexpo.exhibitor.payment.dto.PaymentResponse;
+import com.sportexpo.exhibitor.order.ParticipationOrderService;
 import com.sportexpo.exhibitor.security.CurrentUserService;
+import com.sportexpo.exhibitor.security.DataScopeService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -24,24 +26,39 @@ import java.util.UUID;
 public class PaymentController {
     private final PaymentService service;
     private final CurrentUserService currentUserService;
+    private final DataScopeService dataScopeService;
+    private final ParticipationOrderService orderService;
 
-    public PaymentController(PaymentService service, CurrentUserService currentUserService) {
+    public PaymentController(PaymentService service, CurrentUserService currentUserService,
+                             DataScopeService dataScopeService, ParticipationOrderService orderService) {
         this.service = service;
         this.currentUserService = currentUserService;
+        this.dataScopeService = dataScopeService;
+        this.orderService = orderService;
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('EXHIBITOR')")
     public ApiResponse<PaymentResponse> create(@Valid @RequestBody CreatePaymentRequest request,
                                                Authentication authentication) {
-        return ApiResponse.ok(service.create(request, currentUserService.getCurrentUser(authentication).userId()));
+        var currentUser = currentUserService.getCurrentUser(authentication);
+        return ApiResponse.ok(service.create(request, currentUser.userId(),
+                currentUserService.requireCurrentExhibitorId(authentication)));
     }
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','FINANCE','EXHIBITOR')")
     public ApiResponse<List<PaymentResponse>> list(@RequestParam(required = false) UUID orderId,
-                                                   @RequestParam(required = false) String status) {
-        return ApiResponse.ok(service.list(orderId, status));
+                                                   @RequestParam(required = false) String status,
+                                                   Authentication authentication) {
+        var payments = service.list(orderId, status);
+        if (!dataScopeService.isExhibitorScoped(authentication)) {
+            return ApiResponse.ok(payments);
+        }
+        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
+        return ApiResponse.ok(payments.stream()
+                .filter(payment -> allowedIds.contains(orderService.get(payment.orderId()).exhibitorId()))
+                .toList());
     }
 
     @PostMapping("/{paymentId}/confirm")

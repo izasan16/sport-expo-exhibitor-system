@@ -1,7 +1,9 @@
 package com.sportexpo.exhibitor.selection;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
+import com.sportexpo.exhibitor.order.ParticipationOrderService;
 import com.sportexpo.exhibitor.security.CurrentUserService;
+import com.sportexpo.exhibitor.security.DataScopeService;
 import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
 import com.sportexpo.exhibitor.selection.dto.RejectBoothSelectionRequest;
@@ -24,15 +26,22 @@ import java.util.UUID;
 public class BoothSelectionController {
     private final BoothSelectionService service;
     private final CurrentUserService currentUserService;
+    private final DataScopeService dataScopeService;
+    private final ParticipationOrderService orderService;
 
-    public BoothSelectionController(BoothSelectionService service, CurrentUserService currentUserService) {
+    public BoothSelectionController(BoothSelectionService service, CurrentUserService currentUserService,
+                                    DataScopeService dataScopeService, ParticipationOrderService orderService) {
         this.service = service;
         this.currentUserService = currentUserService;
+        this.dataScopeService = dataScopeService;
+        this.orderService = orderService;
     }
 
     @GetMapping("/api/selection-eligibilities")
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','SERVICE_STAFF','EXHIBITOR')")
-    public ApiResponse<SelectionEligibilityResponse> eligibility(@RequestParam UUID orderId) {
+    public ApiResponse<SelectionEligibilityResponse> eligibility(@RequestParam UUID orderId,
+                                                                 Authentication authentication) {
+        dataScopeService.requireCanAccessExhibitorIfScoped(authentication, orderService.get(orderId).exhibitorId());
         return ApiResponse.ok(service.getEligibility(orderId));
     }
 
@@ -52,8 +61,16 @@ public class BoothSelectionController {
     @GetMapping("/api/booth-selections")
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','SERVICE_STAFF','EXHIBITOR')")
     public ApiResponse<List<BoothSelectionResponse>> list(@RequestParam(required = false) UUID orderId,
-                                                          @RequestParam(required = false) String status) {
-        return ApiResponse.ok(service.list(orderId, status));
+                                                          @RequestParam(required = false) String status,
+                                                          Authentication authentication) {
+        var selections = service.list(orderId, status);
+        if (!dataScopeService.isExhibitorScoped(authentication)) {
+            return ApiResponse.ok(selections);
+        }
+        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
+        return ApiResponse.ok(selections.stream()
+                .filter(selection -> allowedIds.contains(selection.exhibitorId()))
+                .toList());
     }
 
     @PostMapping("/api/booth-selections/{selectionId}/approve")

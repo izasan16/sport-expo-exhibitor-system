@@ -42,6 +42,13 @@ public class ContractService {
     }
 
     @Transactional(readOnly = true)
+    public ContractResponse get(UUID contractId) {
+        return contractRepository.findById(contractId)
+                .map(this::toResponse)
+                .orElseThrow(() -> new BusinessException("Contract does not exist"));
+    }
+
+    @Transactional(readOnly = true)
     public List<ContractVersionResponse> listVersions(UUID contractId) {
         return versionRepository.findByContractIdOrderByVersionNoAsc(contractId)
                 .stream()

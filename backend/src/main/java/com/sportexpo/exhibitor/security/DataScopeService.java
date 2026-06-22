@@ -42,6 +42,12 @@ public class DataScopeService {
         }
     }
 
+    public void requireCanAccessExhibitorIfScoped(Authentication authentication, UUID exhibitorId) {
+        if (isExhibitorScoped(authentication) && !canAccessExhibitor(authentication, exhibitorId)) {
+            throw new AccessDeniedException("Access denied for exhibitor");
+        }
+    }
+
     public Set<UUID> accessibleExhibitorIds(Authentication authentication) {
         var currentUser = currentUserService.getCurrentUser(authentication);
         if (isAdmin(currentUser)) {
@@ -54,6 +60,15 @@ public class DataScopeService {
             return salesDataScopeService.accessibleExhibitorIds(currentUser.userId());
         }
         return Set.of();
+    }
+
+    public boolean isUnrestricted(Authentication authentication) {
+        return isAdmin(currentUserService.getCurrentUser(authentication));
+    }
+
+    public boolean isExhibitorScoped(Authentication authentication) {
+        var currentUser = currentUserService.getCurrentUser(authentication);
+        return !isAdmin(currentUser) && (currentUser.hasRole("EXHIBITOR") || currentUser.hasRole("SALES"));
     }
 
     private boolean isAdmin(CurrentUser currentUser) {

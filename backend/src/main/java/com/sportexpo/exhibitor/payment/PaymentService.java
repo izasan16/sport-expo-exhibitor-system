@@ -11,6 +11,7 @@ import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
 import com.sportexpo.exhibitor.payment.dto.PaymentResponse;
 import com.sportexpo.exhibitor.selection.SelectionEligibility;
 import com.sportexpo.exhibitor.selection.SelectionEligibilityRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,9 +43,12 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponse create(CreatePaymentRequest request, UUID actorId) {
+    public PaymentResponse create(CreatePaymentRequest request, UUID actorId, UUID expectedExhibitorId) {
         var order = orderRepository.findById(request.orderId())
                 .orElseThrow(() -> new BusinessException("Participation order does not exist"));
+        if (expectedExhibitorId == null || !expectedExhibitorId.equals(order.getExhibitorId())) {
+            throw new AccessDeniedException("Access denied for order");
+        }
         if (!BusinessStatuses.ORDER_PENDING_PAYMENT.equals(order.getStatus())
                 && !BusinessStatuses.ORDER_PARTIALLY_PAID.equals(order.getStatus())) {
             throw new BusinessException("Order is not pending payment");

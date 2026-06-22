@@ -4,6 +4,7 @@ import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
 import com.sportexpo.exhibitor.registration.dto.RegistrationResponse;
 import com.sportexpo.exhibitor.security.CurrentUserService;
+import com.sportexpo.exhibitor.security.DataScopeService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,24 +25,37 @@ import com.sportexpo.exhibitor.registration.dto.RejectRegistrationRequest;
 public class RegistrationController {
     private final RegistrationService service;
     private final CurrentUserService currentUserService;
+    private final DataScopeService dataScopeService;
 
-    public RegistrationController(RegistrationService service, CurrentUserService currentUserService) {
+    public RegistrationController(RegistrationService service, CurrentUserService currentUserService,
+                                  DataScopeService dataScopeService) {
         this.service = service;
         this.currentUserService = currentUserService;
+        this.dataScopeService = dataScopeService;
     }
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','EXHIBITOR')")
     public ApiResponse<List<RegistrationResponse>> list(@RequestParam(required = false) UUID eventId,
                                                         @RequestParam(required = false) UUID exhibitorId,
-                                                        @RequestParam(required = false) String status) {
-        return ApiResponse.ok(service.list(eventId, exhibitorId, status));
+                                                        @RequestParam(required = false) String status,
+                                                        Authentication authentication) {
+        var registrations = service.list(eventId, exhibitorId, status);
+        if (!dataScopeService.isExhibitorScoped(authentication)) {
+            return ApiResponse.ok(registrations);
+        }
+        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
+        return ApiResponse.ok(registrations.stream()
+                .filter(registration -> allowedIds.contains(registration.exhibitorId()))
+                .toList());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','EXHIBITOR')")
-    public ApiResponse<RegistrationResponse> get(@PathVariable UUID id) {
-        return ApiResponse.ok(service.get(id));
+    public ApiResponse<RegistrationResponse> get(@PathVariable UUID id, Authentication authentication) {
+        var registration = service.get(id);
+        dataScopeService.requireCanAccessExhibitorIfScoped(authentication, registration.exhibitorId());
+        return ApiResponse.ok(registration);
     }
 
     @PostMapping

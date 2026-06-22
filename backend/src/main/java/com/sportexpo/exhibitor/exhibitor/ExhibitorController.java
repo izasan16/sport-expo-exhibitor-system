@@ -4,6 +4,7 @@ import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorRequest;
 import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorResponse;
 import com.sportexpo.exhibitor.security.CurrentUserService;
+import com.sportexpo.exhibitor.security.DataScopeService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,16 +23,26 @@ import java.util.UUID;
 public class ExhibitorController {
     private final ExhibitorService service;
     private final CurrentUserService currentUserService;
+    private final DataScopeService dataScopeService;
 
-    public ExhibitorController(ExhibitorService service, CurrentUserService currentUserService) {
+    public ExhibitorController(ExhibitorService service, CurrentUserService currentUserService,
+                               DataScopeService dataScopeService) {
         this.service = service;
         this.currentUserService = currentUserService;
+        this.dataScopeService = dataScopeService;
     }
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
-    public ApiResponse<List<ExhibitorResponse>> list() {
-        return ApiResponse.ok(service.list());
+    public ApiResponse<List<ExhibitorResponse>> list(Authentication authentication) {
+        var exhibitors = service.list();
+        if (dataScopeService.isUnrestricted(authentication)) {
+            return ApiResponse.ok(exhibitors);
+        }
+        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
+        return ApiResponse.ok(exhibitors.stream()
+                .filter(exhibitor -> allowedIds.contains(exhibitor.id()))
+                .toList());
     }
 
     @GetMapping("/current")
@@ -41,7 +52,7 @@ public class ExhibitorController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES') or @dataScopeService.canAccessExhibitor(authentication, #id)")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') or @dataScopeService.canAccessExhibitor(authentication, #id)")
     public ApiResponse<ExhibitorResponse> get(@PathVariable UUID id) {
         return ApiResponse.ok(service.get(id));
     }
