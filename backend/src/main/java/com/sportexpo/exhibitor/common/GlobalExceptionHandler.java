@@ -14,8 +14,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
         return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error(exception.getMessage()));
+                .status(statusFor(exception))
+                .body(ApiResponse.error(exception.getMessage(), exception.getCode()));
     }
 
     @ExceptionHandler(AuthException.class)
@@ -48,6 +48,16 @@ public class GlobalExceptionHandler {
             case AuthErrorCodes.ACCOUNT_LOCKED -> HttpStatus.LOCKED;
             case AuthErrorCodes.USER_DISABLED -> HttpStatus.FORBIDDEN;
             default -> HttpStatus.UNAUTHORIZED;
+        };
+    }
+
+    private HttpStatus statusFor(BusinessException exception) {
+        if (exception.getCode() == null) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        return switch (exception.getCode()) {
+            case "E_SALES_ASSIGNMENT_CONFLICT", "E_PAYMENT_STATUS_CONFLICT" -> HttpStatus.CONFLICT;
+            default -> HttpStatus.BAD_REQUEST;
         };
     }
 }

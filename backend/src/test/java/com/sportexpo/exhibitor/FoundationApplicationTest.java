@@ -97,8 +97,8 @@ class FoundationApplicationTest extends TestDatabaseSupport {
 
         assertThat(indexCount).isEqualTo(2);
         assertThat(countRows(schema, "roles")).isEqualTo(6);
-        assertThat(countRows(schema, "users")).isEqualTo(6);
-        assertThat(countRows(schema, "user_roles")).isEqualTo(6);
+        assertThat(demoUserCount(schema)).isEqualTo(6);
+        assertThat(demoUserRoleCount(schema)).isEqualTo(6);
         assertThat(primaryDemoSalesAssignments(schema)).isEqualTo(1);
     }
 
@@ -174,6 +174,31 @@ class FoundationApplicationTest extends TestDatabaseSupport {
                   and a.assignment_type = 'PRIMARY'
                   and u.username = 'sales01'
                 """.formatted(schema, schema), Integer.class);
+    }
+
+    private int demoUserCount(String schema) {
+        return jdbcTemplate.queryForObject("""
+                select count(*)
+                from %s.users
+                where username in ('admin', 'organizer', 'sales01', 'finance01', 'service01', 'exhibitor01')
+                """.formatted(schema), Integer.class);
+    }
+
+    private int demoUserRoleCount(String schema) {
+        return jdbcTemplate.queryForObject("""
+                select count(*)
+                from %s.user_roles ur
+                join %s.users u on u.id = ur.user_id
+                join %s.roles r on r.id = ur.role_id
+                where (u.username, r.code) in (
+                    ('admin', 'SYSTEM_ADMIN'),
+                    ('organizer', 'ORGANIZER_ADMIN'),
+                    ('sales01', 'SALES'),
+                    ('finance01', 'FINANCE'),
+                    ('service01', 'SERVICE_STAFF'),
+                    ('exhibitor01', 'EXHIBITOR')
+                )
+                """.formatted(schema, schema, schema), Integer.class);
     }
 
     private void dropSchema(String schema) {
