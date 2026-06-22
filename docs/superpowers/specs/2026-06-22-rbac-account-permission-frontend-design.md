@@ -14,6 +14,8 @@
 
 本规格用于补齐第六轮中“账号与权限前端完善”部分，并把原本偏固定角色的登录态升级为真正可用的 RBAC 产品骨架。
 
+同时，本规格用于吸收上一轮实施审计结论中与当前范围直接相关的部分，避免旧计划与新范围并存时产生口径冲突。
+
 ## 2. 本轮目标
 
 本轮目标不是只补一个登录页，而是完成以下一整套能力：
@@ -29,6 +31,29 @@
 - 前后端统一的权限编码体系。
 
 本轮完成后，系统应从“角色写死的演示系统”升级为“可以管理账号、角色、菜单和操作权限的真实产品后台”。
+
+## 2.1 与上一轮实施审计的关系
+
+针对上一轮“账号权限、销售协作与服务中心”实施结果的审计意见，本规格明确采用以下处理方式：
+
+- 审计指出“服务中心后端和服务中心前端未完成”，该判断基于上一版总计划是成立的。
+- 但服务中心相关范围已被后续决策明确延期，本规格不继续承接服务中心、服务申请、服务订单的实现责任。
+- 本规格只接管其中与当前目标直接相关的未完成部分：
+  - 登录页仍是 demo 入口，不是真实账号密码登录
+  - 前端缺少 `auth` 类型、登录态管理、角色分流和权限守卫
+  - 后台缺少用户、角色、权限资源、授权矩阵的真实产品页面
+  - README 和验收说明未同步到当前已完成能力
+
+因此，上一轮审计意见在本规格中的归类如下：
+
+| 审计项 | 处理结论 |
+| --- | --- |
+| 服务中心后端未完成 | 确认延期，不纳入本规格 |
+| 服务中心前端未完成 | 确认延期，不纳入本规格 |
+| 登录页仍非正式登录 | 纳入本规格，必须整改 |
+| 缺少 `src/app/types/auth.ts` 等前端账号能力 | 纳入本规格，必须整改 |
+| 缺少销售管理类前端页面 | 以“权限中心 + 后台账号权限产品化”为主线纳入本规格，不单独扩展服务业务页面 |
+| README 和第六轮验收未更新 | 纳入本规格收尾要求 |
 
 ## 3. 范围边界
 
@@ -54,6 +79,7 @@
 - 角色创建、编辑、复制、启停。
 - 角色授权到菜单、页面、操作。
 - 权限资源可视化查看与维护。
+- README、烟测流程和第六轮账号权限验收说明同步更新。
 
 ### 3.2 本轮不做
 
@@ -63,7 +89,14 @@
 - 自助注册、短信验证码、微信登录、单点登录。
 - 审批流式权限申请。
 - 服务中心业务前端。
+- 服务中心后端业务实现。
+- 服务申请审核、服务订单、服务付款前后端实现。
 - 财务支付接入。
+
+说明：
+
+- 上述服务中心相关项虽然在上一版总计划中存在，但已明确从当前实现轮次中拆出。
+- 本规格不再对“服务相关表已经建了但业务代码未实现”承担继续实现责任，只要求文档和后续计划口径保持一致。
 
 ## 4. 核心设计结论
 
@@ -246,12 +279,21 @@ ACTION
 - 操作：`action.admin.users.create`
 - 操作：`action.admin.users.reset-password`
 
+为保持统一命名空间，展商端如需进入权限编码体系，也使用相同规则：
+
+- `menu.exhibitor.home`
+- `page.exhibitor.orders.list`
+- `action.exhibitor.orders.create`
+
 编码规则：
 
 - 全局唯一。
 - 只使用小写字母、数字和点号。
+- 数据库存储长度上限统一为 `varchar(200)`，前后端都不得生成超过 200 字符的权限编码。
 - 前端菜单、路由守卫、按钮权限全部基于该编码判断。
 - 后端 `@PreAuthorize` 或统一鉴权组件也基于该编码判断。
+- 权限编码一旦投入使用，不通过“直接改名”做版本升级；后续扩展采用“新增编码、迁移角色授权、下线旧编码”的版本化策略。
+- 本轮后台权限中心主要维护后台权限资源；展商端编码命名空间先预留，不要求在本轮做完整展商资源树配置。
 
 ### 6.4 权限与路由关系
 
@@ -262,6 +304,41 @@ ACTION
 - 一个操作权限对应一个明确业务动作。
 
 路由不能直接写死“只有管理员能访问”，而应写成“需要某个页面权限”。
+
+### 6.5 预置角色约束
+
+系统预置角色必须明确区分于自定义角色。
+
+建议角色类型：
+
+```text
+SYSTEM
+CUSTOM
+```
+
+约束规则：
+
+- `SYSTEM_ADMIN`、`ORGANIZER_ADMIN`、`SALES`、`FINANCE`、`SERVICE_STAFF`、`EXHIBITOR` 均为 `SYSTEM` 角色。
+- 后台新建角色时只能创建 `CUSTOM` 角色，不能通过前端新建新的 `SYSTEM` 角色。
+- `SYSTEM` 角色允许调整权限，但不允许删除。
+- `CUSTOM` 角色本轮也不提供物理删除入口，只允许停用；后续若新增删除能力，必须先校验该角色下无用户引用。
+- `SYSTEM_ADMIN` 角色必须始终保留完整后台权限，不允许被改成空角色。
+
+### 6.6 权限资源初始化策略
+
+权限资源不从前端硬编码“反向写回数据库”，而采用版本化数据库种子脚本初始化。
+
+初始化来源：
+
+- `permissions` 资源由后端版本化 SQL 脚本初始化。
+- `role_permissions` 的系统默认授权由后端版本化 SQL 脚本初始化。
+- 前端 `permissionRegistry` 和 `menuRegistry` 负责消费这些稳定编码，不负责创造数据库中的初始编码。
+
+同步原则：
+
+- 新增后台菜单、页面或关键操作时，必须同步增加数据库权限资源种子和前端 registry。
+- 已存在权限资源允许通过后台页面调整名称、说明、排序和启停状态。
+- 已投入使用的权限编码不直接改名；如需重构命名空间，走新增编码 + 迁移授权 + 下线旧编码的升级流程。
 
 ## 7. 登录、鉴权与角色分流
 
@@ -333,6 +410,9 @@ EXHIBITOR
 - 切换后更新 `activeRole`。
 - 更新顶栏角色名称、当前菜单树、默认首页入口。
 - 若当前页面不在新角色权限范围内，则重定向到新角色默认首页。
+- `activeRole` 仅由前端保存到 `localStorage`，本轮后端不记录“当前工作台”状态。
+- 登录分流始终先按 `defaultRole` 或角色优先级决定。
+- 登录后的前端恢复阶段可读取上次缓存的 `activeRole`；若该角色仍属于当前用户，则自动切换到上次工作台，否则回退到默认工作台。
 
 工作台切换只影响“当前前端使用哪套菜单和导航语义”，不影响后端真实角色集合。
 
@@ -449,6 +529,14 @@ EXHIBITOR
 - 分配角色
 - 设置默认角色
 
+批量操作规则：
+
+- 如果用户管理页引入批量启用、批量禁用、批量重置密码等能力，必须为每个批量动作定义独立权限编码。
+- 批量权限不得默认复用单条操作权限，例如：
+  - `action.admin.users.enable`
+  - `action.admin.users.batch-enable`
+- 后端接口也必须按批量动作单独鉴权，不能仅靠前端按钮禁用。
+
 创建 / 编辑弹窗字段：
 
 - 用户名
@@ -503,6 +591,7 @@ EXHIBITOR
 
 - 角色名称
 - 角色编码
+- 角色类型
 - 描述
 - 状态
 
@@ -510,6 +599,7 @@ EXHIBITOR
 
 - 内置角色不可删除。
 - 角色编码全局唯一。
+- 新建角色默认且只能创建 `CUSTOM` 类型。
 - 已分配给用户的角色不可硬删除，本轮仅允许停用。
 
 ### 9.3 权限资源
@@ -678,6 +768,11 @@ PUT /api/permissions/{id}
 PUT /api/permissions/{id}/status
 ```
 
+说明：
+
+- 本轮不提供 `DELETE /api/roles/{id}`。
+- 角色删除能力被明确延期，避免与角色引用、审计追溯和系统预置角色保护规则冲突。
+
 ### 11.3 必要数据对象
 
 除已有 `users / roles / user_roles` 外，本轮需明确引入：
@@ -714,6 +809,62 @@ PUT /api/permissions/{id}/status
 
 - `permissions.code` 唯一
 - `role_permissions(role_id, permission_id)` 唯一
+
+`roles` 本轮需补充的管理字段：
+
+- `role_type`
+- `enabled`
+- `description`
+- `created_by`
+- `updated_by`
+
+### 11.5 数据库表变更清单
+
+本轮数据库结构重点变更如下：
+
+```sql
+alter table __schema__.roles
+    add column if not exists role_type varchar(20) not null default 'SYSTEM',
+    add column if not exists enabled boolean not null default true,
+    add column if not exists description varchar(500),
+    add column if not exists created_by uuid,
+    add column if not exists updated_by uuid;
+
+create table if not exists __schema__.permissions (
+    id uuid primary key,
+    code varchar(200) not null unique,
+    name varchar(160) not null,
+    resource_type varchar(40) not null,
+    module_key varchar(80) not null,
+    parent_id uuid references __schema__.permissions(id),
+    route_path varchar(255),
+    action_key varchar(160),
+    sort_order int not null default 0,
+    enabled boolean not null default true,
+    description varchar(500),
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+
+create table if not exists __schema__.role_permissions (
+    role_id uuid not null references __schema__.roles(id),
+    permission_id uuid not null references __schema__.permissions(id),
+    created_at timestamptz not null,
+    created_by uuid,
+    primary key (role_id, permission_id)
+);
+
+create index if not exists idx_permissions_parent
+    on __schema__.permissions(parent_id);
+
+create index if not exists idx_permissions_type
+    on __schema__.permissions(resource_type);
+
+create index if not exists idx_role_permissions_role
+    on __schema__.role_permissions(role_id);
+```
 
 ### 11.4 当前用户响应补充
 
@@ -768,6 +919,25 @@ PUT /api/permissions/{id}/status
 
 这样可以避免“有页面权限但菜单入口被隐藏”时出现模型矛盾。
 
+### 12.4 403 页面体验
+
+无权限页面不能只是一句“403”。
+
+建议展示内容：
+
+- 标题：`无权限访问`
+- 描述：`您没有访问此页面的权限，请联系管理员`
+- 当前角色列表
+- 当前页面所需权限编码
+- 返回按钮
+- 若存在其他可切换工作台，则展示“切换工作台”按钮
+
+要求：
+
+- 页面级无权限统一进入友好的 `403` 视图。
+- 组件级无权限不强制跳转 `403`，仍以隐藏或禁用为主。
+- `403` 页面对调试和演示有帮助，因此允许展示 `requiredPermission` 和 `currentRoles`。
+
 ## 13. 页面视觉与交互规范
 
 ### 13.1 后台桌面端
@@ -813,6 +983,42 @@ PUT /api/permissions/{id}/status
 - 资源类型切换
 - 权限树勾选
 - 保存差异提示
+
+### 13.4 前端文件结构建议
+
+建议按下列职责组织前端文件：
+
+```text
+frontend/src/
+├── app/
+│   ├── types/
+│   │   ├── auth.ts
+│   │   └── rbac.ts
+│   ├── auth.ts
+│   ├── AuthProvider.tsx
+│   ├── ProtectedRoute.tsx
+│   ├── AccessGuard.tsx
+│   ├── roleRouting.ts
+│   ├── permissionRegistry.ts
+│   └── menuRegistry.tsx
+├── pages/
+│   ├── LoginPage.tsx
+│   ├── errors/
+│   │   ├── Unauthorized401Page.tsx
+│   │   └── Forbidden403Page.tsx
+│   └── admin/
+│       ├── users/
+│       │   └── UserListPage.tsx
+│       ├── roles/
+│       │   └── RoleListPage.tsx
+│       ├── permissions/
+│       │   └── PermissionResourcePage.tsx
+│       ├── role-permissions/
+│       │   └── RolePermissionMatrixPage.tsx
+│       └── rbac/
+│           ├── rbacViewModels.ts
+│           └── rbacViewModels.test.ts
+```
 
 ## 14. 审计与安全要求
 
@@ -869,6 +1075,16 @@ PUT /api/permissions/{id}/status
 - 用户管理接口
 - 角色管理接口
 - 权限资源接口
+
+本轮不补：
+
+- `service_types`
+- `service_fields`
+- `service_applications`
+- `service_orders`
+- `service_payments`
+
+这些表继续保留在 schema 中，但仍视为“已建模、未进入本规格实现”的延期能力。
 
 ### 15.3 与现有 demo 账号兼容
 
@@ -936,6 +1152,15 @@ PUT /api/permissions/{id}/status
 7. 去掉某角色菜单权限后，重新登录不再显示该菜单。
 8. 去掉某操作权限后，按钮消失或禁用，后端接口仍拒绝直接调用。
 
+### 16.4 文档与审计验收
+
+必须额外确认：
+
+- 新 spec 已明确承接上一轮实施审计中与账号权限前端相关的问题。
+- 新 spec 已明确排除服务中心延期范围，避免误判为本轮漏做。
+- README 不再继续沿用旧的“只覆盖主链路或旧 demo 入口”的说明。
+- 第六轮对外验收说明应以“真实登录 + RBAC + 权限中心 + 多角色工作台”作为当前交付面。
+
 ## 17. 实施优先级
 
 为了保证产品闭环，本轮建议按以下顺序进入 implementation plan：
@@ -962,3 +1187,4 @@ PUT /api/permissions/{id}/status
 - 管理员可管理用户、角色、权限资源和授权矩阵。
 - 页面与按钮权限前后端口径一致。
 - 展商端接入真实登录态，但不被错误地后台化。
+- 文档层已消除“上一轮服务中心总计划尚未完成”与“当前轮次只做账号权限前端”的范围混淆。
