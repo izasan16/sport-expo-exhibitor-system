@@ -12,6 +12,8 @@ import java.util.UUID;
 import java.util.Collection;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
+    boolean existsByUsername(String username);
+
     Optional<User> findByUsername(String username);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

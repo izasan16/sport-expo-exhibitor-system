@@ -32,7 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
-    private PermissionRepository permissionRepository;
+    private final PermissionRepository permissionRepository;
 
     public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository, ObjectMapper objectMapper,
                                    PermissionRepository permissionRepository) {
@@ -82,7 +82,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             var authentication = new UsernamePasswordAuthenticationToken(
                     currentUser,
                     null,
-                    currentUser.roles().stream().map(SimpleGrantedAuthority::new).toList()
+                    toAuthorities(currentUser)
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
@@ -108,6 +108,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 user.getExhibitorId(),
                 permissions
         );
+    }
+
+    private java.util.List<SimpleGrantedAuthority> toAuthorities(CurrentUser currentUser) {
+        return java.util.stream.Stream.concat(currentUser.roles().stream(), currentUser.permissions().stream())
+                .distinct()
+                .map(SimpleGrantedAuthority::new)
+                .toList();
     }
 
     private void writeAuthError(HttpServletResponse response, AuthException exception) throws IOException {

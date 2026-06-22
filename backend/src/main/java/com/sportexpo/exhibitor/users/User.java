@@ -93,6 +93,45 @@ public class User {
         userRoles.add(new UserRole(this, role, OffsetDateTime.now()));
     }
 
+    public void updateProfile(String username, String displayName, String phone, String email, String userType,
+                              UUID exhibitorId, UUID actorId, OffsetDateTime now) {
+        this.username = username;
+        this.displayName = displayName;
+        this.phone = phone;
+        this.email = email;
+        this.userType = userType;
+        this.exhibitorId = exhibitorId;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    public void updateStatus(String status, UUID actorId, OffsetDateTime now) {
+        this.status = status;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    public void updateDefaultRole(String defaultRole, UUID actorId, OffsetDateTime now) {
+        this.defaultRole = defaultRole;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    public void replaceRoles(java.util.Collection<Role> roles) {
+        userRoles.clear();
+        var assignedAt = OffsetDateTime.now();
+        for (var role : roles) {
+            userRoles.add(new UserRole(this, role, assignedAt));
+        }
+    }
+
+    public void resetPassword(String passwordHash, UUID actorId, OffsetDateTime now) {
+        this.passwordHash = passwordHash;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+        incrementJwtVersion(now);
+    }
+
     public boolean isDisabled() {
         return !STATUS_ACTIVE.equals(status);
     }

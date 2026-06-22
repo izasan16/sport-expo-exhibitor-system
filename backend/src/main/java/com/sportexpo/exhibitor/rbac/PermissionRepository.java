@@ -6,9 +6,16 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface PermissionRepository extends JpaRepository<Permission, UUID> {
+    boolean existsByCode(String code);
+
+    Optional<Permission> findByCode(String code);
+
+    List<Permission> findAllByOrderBySortOrderAscCodeAsc();
+
     @Query("""
             select distinct permission
             from RolePermission rolePermission

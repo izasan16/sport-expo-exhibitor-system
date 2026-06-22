@@ -60,6 +60,49 @@ public class Permission {
     protected Permission() {
     }
 
+    public Permission(UUID id, String code, String name, String resourceType, String moduleKey, UUID parentId,
+                      String routePath, String actionKey, int sortOrder, boolean enabled, String description,
+                      OffsetDateTime createdAt, OffsetDateTime updatedAt, UUID createdBy, UUID updatedBy) {
+        this.id = id;
+        this.code = code;
+        this.name = name;
+        this.resourceType = resourceType;
+        this.moduleKey = moduleKey;
+        this.parentId = parentId;
+        this.routePath = routePath;
+        this.actionKey = actionKey;
+        this.sortOrder = sortOrder;
+        this.enabled = enabled;
+        this.description = description;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.createdBy = createdBy;
+        this.updatedBy = updatedBy;
+    }
+
+    public void update(String code, String name, String resourceType, String moduleKey, UUID parentId,
+                       String routePath, String actionKey, int sortOrder, boolean enabled, String description,
+                       UUID actorId, OffsetDateTime now) {
+        this.code = code;
+        this.name = name;
+        this.resourceType = resourceType;
+        this.moduleKey = moduleKey;
+        this.parentId = parentId;
+        this.routePath = routePath;
+        this.actionKey = actionKey;
+        this.sortOrder = sortOrder;
+        this.enabled = enabled;
+        this.description = description;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    public void updateStatus(boolean enabled, UUID actorId, OffsetDateTime now) {
+        this.enabled = enabled;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
     public UUID getId() { return id; }
     public String getCode() { return code; }
     public String getName() { return name; }

@@ -183,6 +183,18 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
     }
 
     @Test
+    void permissionGuardedAdminUserApisAcceptAdminButRejectSales() throws Exception {
+        mockMvc.perform(get("/api/users")
+                        .header("Authorization", "Bearer " + login("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/users")
+                        .header("Authorization", "Bearer " + login("sales01")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void exhibitorAndSalesCannotReadOtherExhibitorOrderDetail() throws Exception {
         seedOtherExhibitorGraph();
 

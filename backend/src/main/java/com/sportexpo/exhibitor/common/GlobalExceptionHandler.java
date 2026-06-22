@@ -56,7 +56,8 @@ public class GlobalExceptionHandler {
             return HttpStatus.BAD_REQUEST;
         }
         return switch (exception.getCode()) {
-            case "E_SALES_ASSIGNMENT_CONFLICT", "E_PAYMENT_STATUS_CONFLICT" -> HttpStatus.CONFLICT;
+            case "E_SALES_ASSIGNMENT_CONFLICT", "E_PAYMENT_STATUS_CONFLICT", "E_USER_USERNAME_CONFLICT",
+                 "E_ROLE_CODE_CONFLICT", "E_PERMISSION_CODE_CONFLICT" -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
         };
     }
