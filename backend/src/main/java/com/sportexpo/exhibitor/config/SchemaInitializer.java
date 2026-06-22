@@ -31,6 +31,12 @@ public class SchemaInitializer implements ApplicationRunner {
             "db/migrations/v6/V6_007__backfill_demo_data.sql"
     );
 
+    private static final List<String> V7_BASELINE_SCRIPTS = List.of(
+            "db/migrations/v7/V7_001__create_permission_tables.sql",
+            "db/migrations/v7/V7_002__seed_permission_resources.sql",
+            "db/migrations/v7/V7_003__seed_role_permissions.sql"
+    );
+
     private final JdbcTemplate jdbcTemplate;
     private final String schema;
     private final Environment environment;
@@ -60,6 +66,9 @@ public class SchemaInitializer implements ApplicationRunner {
             for (var script : V6_DEMO_SCRIPTS) {
                 executeSqlResource(script);
             }
+        }
+        for (var script : V7_BASELINE_SCRIPTS) {
+            executeSqlResource(script);
         }
     }
 

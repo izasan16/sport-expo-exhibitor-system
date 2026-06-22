@@ -103,6 +103,41 @@ class FoundationApplicationTest extends TestDatabaseSupport {
     }
 
     @Test
+    void initializesV7RbacTablesAndSeeds() {
+        var tables = jdbcTemplate.queryForList("""
+                select table_name
+                from information_schema.tables
+                where table_schema = ?
+                """, String.class, schema);
+
+        assertThat(tables).contains("permissions", "role_permissions");
+
+        var roleColumns = jdbcTemplate.queryForList("""
+                select column_name
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'roles'
+                """, String.class, schema);
+
+        assertThat(roleColumns).contains("role_type", "enabled", "description");
+
+        var permissionCodes = jdbcTemplate.queryForList("""
+                select code
+                from %s.permissions
+                order by code
+                """.formatted(schema), String.class);
+
+        assertThat(permissionCodes).contains(
+                "menu.admin.users",
+                "page.admin.users.list",
+                "action.admin.users.create",
+                "menu.admin.roles",
+                "page.admin.permissions.list",
+                "page.admin.role-permissions.matrix"
+        );
+    }
+
+    @Test
     void skipsDemoSeedScriptsWhenDemoDataIsDisabled() throws Exception {
         var isolatedSchema = uniqueSchema("foundation_no_demo");
         try {
@@ -146,6 +181,37 @@ class FoundationApplicationTest extends TestDatabaseSupport {
             assertThat(countRows(isolatedSchema, "users")).isEqualTo(6);
             assertThat(countRows(isolatedSchema, "user_roles")).isEqualTo(6);
             assertThat(primaryDemoSalesAssignments(isolatedSchema)).isEqualTo(1);
+        } finally {
+            dropSchema(isolatedSchema);
+        }
+    }
+
+    @Test
+    void v7SeedScriptsDoNotReactivateDisabledBuiltInRoles() throws Exception {
+        var isolatedSchema = uniqueSchema("foundation_v7_roles");
+        try {
+            var initializer = new SchemaInitializer(jdbcTemplate, isolatedSchema, environmentFor(isolatedSchema, true));
+            initializer.run(null);
+
+            jdbcTemplate.update("""
+                    update %s.roles
+                    set enabled = false
+                    where code = 'SALES'
+                    """.formatted(isolatedSchema));
+
+            initializer.run(null);
+
+            var salesRole = jdbcTemplate.queryForMap("""
+                    select role_type, enabled
+                    from %s.roles
+                    where code = 'SALES'
+                    """.formatted(isolatedSchema));
+
+            assertThat(salesRole)
+                    .containsEntry("role_type", "SYSTEM")
+                    .containsEntry("enabled", false);
+            assertThat(countRows(isolatedSchema, "permissions")).isPositive();
+            assertThat(countRows(isolatedSchema, "role_permissions")).isPositive();
         } finally {
             dropSchema(isolatedSchema);
         }
