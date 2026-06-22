@@ -72,14 +72,11 @@ public class ParticipationOrderController {
                                                               @RequestParam(required = false) UUID exhibitorId,
                                                               @RequestParam(required = false) String status,
                                                               Authentication authentication) {
-        var orders = service.list(eventId, exhibitorId, status);
         if (!dataScopeService.isExhibitorScoped(authentication)) {
-            return ApiResponse.ok(orders);
+            return ApiResponse.ok(service.list(eventId, exhibitorId, status));
         }
-        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
-        return ApiResponse.ok(orders.stream()
-                .filter(order -> allowedIds.contains(order.exhibitorId()))
-                .toList());
+        return ApiResponse.ok(service.listScoped(eventId, exhibitorId, status,
+                dataScopeService.accessibleExhibitorIds(authentication)));
     }
 
     @GetMapping("/{orderId}")

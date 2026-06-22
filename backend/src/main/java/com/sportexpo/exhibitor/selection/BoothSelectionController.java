@@ -63,14 +63,11 @@ public class BoothSelectionController {
     public ApiResponse<List<BoothSelectionResponse>> list(@RequestParam(required = false) UUID orderId,
                                                           @RequestParam(required = false) String status,
                                                           Authentication authentication) {
-        var selections = service.list(orderId, status);
         if (!dataScopeService.isExhibitorScoped(authentication)) {
-            return ApiResponse.ok(selections);
+            return ApiResponse.ok(service.list(orderId, status));
         }
-        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
-        return ApiResponse.ok(selections.stream()
-                .filter(selection -> allowedIds.contains(selection.exhibitorId()))
-                .toList());
+        return ApiResponse.ok(service.listScoped(orderId, status,
+                dataScopeService.accessibleExhibitorIds(authentication)));
     }
 
     @PostMapping("/api/booth-selections/{selectionId}/approve")

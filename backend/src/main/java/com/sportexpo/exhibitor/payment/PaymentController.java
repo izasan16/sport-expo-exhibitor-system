@@ -4,7 +4,6 @@ import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
 import com.sportexpo.exhibitor.payment.dto.FailPaymentRequest;
 import com.sportexpo.exhibitor.payment.dto.PaymentResponse;
-import com.sportexpo.exhibitor.order.ParticipationOrderService;
 import com.sportexpo.exhibitor.security.CurrentUserService;
 import com.sportexpo.exhibitor.security.DataScopeService;
 import jakarta.validation.Valid;
@@ -27,14 +26,12 @@ public class PaymentController {
     private final PaymentService service;
     private final CurrentUserService currentUserService;
     private final DataScopeService dataScopeService;
-    private final ParticipationOrderService orderService;
 
     public PaymentController(PaymentService service, CurrentUserService currentUserService,
-                             DataScopeService dataScopeService, ParticipationOrderService orderService) {
+                             DataScopeService dataScopeService) {
         this.service = service;
         this.currentUserService = currentUserService;
         this.dataScopeService = dataScopeService;
-        this.orderService = orderService;
     }
 
     @PostMapping
@@ -51,14 +48,11 @@ public class PaymentController {
     public ApiResponse<List<PaymentResponse>> list(@RequestParam(required = false) UUID orderId,
                                                    @RequestParam(required = false) String status,
                                                    Authentication authentication) {
-        var payments = service.list(orderId, status);
         if (!dataScopeService.isExhibitorScoped(authentication)) {
-            return ApiResponse.ok(payments);
+            return ApiResponse.ok(service.list(orderId, status));
         }
-        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
-        return ApiResponse.ok(payments.stream()
-                .filter(payment -> allowedIds.contains(orderService.get(payment.orderId()).exhibitorId()))
-                .toList());
+        return ApiResponse.ok(service.listScoped(orderId, status,
+                dataScopeService.accessibleExhibitorIds(authentication)));
     }
 
     @PostMapping("/{paymentId}/confirm")

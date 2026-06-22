@@ -17,7 +17,7 @@ public class AdminDashboardController {
     }
 
     @GetMapping("/dashboard")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','SERVICE_STAFF')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
     public ApiResponse<AdminDashboardResponse> getDashboard() {
         return ApiResponse.ok(service.getDashboard());
     }

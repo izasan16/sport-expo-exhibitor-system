@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -84,6 +85,18 @@ public class PaymentService {
     public List<PaymentResponse> list(UUID orderId, String status) {
         var payments = findPayments(orderId, status);
         return payments.stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> listScoped(UUID orderId, String status, Collection<UUID> allowedExhibitorIds) {
+        if (allowedExhibitorIds == null || allowedExhibitorIds.isEmpty()) {
+            return List.of();
+        }
+        var normalizedStatus = status == null || status.isBlank() ? null : status;
+        return paymentRepository.findByFiltersAndExhibitorIdIn(orderId, normalizedStatus, allowedExhibitorIds)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional

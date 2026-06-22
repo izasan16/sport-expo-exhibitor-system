@@ -38,14 +38,11 @@ public class ContractController {
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','EXHIBITOR')")
     public ApiResponse<List<ContractResponse>> list(@RequestParam(required = false) UUID orderId,
                                                     Authentication authentication) {
-        var contracts = service.list(orderId);
         if (!dataScopeService.isExhibitorScoped(authentication)) {
-            return ApiResponse.ok(contracts);
+            return ApiResponse.ok(service.list(orderId));
         }
-        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
-        return ApiResponse.ok(contracts.stream()
-                .filter(contract -> allowedIds.contains(orderService.get(contract.orderId()).exhibitorId()))
-                .toList());
+        return ApiResponse.ok(service.listScoped(orderId,
+                dataScopeService.accessibleExhibitorIds(authentication)));
     }
 
     @GetMapping("/{contractId}/versions")

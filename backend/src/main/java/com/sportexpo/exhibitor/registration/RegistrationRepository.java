@@ -28,6 +28,19 @@ public interface RegistrationRepository extends JpaRepository<Registration, UUID
     List<Registration> findByFilters(@Param("eventId") UUID eventId,
                                       @Param("exhibitorId") UUID exhibitorId,
                                       @Param("status") String status);
+    @Query("""
+            select registration
+            from Registration registration
+            where (:eventId is null or registration.eventId = :eventId)
+              and (:exhibitorId is null or registration.exhibitorId = :exhibitorId)
+              and (:status is null or registration.status = :status)
+              and registration.exhibitorId in :exhibitorIds
+            order by registration.updatedAt desc
+            """)
+    List<Registration> findByFiltersAndExhibitorIdIn(@Param("eventId") UUID eventId,
+                                                     @Param("exhibitorId") UUID exhibitorId,
+                                                     @Param("status") String status,
+                                                     @Param("exhibitorIds") Collection<UUID> exhibitorIds);
     List<Registration> findByEventIdAndExhibitorIdAndStatus(UUID eventId, UUID exhibitorId, String status);
     List<Registration> findByEventIdAndExhibitorId(UUID eventId, UUID exhibitorId);
     List<Registration> findByStatusOrderBySubmittedAtDesc(String status);

@@ -40,14 +40,11 @@ public class RegistrationController {
                                                         @RequestParam(required = false) UUID exhibitorId,
                                                         @RequestParam(required = false) String status,
                                                         Authentication authentication) {
-        var registrations = service.list(eventId, exhibitorId, status);
         if (!dataScopeService.isExhibitorScoped(authentication)) {
-            return ApiResponse.ok(registrations);
+            return ApiResponse.ok(service.list(eventId, exhibitorId, status));
         }
-        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
-        return ApiResponse.ok(registrations.stream()
-                .filter(registration -> allowedIds.contains(registration.exhibitorId()))
-                .toList());
+        return ApiResponse.ok(service.listScoped(eventId, exhibitorId, status,
+                dataScopeService.accessibleExhibitorIds(authentication)));
     }
 
     @GetMapping("/{id}")

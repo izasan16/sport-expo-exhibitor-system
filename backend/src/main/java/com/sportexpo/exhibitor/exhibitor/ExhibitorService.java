@@ -8,6 +8,7 @@ import com.sportexpo.exhibitor.exhibitor.dto.ExhibitorResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,6 +55,14 @@ public class ExhibitorService {
     @Transactional(readOnly = true)
     public List<ExhibitorResponse> list() {
         return repository.findAll().stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ExhibitorResponse> listByIds(Collection<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return repository.findByIdIn(ids).stream().map(this::toResponse).toList();
     }
 
     private ExhibitorResponse toResponse(Exhibitor exhibitor) {

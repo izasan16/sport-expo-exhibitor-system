@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -25,4 +26,16 @@ public interface BoothSelectionRepository extends JpaRepository<BoothSelection, 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from BoothSelection s where s.id = :id")
     Optional<BoothSelection> findByIdForUpdate(@Param("id") UUID id);
+
+    @Query("""
+            select selection
+            from BoothSelection selection
+            where (:orderId is null or selection.orderId = :orderId)
+              and (:status is null or selection.status = :status)
+              and selection.exhibitorId in :exhibitorIds
+            order by selection.createdAt desc
+            """)
+    List<BoothSelection> findByFiltersAndExhibitorIdIn(@Param("orderId") UUID orderId,
+                                                       @Param("status") String status,
+                                                       @Param("exhibitorIds") Collection<UUID> exhibitorIds);
 }

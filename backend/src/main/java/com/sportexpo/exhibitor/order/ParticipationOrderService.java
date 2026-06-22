@@ -37,6 +37,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -173,6 +174,19 @@ public class ParticipationOrderService {
     }
 
     @Transactional(readOnly = true)
+    public List<ParticipationOrderResponse> listScoped(UUID eventId, UUID exhibitorId, String status,
+                                                       Collection<UUID> allowedExhibitorIds) {
+        if (allowedExhibitorIds == null || allowedExhibitorIds.isEmpty()) {
+            return List.of();
+        }
+        return repository.findAll(orderFilters(eventId, exhibitorId, status, allowedExhibitorIds),
+                        Sort.by(Sort.Direction.DESC, "createdAt"))
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public ParticipationOrderResponse get(UUID id) {
         return repository.findById(id)
                 .map(this::toResponse)
@@ -280,6 +294,11 @@ public class ParticipationOrderService {
     }
 
     private Specification<ParticipationOrder> orderFilters(UUID eventId, UUID exhibitorId, String status) {
+        return orderFilters(eventId, exhibitorId, status, null);
+    }
+
+    private Specification<ParticipationOrder> orderFilters(UUID eventId, UUID exhibitorId, String status,
+                                                           Collection<UUID> allowedExhibitorIds) {
         return (root, query, criteriaBuilder) -> {
             var predicate = criteriaBuilder.conjunction();
             if (eventId != null) {
@@ -290,6 +309,9 @@ public class ParticipationOrderService {
             }
             if (status != null && !status.isBlank()) {
                 predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("status"), status));
+            }
+            if (allowedExhibitorIds != null) {
+                predicate = criteriaBuilder.and(predicate, root.get("exhibitorId").in(allowedExhibitorIds));
             }
             return predicate;
         };

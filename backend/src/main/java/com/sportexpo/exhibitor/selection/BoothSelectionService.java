@@ -27,6 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -294,6 +295,18 @@ public class BoothSelectionService {
                 : selectionRepository.findByOrderIdOrderByCreatedAtDesc(orderId);
         return selections.stream()
                 .filter(selection -> status == null || status.isBlank() || selection.getStatus().equals(status))
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<BoothSelectionResponse> listScoped(UUID orderId, String status, Collection<UUID> allowedExhibitorIds) {
+        if (allowedExhibitorIds == null || allowedExhibitorIds.isEmpty()) {
+            return List.of();
+        }
+        var normalizedStatus = status == null || status.isBlank() ? null : status;
+        return selectionRepository.findByFiltersAndExhibitorIdIn(orderId, normalizedStatus, allowedExhibitorIds)
+                .stream()
                 .map(this::toResponse)
                 .toList();
     }

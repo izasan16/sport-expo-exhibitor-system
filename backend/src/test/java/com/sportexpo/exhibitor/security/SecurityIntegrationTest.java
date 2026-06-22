@@ -117,6 +117,17 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
     }
 
     @Test
+    void salesAndFinanceCannotReadGlobalAdminDashboard() throws Exception {
+        mockMvc.perform(get("/api/admin/dashboard")
+                        .header("Authorization", "Bearer " + login("sales01")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/admin/dashboard")
+                        .header("Authorization", "Bearer " + login("finance01")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void exhibitorAndSalesCannotReadOtherExhibitorOrderDetail() throws Exception {
         seedOtherExhibitorGraph();
 

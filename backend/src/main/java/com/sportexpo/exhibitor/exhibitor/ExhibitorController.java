@@ -35,14 +35,10 @@ public class ExhibitorController {
     @GetMapping
     @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
     public ApiResponse<List<ExhibitorResponse>> list(Authentication authentication) {
-        var exhibitors = service.list();
         if (dataScopeService.isUnrestricted(authentication)) {
-            return ApiResponse.ok(exhibitors);
+            return ApiResponse.ok(service.list());
         }
-        var allowedIds = dataScopeService.accessibleExhibitorIds(authentication);
-        return ApiResponse.ok(exhibitors.stream()
-                .filter(exhibitor -> allowedIds.contains(exhibitor.id()))
-                .toList());
+        return ApiResponse.ok(service.listByIds(dataScopeService.accessibleExhibitorIds(authentication)));
     }
 
     @GetMapping("/current")

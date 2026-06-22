@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Value;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -165,6 +166,17 @@ public class RegistrationService {
     @Transactional(readOnly = true)
     public List<RegistrationResponse> list(UUID eventId, UUID exhibitorId, String status) {
         var registrations = repository.findByFilters(eventId, exhibitorId, status);
+        var categoryNames = loadCategoryNames(registrations);
+        return registrations.stream().map(registration -> toResponse(registration, categoryNames)).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<RegistrationResponse> listScoped(UUID eventId, UUID exhibitorId, String status,
+                                                 Collection<UUID> allowedExhibitorIds) {
+        if (allowedExhibitorIds == null || allowedExhibitorIds.isEmpty()) {
+            return List.of();
+        }
+        var registrations = repository.findByFiltersAndExhibitorIdIn(eventId, exhibitorId, status, allowedExhibitorIds);
         var categoryNames = loadCategoryNames(registrations);
         return registrations.stream().map(registration -> toResponse(registration, categoryNames)).toList();
     }

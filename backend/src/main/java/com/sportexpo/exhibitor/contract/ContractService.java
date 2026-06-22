@@ -11,6 +11,7 @@ import com.sportexpo.exhibitor.order.ParticipationOrderRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +40,17 @@ public class ContractService {
                 ? contractRepository.findAllByOrderByCreatedAtDesc()
                 : contractRepository.findByOrderIdOrderByCreatedAtDesc(orderId);
         return contracts.stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContractResponse> listScoped(UUID orderId, Collection<UUID> allowedExhibitorIds) {
+        if (allowedExhibitorIds == null || allowedExhibitorIds.isEmpty()) {
+            return List.of();
+        }
+        return contractRepository.findByOrderIdAndExhibitorIdIn(orderId, allowedExhibitorIds)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
