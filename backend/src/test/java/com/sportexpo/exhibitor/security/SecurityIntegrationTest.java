@@ -33,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class SecurityIntegrationTest extends TestDatabaseSupport {
     private static final UUID ADMIN_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000201");
+    private static final UUID DEMO_EXHIBITOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID OTHER_EVENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000991");
     private static final UUID OTHER_EXHIBITOR_ID = UUID.fromString("00000000-0000-0000-0000-000000000992");
     private static final UUID OTHER_AREA_TIER_ID = UUID.fromString("00000000-0000-0000-0000-000000000993");
@@ -43,6 +44,13 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
     private static final UUID OTHER_CONTRACT_VERSION_ID = UUID.fromString("00000000-0000-0000-0000-000000000998");
     private static final UUID OTHER_SELECTION_ID = UUID.fromString("00000000-0000-0000-0000-000000000999");
     private static final UUID OTHER_ELIGIBILITY_ID = UUID.fromString("00000000-0000-0000-0000-000000000990");
+    private static final UUID ASSIGNED_AREA_TIER_ID = UUID.fromString("00000000-0000-0000-0000-000000000981");
+    private static final UUID ASSIGNED_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000982");
+    private static final UUID ASSIGNED_PAYMENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000983");
+    private static final UUID ASSIGNED_REGISTRATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000984");
+    private static final UUID ASSIGNED_CONTRACT_ID = UUID.fromString("00000000-0000-0000-0000-000000000985");
+    private static final UUID ASSIGNED_CONTRACT_VERSION_ID = UUID.fromString("00000000-0000-0000-0000-000000000986");
+    private static final UUID ASSIGNED_SELECTION_ID = UUID.fromString("00000000-0000-0000-0000-000000000987");
 
     @Autowired
     MockMvc mockMvc;
@@ -54,6 +62,12 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
     JdbcTemplate jdbcTemplate;
     @Value("${app.db.schema}")
     String schema;
+
+    @Test
+    void healthEndpointIsPublic() throws Exception {
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk());
+    }
 
     @Test
     void businessApiWithoutTokenReturns401() throws Exception {
@@ -117,15 +131,50 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
     @Test
     void scopedListsDoNotLeakOtherExhibitorRecords() throws Exception {
         seedOtherExhibitorGraph();
+        seedAssignedExhibitorGraph();
         var exhibitorToken = login("exhibitor01");
         var salesToken = login("sales01");
 
         assertListDoesNotContain(exhibitorToken, "/api/participation-orders", OTHER_ORDER_ID);
+        assertListContains(salesToken, "/api/exhibitors", DEMO_EXHIBITOR_ID);
         assertListDoesNotContain(salesToken, "/api/exhibitors", OTHER_EXHIBITOR_ID);
         assertListDoesNotContain(exhibitorToken, "/api/registrations", OTHER_REGISTRATION_ID);
+        assertListContains(salesToken, "/api/registrations", ASSIGNED_REGISTRATION_ID);
+        assertListDoesNotContain(salesToken, "/api/registrations", OTHER_REGISTRATION_ID);
         assertListDoesNotContain(exhibitorToken, "/api/contracts", OTHER_CONTRACT_ID);
+        assertListContains(salesToken, "/api/contracts", ASSIGNED_CONTRACT_ID);
+        assertListDoesNotContain(salesToken, "/api/contracts", OTHER_CONTRACT_ID);
         assertListDoesNotContain(exhibitorToken, "/api/payments", OTHER_PAYMENT_ID);
+        assertListContains(salesToken, "/api/payments", ASSIGNED_PAYMENT_ID);
+        assertListDoesNotContain(salesToken, "/api/payments", OTHER_PAYMENT_ID);
         assertListDoesNotContain(exhibitorToken, "/api/booth-selections", OTHER_SELECTION_ID);
+        assertListContains(salesToken, "/api/booth-selections", ASSIGNED_SELECTION_ID);
+        assertListDoesNotContain(salesToken, "/api/booth-selections", OTHER_SELECTION_ID);
+    }
+
+    @Test
+    void exhibitorCannotUpdateOrSubmitAnotherExhibitorRegistration() throws Exception {
+        seedOtherExhibitorGraph();
+        var exhibitorToken = login("exhibitor01");
+
+        mockMvc.perform(post("/api/registrations/{id}/submit", OTHER_REGISTRATION_ID)
+                        .header("Authorization", "Bearer " + exhibitorToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/registrations/{id}", OTHER_REGISTRATION_ID)
+                        .header("Authorization", "Bearer " + exhibitorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "eventId": "%s",
+                                  "exhibitorId": "%s",
+                                  "category": "SPORTS_EQUIPMENT",
+                                  "contactName": "王老板",
+                                  "contactPhone": "13800000000"
+                                }
+                                """.formatted(OTHER_EVENT_ID, DEMO_EXHIBITOR_ID)))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -215,6 +264,20 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
                 .doesNotContain(id.toString());
     }
 
+    private void assertListContains(String token, String url, UUID id) throws Exception {
+        var response = mockMvc.perform(get(url)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        var data = objectMapper.readTree(response).get("data");
+        assertThat(StreamSupport.stream(data.spliterator(), false)
+                .map(node -> node.get("id").asText())
+                .toList())
+                .contains(id.toString());
+    }
+
     private void seedOtherExhibitorGraph() {
         jdbcTemplate.update("""
                 insert into %s.events(id, name, year, status, default_lock_minutes, created_at, updated_at)
@@ -295,5 +358,69 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
                 on conflict (id) do nothing
                 """.formatted(schema), OTHER_SELECTION_ID, OTHER_EVENT_ID, OTHER_ORDER_ID, OTHER_EXHIBITOR_ID,
                 BusinessStatuses.SELECTION_REJECTED, OTHER_EXHIBITOR_ID, OTHER_EXHIBITOR_ID);
+    }
+
+    private void seedAssignedExhibitorGraph() {
+        jdbcTemplate.update("""
+                insert into %s.area_tiers(id, event_id, area_sqm, enabled, created_at, updated_at)
+                values (?, ?, 18.00, true, now(), now())
+                on conflict do nothing
+                """.formatted(schema), ASSIGNED_AREA_TIER_ID, OTHER_EVENT_ID);
+        jdbcTemplate.update("""
+                insert into %s.participation_orders(
+                    id, event_id, exhibitor_id, area_tier_id, area_sqm, booth_type, status,
+                    area_fee, service_fee, discount_amount, adjustment_amount, total_amount,
+                    created_at, updated_at, created_by, updated_by
+                )
+                values (?, ?, ?, ?, 18.00, 'STANDARD', ?, 21600.00, 0.00, 0.00, 0.00, 21600.00,
+                        now(), now(), ?, ?)
+                on conflict (id) do nothing
+                """.formatted(schema), ASSIGNED_ORDER_ID, OTHER_EVENT_ID, DEMO_EXHIBITOR_ID, ASSIGNED_AREA_TIER_ID,
+                BusinessStatuses.ORDER_PENDING_PAYMENT, DEMO_EXHIBITOR_ID, DEMO_EXHIBITOR_ID);
+        jdbcTemplate.update("""
+                insert into %s.registrations(
+                    id, event_id, exhibitor_id, status, category, contact_name, contact_phone,
+                    submitted_at, reviewed_at, created_at, updated_at, created_by, updated_by
+                )
+                values (?, ?, ?, ?, 'SPORTS_EQUIPMENT', 'Assigned', '13800000000',
+                        now(), now(), now(), now(), ?, ?)
+                on conflict (id) do nothing
+                """.formatted(schema), ASSIGNED_REGISTRATION_ID, OTHER_EVENT_ID, DEMO_EXHIBITOR_ID,
+                BusinessStatuses.REGISTRATION_APPROVED, DEMO_EXHIBITOR_ID, DEMO_EXHIBITOR_ID);
+        jdbcTemplate.update("""
+                insert into %s.payments(
+                    id, event_id, order_id, amount, status, method, created_at, updated_at, created_by, updated_by
+                )
+                values (?, ?, ?, 100.00, ?, 'OFFLINE_TRANSFER', now(), now(), ?, ?)
+                on conflict (id) do nothing
+                """.formatted(schema), ASSIGNED_PAYMENT_ID, OTHER_EVENT_ID, ASSIGNED_ORDER_ID,
+                BusinessStatuses.PAYMENT_PENDING_FINANCE_CONFIRM, DEMO_EXHIBITOR_ID, DEMO_EXHIBITOR_ID);
+        jdbcTemplate.update("""
+                insert into %s.contracts(
+                    id, event_id, order_id, current_version_id, contract_no, status, created_at, updated_at,
+                    created_by, updated_by
+                )
+                values (?, ?, ?, ?, 'ASSIGNED-CONTRACT-001', ?, now(), now(), ?, ?)
+                on conflict (id) do nothing
+                """.formatted(schema), ASSIGNED_CONTRACT_ID, OTHER_EVENT_ID, ASSIGNED_ORDER_ID,
+                ASSIGNED_CONTRACT_VERSION_ID, BusinessStatuses.CONTRACT_GENERATED, DEMO_EXHIBITOR_ID, DEMO_EXHIBITOR_ID);
+        jdbcTemplate.update("""
+                insert into %s.contract_versions(
+                    id, event_id, contract_id, version_no, reason, content_snapshot, amount, area_sqm,
+                    sign_status, created_at, created_by
+                )
+                values (?, ?, ?, 1, 'security_test', '{}'::jsonb, 21600.00, 18.00, ?, now(), ?)
+                on conflict (id) do nothing
+                """.formatted(schema), ASSIGNED_CONTRACT_VERSION_ID, OTHER_EVENT_ID, ASSIGNED_CONTRACT_ID,
+                BusinessStatuses.CONTRACT_VERSION_UNSIGNED, DEMO_EXHIBITOR_ID);
+        jdbcTemplate.update("""
+                insert into %s.booth_selections(
+                    id, event_id, order_id, exhibitor_id, status, total_area_sqm,
+                    created_at, updated_at, created_by, updated_by
+                )
+                values (?, ?, ?, ?, ?, 18.00, now(), now(), ?, ?)
+                on conflict (id) do nothing
+                """.formatted(schema), ASSIGNED_SELECTION_ID, OTHER_EVENT_ID, ASSIGNED_ORDER_ID, DEMO_EXHIBITOR_ID,
+                BusinessStatuses.SELECTION_REJECTED, DEMO_EXHIBITOR_ID, DEMO_EXHIBITOR_ID);
     }
 }

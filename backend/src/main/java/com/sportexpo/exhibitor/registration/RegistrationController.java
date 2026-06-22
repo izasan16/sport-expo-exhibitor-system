@@ -71,12 +71,14 @@ public class RegistrationController {
     public ApiResponse<RegistrationResponse> update(@PathVariable UUID id, @RequestBody RegistrationRequest request,
                                                     Authentication authentication) {
         var currentUser = currentUserService.getCurrentUser(authentication);
+        dataScopeService.requireCanAccessExhibitor(authentication, service.get(id).exhibitorId());
         return ApiResponse.ok(service.update(id, scopedRequest(request, currentUser.exhibitorId()), currentUser.userId()));
     }
 
     @PostMapping("/{id}/submit")
     @PreAuthorize("hasAuthority('EXHIBITOR')")
     public ApiResponse<RegistrationResponse> submit(@PathVariable UUID id, Authentication authentication) {
+        dataScopeService.requireCanAccessExhibitor(authentication, service.get(id).exhibitorId());
         return ApiResponse.ok(service.submitOrResubmit(id, currentUserService.getCurrentUser(authentication).userId()));
     }
 

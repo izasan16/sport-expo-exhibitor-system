@@ -47,7 +47,7 @@ public class PaymentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','FINANCE','EXHIBITOR')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','EXHIBITOR')")
     public ApiResponse<List<PaymentResponse>> list(@RequestParam(required = false) UUID orderId,
                                                    @RequestParam(required = false) String status,
                                                    Authentication authentication) {
