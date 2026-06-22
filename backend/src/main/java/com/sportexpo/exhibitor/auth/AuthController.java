@@ -32,16 +32,22 @@ public class AuthController {
     @GetMapping("/api/auth/me")
     public ApiResponse<CurrentUserResponse> me(Authentication authentication) {
         var currentUser = currentUserService.getCurrentUser(authentication);
+        var sortedRoles = currentUser.roles().stream().sorted().toList();
         return ApiResponse.ok(new CurrentUserResponse(
                 currentUser.userId(),
                 currentUser.username(),
-                currentUser.roles().stream().sorted().toList(),
-                currentUser.exhibitorId()
+                currentUser.displayName(),
+                sortedRoles,
+                currentUser.defaultRole(),
+                sortedRoles,
+                currentUser.exhibitorId(),
+                currentUser.permissions().stream().sorted().toList()
         ));
     }
 
     @PostMapping("/api/auth/logout")
-    public ApiResponse<Void> logout() {
+    public ApiResponse<Void> logout(Authentication authentication) {
+        authService.logout(currentUserService.getCurrentUser(authentication).userId());
         return ApiResponse.ok(null);
     }
 }

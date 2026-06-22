@@ -9,6 +9,7 @@ public record JwtPrincipal(
         String username,
         List<String> roles,
         UUID exhibitorId,
+        int jwtVersion,
         String tokenId,
         Instant issuedAt,
         Instant expiresAt

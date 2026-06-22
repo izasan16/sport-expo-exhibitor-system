@@ -31,6 +31,7 @@ public class JwtService {
                 .subject(user.getId().toString())
                 .claim("username", user.getUsername())
                 .claim("roles", roles)
+                .claim("jwtVersion", user.getJwtVersion())
                 .id(UUID.randomUUID().toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
@@ -63,6 +64,10 @@ public class JwtService {
             if (roleValues.stream().anyMatch(role -> !(role instanceof String value) || value.isBlank())) {
                 throw invalidToken();
             }
+            var jwtVersionValue = claims.get("jwtVersion");
+            if (!(jwtVersionValue instanceof Number jwtVersionNumber)) {
+                throw invalidToken();
+            }
             var roles = roleValues.stream().map(String.class::cast).toList();
             var exhibitorId = claims.get("exhibitorId") == null
                     ? null
@@ -72,6 +77,7 @@ public class JwtService {
                     username,
                     roles,
                     exhibitorId,
+                    jwtVersionNumber.intValue(),
                     claims.getId(),
                     claims.getIssuedAt().toInstant(),
                     claims.getExpiration().toInstant()

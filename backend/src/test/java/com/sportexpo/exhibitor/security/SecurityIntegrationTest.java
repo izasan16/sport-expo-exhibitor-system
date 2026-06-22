@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -94,6 +95,60 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value(AuthErrorCodes.TOKEN_EXPIRED));
+    }
+
+    @Test
+    void lowercaseBearerSchemeIsAccepted() throws Exception {
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "bearer " + login("admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.username").value("admin"));
+    }
+
+    @Test
+    void authMeReturnsRicherCurrentUserPayloadForAdmin() throws Exception {
+        var response = mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + login("admin")))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        var data = objectMapper.readTree(response).get("data");
+        assertThat(data.get("userId").asText()).isEqualTo(ADMIN_USER_ID.toString());
+        assertThat(data.get("username").asText()).isEqualTo("admin");
+        assertThat(data.get("displayName")).as("displayName").isNotNull();
+        assertThat(data.get("defaultRole")).as("defaultRole").isNotNull();
+        assertThat(data.get("activeAvailableRoles")).as("activeAvailableRoles").isNotNull();
+        assertThat(data.get("permissions")).as("permissions").isNotNull();
+        assertThat(data.get("displayName").asText()).isEqualTo("系统管理员");
+        assertThat(data.get("defaultRole").asText()).isEqualTo("SYSTEM_ADMIN");
+        assertThat(stringValues(data.get("roles"))).containsExactly("SYSTEM_ADMIN");
+        assertThat(stringValues(data.get("activeAvailableRoles"))).containsExactly("SYSTEM_ADMIN");
+        assertThat(stringValues(data.get("permissions")))
+                .contains("menu.admin.users", "page.admin.users.list");
+    }
+
+    @Test
+    void logoutInvalidatesCurrentBearerToken() throws Exception {
+        var token = login("admin");
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("admin"));
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value(AuthErrorCodes.TOKEN_INVALID));
     }
 
     @Test
@@ -249,11 +304,17 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
 
     private String expiredAdminToken() {
         var now = Instant.now();
+        var jwtVersion = jdbcTemplate.queryForObject("""
+                select jwt_version
+                from %s.users
+                where id = ?
+                """.formatted(schema), Integer.class, ADMIN_USER_ID);
         return Jwts.builder()
                 .issuer(authProperties.getJwtIssuer())
                 .subject(ADMIN_USER_ID.toString())
                 .claim("username", "admin")
                 .claim("roles", List.of("SYSTEM_ADMIN"))
+                .claim("jwtVersion", jwtVersion)
                 .id(UUID.randomUUID().toString())
                 .issuedAt(Date.from(now.minusSeconds(120)))
                 .expiration(Date.from(now.minusSeconds(60)))
@@ -287,6 +348,12 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
                 .map(node -> node.get("id").asText())
                 .toList())
                 .contains(id.toString());
+    }
+
+    private List<String> stringValues(JsonNode arrayNode) {
+        return StreamSupport.stream(arrayNode.spliterator(), false)
+                .map(JsonNode::asText)
+                .toList();
     }
 
     private void seedOtherExhibitorGraph() {

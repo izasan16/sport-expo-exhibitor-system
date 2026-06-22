@@ -124,6 +124,11 @@ public class User {
         updatedAt = now;
     }
 
+    public void incrementJwtVersion(OffsetDateTime now) {
+        jwtVersion++;
+        updatedAt = now;
+    }
+
     public List<String> roleCodes() {
         return userRoles.stream()
                 .map(UserRole::getRole)

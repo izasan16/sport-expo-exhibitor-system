@@ -2,6 +2,7 @@ package com.sportexpo.exhibitor.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportexpo.exhibitor.common.ApiResponse;
+import com.sportexpo.exhibitor.rbac.PermissionRepository;
 import com.sportexpo.exhibitor.security.DataScopeService;
 import com.sportexpo.exhibitor.security.JwtAuthenticationFilter;
 import com.sportexpo.exhibitor.users.UserRepository;
@@ -64,8 +65,9 @@ public class SecurityConfig {
 
     @Bean
     JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository,
-                                                    ObjectMapper objectMapper) {
-        return new JwtAuthenticationFilter(jwtService, userRepository, objectMapper);
+                                                    ObjectMapper objectMapper,
+                                                    PermissionRepository permissionRepository) {
+        return new JwtAuthenticationFilter(jwtService, userRepository, objectMapper, permissionRepository);
     }
 
     @Bean

@@ -61,6 +61,13 @@ public class AuthService {
         );
     }
 
+    @Transactional
+    public void logout(java.util.UUID userId) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new AuthException(AuthErrorCodes.TOKEN_INVALID, "Invalid token"));
+        user.incrementJwtVersion(OffsetDateTime.now());
+    }
+
     private AuthException badCredentials() {
         return new AuthException(AuthErrorCodes.BAD_CREDENTIALS, "Bad credentials");
     }

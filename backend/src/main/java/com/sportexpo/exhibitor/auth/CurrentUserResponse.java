@@ -6,7 +6,11 @@ import java.util.UUID;
 public record CurrentUserResponse(
         UUID userId,
         String username,
+        String displayName,
         List<String> roles,
-        UUID exhibitorId
+        String defaultRole,
+        List<String> activeAvailableRoles,
+        UUID exhibitorId,
+        List<String> permissions
 ) {
 }
