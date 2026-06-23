@@ -300,6 +300,19 @@ class SecurityIntegrationTest extends TestDatabaseSupport {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void exhibitorCanReadAreaTiersForEventSelectionAndOrderDetail() throws Exception {
+        seedOtherExhibitorGraph();
+
+        mockMvc.perform(get("/api/area-tiers")
+                        .param("eventId", OTHER_EVENT_ID.toString())
+                        .header("Authorization", "Bearer " + login("exhibitor01")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].eventId").value(OTHER_EVENT_ID.toString()))
+                .andExpect(jsonPath("$.data[0].id").value(OTHER_AREA_TIER_ID.toString()));
+    }
+
     private String login(String username) throws Exception {
         var response = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

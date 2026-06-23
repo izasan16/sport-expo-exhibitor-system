@@ -36,7 +36,7 @@ public class AreaTierController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','EXHIBITOR')")
     public ApiResponse<List<AreaTierResponse>> list(@RequestParam UUID eventId) {
         return ApiResponse.ok(service.list(eventId));
     }
