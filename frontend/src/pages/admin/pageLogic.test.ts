@@ -4,6 +4,7 @@ import {
   buildBatchConfirmFailureItems,
   filterConfirmableSelectedKeys,
   formatNullableAdminText,
+  formatRoleLabels,
   validateRequiredAdminReason,
 } from './pageLogic';
 import type { BatchConfirmOrdersResponse } from '../../app/domain';
@@ -35,6 +36,11 @@ describe('admin page logic', () => {
   it('trims nullable admin display text before rendering it', () => {
     expect(formatNullableAdminText('  推荐 A101  ')).toBe('推荐 A101');
     expect(formatNullableAdminText('   ')).toBe('暂无');
+    expect(formatNullableAdminText('DISABLED')).toBe('DISABLED');
+  });
+
+  it('joins multiple role labels in stable order', () => {
+    expect(formatRoleLabels(['SALES', 'ORGANIZER_ADMIN'])).toBe('主办方管理员 / 销售');
   });
 
   it('keeps batch confirm ids limited to visible confirmable rows', () => {

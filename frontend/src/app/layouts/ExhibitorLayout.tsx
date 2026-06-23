@@ -2,6 +2,8 @@ import { BellOutlined, FormOutlined, HomeOutlined, LeftOutlined, OrderedListOutl
 import { Badge, Button, Space, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../AuthProvider';
+import { getWorkspacePath, hasAdminWorkspace } from '../roleRouting';
 
 type ExhibitorNavigationItem = {
   key: string;
@@ -107,6 +109,7 @@ export function getExhibitorHeaderConfig(pathname: string): ExhibitorHeaderConfi
 export default function ExhibitorLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { switchRole, user } = useAuth();
   const menuItems = getExhibitorNavigationItems();
   const selectedKey = getExhibitorSelectedNavKey(location.pathname);
   const classNames = getExhibitorShellClassNames();
@@ -130,9 +133,26 @@ export default function ExhibitorLayout() {
             <Typography.Title level={4} style={{ margin: 0 }}>{header.title}</Typography.Title>
           </div>
         </Space>
-        <Badge dot>
-          <Button shape="circle" icon={<BellOutlined />} onClick={() => navigate('/exhibitor/notifications')} />
-        </Badge>
+        <Space size={8}>
+          {user && hasAdminWorkspace(user) ? (
+            <Button
+              size="small"
+              onClick={() => {
+                const adminRole = user.activeAvailableRoles.find((role) => role !== 'EXHIBITOR');
+                if (!adminRole) {
+                  return;
+                }
+                switchRole(adminRole);
+                navigate(getWorkspacePath(adminRole));
+              }}
+            >
+              后台
+            </Button>
+          ) : null}
+          <Badge dot>
+            <Button shape="circle" icon={<BellOutlined />} onClick={() => navigate('/exhibitor/notifications')} />
+          </Badge>
+        </Space>
       </header>
       <main className={classNames.content}>
         <Outlet />

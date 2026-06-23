@@ -1,7 +1,9 @@
 import type { BatchConfirmOrdersResponse, Booth, BoothSelection, ParticipationOrder, PaymentRecord } from '../../app/domain';
 import { formatShortId } from '../../app/formatters';
+import { ROLE_LABELS } from '../../app/types/rbac';
 
 export const ADMIN_REASON_MAX_LENGTH = 500;
+const ROLE_SORT_ORDER = ['SYSTEM_ADMIN', 'ORGANIZER_ADMIN', 'FINANCE', 'SERVICE_STAFF', 'SALES', 'EXHIBITOR'];
 
 export function buildBatchConfirmFailureItems(response?: BatchConfirmOrdersResponse | null) {
   if (!response || response.failureCount <= 0) return [];
@@ -65,4 +67,24 @@ export function formatSelectionBoothNumbers(selection: Pick<BoothSelection, 'boo
 export function formatNullableAdminText(value?: string | null, fallback = '暂无') {
   const trimmed = value?.trim();
   return trimmed ? trimmed : fallback;
+}
+
+export function formatRoleLabels(roleCodes: string[]) {
+  return [...new Set(roleCodes)]
+    .sort((left, right) => {
+      const leftOrder = ROLE_SORT_ORDER.indexOf(left);
+      const rightOrder = ROLE_SORT_ORDER.indexOf(right);
+      if (leftOrder === -1 && rightOrder === -1) {
+        return left.localeCompare(right);
+      }
+      if (leftOrder === -1) {
+        return 1;
+      }
+      if (rightOrder === -1) {
+        return -1;
+      }
+      return leftOrder - rightOrder;
+    })
+    .map((code) => ROLE_LABELS[code as keyof typeof ROLE_LABELS] ?? code)
+    .join(' / ');
 }

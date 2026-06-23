@@ -130,10 +130,41 @@ Exhibitor:
 Admin:
 
 - `/admin/dashboard` - pending work dashboard
+- `/admin/users` - user management
+- `/admin/roles` - role management
+- `/admin/permissions` - permission resources
+- `/admin/role-permissions` - role permission matrix
 - `/admin/orders` - order review list
 - `/admin/orders/{orderId}` - order detail
 - `/admin/payments` - payment confirmation
 - `/admin/selections` - booth selection review
+
+## RBAC smoke flow
+
+Demo accounts:
+
+| Username | Password | Expected landing |
+| --- | --- | --- |
+| `admin` | `demo123` | `/admin/dashboard` |
+| `organizer` | `demo123` | `/admin/dashboard` |
+| `sales01` | `demo123` | `/admin/dashboard` |
+| `finance01` | `demo123` | `/admin/dashboard` |
+| `service01` | `demo123` | `/admin/dashboard` |
+| `exhibitor01` | `demo123` | `/exhibitor` |
+
+Verify this flow after starting backend and frontend:
+
+```text
+1. Open /login and sign in with admin.
+2. Confirm the admin shell shows 用户管理 / 角色管理 / 权限资源 / 授权矩阵.
+3. Open /admin/users and confirm friendly user type labels and exhibitor names are shown.
+4. Open /admin/roles and verify create / copy / status actions render under role permissions.
+5. Open /admin/permissions and verify the resource tree and table load together.
+6. Open /admin/role-permissions and verify selecting a role loads its permission tree.
+7. Sign out and sign in with exhibitor01, then confirm landing on /exhibitor.
+8. For a multi-role account, switch workbenches from the shell without logging out.
+9. Visit a page without page permission and confirm the app lands on /403.
+```
 
 ## Second-round business smoke flow
 

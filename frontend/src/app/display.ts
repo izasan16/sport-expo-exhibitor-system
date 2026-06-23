@@ -1,6 +1,7 @@
 import { DEMO_EXHIBITOR_ID } from './demoActors';
 import type { EventCategory, ExhibitorStatus, RegistrationStatus } from './domain';
 import { formatArea, formatShortId } from './formatters';
+import { ROLE_LABELS } from './types/rbac';
 
 export type EventLookupSource = {
   id: string;
@@ -84,6 +85,11 @@ export function formatRegistrationStatus(status: RegistrationStatus | string | n
 export function formatExhibitorStatus(status: ExhibitorStatus | string | null | undefined) {
   if (!status) return '-';
   return exhibitorStatusLabels[status as ExhibitorStatus] ?? status;
+}
+
+export function formatRoleDisplay(roleCode: string | null | undefined) {
+  if (!roleCode) return '-';
+  return ROLE_LABELS[roleCode as keyof typeof ROLE_LABELS] ?? roleCode;
 }
 
 export function formatEventCategoryDisplay(category: Pick<EventCategory, 'code' | 'name'> | null | undefined) {

@@ -9,6 +9,7 @@ import {
   formatExhibitorDisplay,
   formatExhibitorStatus,
   formatPaymentMethod,
+  formatRoleDisplay,
   formatRegistrationStatus,
   formatSupportedPaymentMethod,
 } from './display';
@@ -66,5 +67,12 @@ describe('business display helpers', () => {
     expect(formatExhibitorStatus('SUSPENDED')).toBe('已停用');
     expect(formatEventCategoryDisplay({ code: 'SPORTS', name: '体育用品' })).toBe('体育用品（SPORTS）');
     expect(formatEventCategoryDisplay(undefined)).toBe('-');
+  });
+
+  it('formats role codes into readable workspace labels', () => {
+    expect(formatRoleDisplay('SYSTEM_ADMIN')).toBe('系统管理员');
+    expect(formatRoleDisplay('EXHIBITOR')).toBe('展商');
+    expect(formatRoleDisplay('UNKNOWN_ROLE')).toBe('UNKNOWN_ROLE');
+    expect(formatRoleDisplay(null)).toBe('-');
   });
 });
