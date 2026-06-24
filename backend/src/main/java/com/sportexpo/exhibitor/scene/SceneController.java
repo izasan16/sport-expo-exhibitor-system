@@ -2,15 +2,19 @@ package com.sportexpo.exhibitor.scene;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.file.LocalFileStorageService;
 import com.sportexpo.exhibitor.scene.dto.PublishSceneRequest;
 import com.sportexpo.exhibitor.scene.dto.PublishedSceneBoothResponse;
 import com.sportexpo.exhibitor.scene.dto.PublishedSceneResponse;
 import com.sportexpo.exhibitor.scene.dto.SaveSceneBackgroundRequest;
 import com.sportexpo.exhibitor.scene.dto.SaveSceneDraftRequest;
+import com.sportexpo.exhibitor.scene.dto.SceneConversionJobResponse;
 import com.sportexpo.exhibitor.scene.dto.SceneDraftResponse;
 import com.sportexpo.exhibitor.scene.dto.SceneRevisionResponse;
+import com.sportexpo.exhibitor.scene.dto.SceneSourceFileResponse;
 import com.sportexpo.exhibitor.scene.dto.SceneValidationResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,7 +22,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 import java.util.List;
@@ -30,14 +36,20 @@ public class SceneController {
     private final SceneEditorService editorService;
     private final ScenePublishService publishService;
     private final SceneValidationService validationService;
+    private final LocalFileStorageService fileStorageService;
+    private final SceneCadConversionService cadConversionService;
 
     public SceneController(SceneQueryService queryService, SceneEditorService editorService,
                            ScenePublishService publishService,
-                           SceneValidationService validationService) {
+                           SceneValidationService validationService,
+                           LocalFileStorageService fileStorageService,
+                           SceneCadConversionService cadConversionService) {
         this.queryService = queryService;
         this.editorService = editorService;
         this.publishService = publishService;
         this.validationService = validationService;
+        this.fileStorageService = fileStorageService;
+        this.cadConversionService = cadConversionService;
     }
 
     @GetMapping
@@ -77,6 +89,29 @@ public class SceneController {
     @GetMapping("/revisions")
     public ApiResponse<List<SceneRevisionResponse>> getRevisions(@PathVariable UUID eventId) {
         return ApiResponse.ok(queryService.getRevisions(eventId));
+    }
+
+    @PostMapping(value = "/source-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<SceneSourceFileResponse> uploadSourceFile(@PathVariable UUID eventId,
+                                                                 @RequestPart("file") MultipartFile file) {
+        var draft = queryService.getDraft(eventId, DemoActors.DEMO_ADMIN_ID);
+        var storedFile = fileStorageService.store(file, DemoActors.DEMO_ADMIN_ID);
+        return ApiResponse.ok(cadConversionService.registerCadSource(
+                eventId,
+                draft.sceneId(),
+                draft.revisionId(),
+                storedFile.originalName(),
+                storedFile.mimeType(),
+                storedFile.fileSize(),
+                storedFile.fileId(),
+                DemoActors.DEMO_ADMIN_ID
+        ));
+    }
+
+    @GetMapping("/conversion-jobs/{jobId}")
+    public ApiResponse<SceneConversionJobResponse> getConversionJob(@PathVariable UUID eventId,
+                                                                    @PathVariable UUID jobId) {
+        return ApiResponse.ok(cadConversionService.getJob(eventId, jobId));
     }
 
     @GetMapping("/revisions/{revisionId}")
