@@ -94,12 +94,12 @@ public class SceneController {
     @PostMapping(value = "/source-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<SceneSourceFileResponse> uploadSourceFile(@PathVariable UUID eventId,
                                                                  @RequestPart("file") MultipartFile file) {
-        var draft = queryService.getDraft(eventId, DemoActors.DEMO_ADMIN_ID);
+        var draftTarget = editorService.getDraftTarget(eventId, DemoActors.DEMO_ADMIN_ID);
         var storedFile = fileStorageService.store(file, DemoActors.DEMO_ADMIN_ID);
         return ApiResponse.ok(cadConversionService.registerCadSource(
                 eventId,
-                draft.sceneId(),
-                draft.revisionId(),
+                draftTarget.sceneId(),
+                draftTarget.revisionId(),
                 storedFile.originalName(),
                 storedFile.mimeType(),
                 storedFile.fileSize(),

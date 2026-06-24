@@ -26,6 +26,9 @@ class SceneCadConversionServiceTest extends TestDatabaseSupport {
     private SceneQueryService queryService;
 
     @Autowired
+    private SceneEditorService sceneEditorService;
+
+    @Autowired
     private SceneCadConversionService sceneCadConversionService;
 
     @Autowired
@@ -54,11 +57,13 @@ class SceneCadConversionServiceTest extends TestDatabaseSupport {
                 DemoActors.DEMO_ADMIN_ID
         );
 
-        var sourceFile = sceneSourceFileRepository.findById(response.id()).orElseThrow();
-        var job = sceneConversionJobRepository.findById(response.job().id()).orElseThrow();
+        var sourceFile = sceneSourceFileRepository.findById(response.sourceFileId()).orElseThrow();
+        var job = sceneConversionJobRepository.findById(response.job().jobId()).orElseThrow();
 
         assertThat(response.sourceFormat()).isEqualTo("DXF");
+        assertThat(response.sourceFileId()).isEqualTo(sourceFile.getId());
         assertThat(response.job().jobStatus()).isEqualTo("PENDING");
+        assertThat(response.job().jobId()).isEqualTo(job.getId());
         assertThat(sourceFile.getSceneId()).isEqualTo(draft.sceneId());
         assertThat(sourceFile.getSceneRevisionId()).isEqualTo(draft.revisionId());
         assertThat(sourceFile.getStoredFileId()).isEqualTo(storedFile.getId());
@@ -87,7 +92,7 @@ class SceneCadConversionServiceTest extends TestDatabaseSupport {
         );
 
         assertThat(response.sourceFormat()).isEqualTo("DWG");
-        assertThat(sceneSourceFileRepository.findById(response.id()).orElseThrow().getSourceFormat()).isEqualTo("DWG");
+        assertThat(sceneSourceFileRepository.findById(response.sourceFileId()).orElseThrow().getSourceFormat()).isEqualTo("DWG");
     }
 
     @Test
@@ -108,6 +113,17 @@ class SceneCadConversionServiceTest extends TestDatabaseSupport {
         ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("Only DWG and DXF files are supported");
+    }
+
+    @Test
+    void draftTargetCreatesAndReturnsCurrentDraftIdentifiers() {
+        var event = eventService.create(new CreateEventRequest("草稿目标测试展会", 2035, "SCENE_DRIVEN", true));
+
+        var draftTarget = sceneEditorService.getDraftTarget(event.id(), DemoActors.DEMO_ADMIN_ID);
+        var draft = queryService.getDraft(event.id(), DemoActors.DEMO_ADMIN_ID);
+
+        assertThat(draftTarget.sceneId()).isEqualTo(draft.sceneId());
+        assertThat(draftTarget.revisionId()).isEqualTo(draft.revisionId());
     }
 
     private StoredFile createStoredFile(String originalName, String mimeType, long fileSize) {

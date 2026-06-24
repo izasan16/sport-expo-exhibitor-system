@@ -109,15 +109,9 @@ public class SceneCadConversionService {
     private SceneSourceFileResponse toResponse(SceneSourceFile sourceFile, SceneConversionJob job) {
         return new SceneSourceFileResponse(
                 sourceFile.getId(),
-                sourceFile.getSceneId(),
-                sourceFile.getSceneRevisionId(),
-                sourceFile.getStoredFileId(),
                 sourceFile.getSourceFormat(),
                 sourceFile.getOriginalName(),
-                sourceFile.getFileSize(),
-                sourceFile.getUploadStatus(),
                 sourceFile.getCreatedAt(),
-                sourceFile.getCreatedBy(),
                 toResponse(job)
         );
     }
@@ -125,8 +119,6 @@ public class SceneCadConversionService {
     private SceneConversionJobResponse toResponse(SceneConversionJob job) {
         return new SceneConversionJobResponse(
                 job.getId(),
-                job.getSceneId(),
-                job.getSceneRevisionId(),
                 job.getSourceFileId(),
                 job.getJobStatus(),
                 job.getTargetFormat(),

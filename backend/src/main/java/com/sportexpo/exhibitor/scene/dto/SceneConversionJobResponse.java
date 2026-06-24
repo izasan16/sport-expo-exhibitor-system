@@ -4,9 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record SceneConversionJobResponse(
-        UUID id,
-        UUID sceneId,
-        UUID sceneRevisionId,
+        UUID jobId,
         UUID sourceFileId,
         String jobStatus,
         String targetFormat,

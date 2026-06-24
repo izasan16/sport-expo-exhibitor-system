@@ -37,19 +37,25 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
                         .file(new MockMultipartFile("file", "hall-plan.dxf", "application/dxf", "dxf-content".getBytes()))
                         .contentType(MULTIPART_FORM_DATA))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sourceFileId").isNotEmpty())
                 .andExpect(jsonPath("$.data.sourceFormat").value("DXF"))
+                .andExpect(jsonPath("$.data.originalName").value("hall-plan.dxf"))
+                .andExpect(jsonPath("$.data.id").doesNotExist())
+                .andExpect(jsonPath("$.data.job.jobId").isNotEmpty())
                 .andExpect(jsonPath("$.data.job.jobStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.job.id").doesNotExist())
                 .andReturn();
 
         var jobId = objectMapper.readTree(uploadResponse.getResponse().getContentAsString())
                 .path("data")
                 .path("job")
-                .path("id")
+                .path("jobId")
                 .asText();
 
         mockMvc.perform(get("/api/events/{eventId}/scene/conversion-jobs/{jobId}", event.id(), jobId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value(jobId))
+                .andExpect(jsonPath("$.data.jobId").value(jobId))
+                .andExpect(jsonPath("$.data.id").doesNotExist())
                 .andExpect(jsonPath("$.data.jobStatus").value("PENDING"));
     }
 }
