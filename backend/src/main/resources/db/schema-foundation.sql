@@ -94,6 +94,12 @@ create table if not exists __schema__.venue_scenes (
     updated_by uuid
 );
 
+alter table __schema__.venue_scenes
+    add column if not exists published_background_visible_to_sales boolean not null default true;
+
+alter table __schema__.venue_scenes
+    add column if not exists published_background_visible_to_exhibitor boolean not null default false;
+
 create table if not exists __schema__.scene_revisions (
     id uuid primary key,
     scene_id uuid not null references __schema__.venue_scenes(id),
@@ -162,6 +168,46 @@ create table if not exists __schema__.scene_background_assets (
     created_by uuid,
     updated_by uuid,
     unique(scene_revision_id)
+);
+
+alter table __schema__.scene_background_assets
+    add column if not exists render_format varchar(40) not null default 'SVG';
+
+alter table __schema__.scene_background_assets
+    add column if not exists rotation_deg numeric(10,4) not null default 0;
+
+alter table __schema__.scene_background_assets
+    add column if not exists visible boolean not null default true;
+
+alter table __schema__.scene_background_assets
+    add column if not exists z_index int not null default 0;
+
+create table if not exists __schema__.scene_source_files (
+    id uuid primary key,
+    scene_id uuid not null references __schema__.venue_scenes(id),
+    scene_revision_id uuid not null references __schema__.scene_revisions(id),
+    file_id uuid not null references __schema__.stored_files(id),
+    source_format varchar(20) not null,
+    original_name varchar(255) not null,
+    file_size bigint not null,
+    upload_status varchar(40) not null,
+    created_at timestamptz not null,
+    created_by uuid
+);
+
+create table if not exists __schema__.scene_conversion_jobs (
+    id uuid primary key,
+    scene_id uuid not null references __schema__.venue_scenes(id),
+    scene_revision_id uuid not null references __schema__.scene_revisions(id),
+    source_file_id uuid not null references __schema__.scene_source_files(id),
+    job_status varchar(40) not null,
+    target_format varchar(40) not null,
+    result_file_id uuid references __schema__.stored_files(id),
+    error_code varchar(80),
+    error_message varchar(500),
+    started_at timestamptz,
+    finished_at timestamptz,
+    created_at timestamptz not null
 );
 
 create table if not exists __schema__.registrations (
@@ -475,6 +521,10 @@ create index if not exists idx_scene_features_revision_type
     on __schema__.scene_features(scene_revision_id, feature_type, layer_order);
 create index if not exists idx_scene_background_assets_revision
     on __schema__.scene_background_assets(scene_revision_id);
+create index if not exists idx_scene_source_files_scene_revision
+    on __schema__.scene_source_files(scene_revision_id);
+create index if not exists idx_scene_conversion_jobs_scene_revision
+    on __schema__.scene_conversion_jobs(scene_revision_id);
 create index if not exists idx_stored_files_created_at
     on __schema__.stored_files(created_at desc);
 create index if not exists idx_booth_scene_bindings_event_revision

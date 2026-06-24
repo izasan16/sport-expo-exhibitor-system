@@ -78,4 +78,35 @@ class FoundationApplicationTest extends TestDatabaseSupport {
         assertThat(sceneTables).isEqualTo(7);
         assertThat(eventColumns).isEqualTo(2);
     }
+
+    @Test
+    void createsCadConversionTablesAndReferenceLayerColumns() {
+        var cadConversionTables = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.tables
+                where table_schema = ?
+                  and table_name in ('scene_source_files', 'scene_conversion_jobs')
+                """, Integer.class, schema);
+
+        var backgroundAssetColumns = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'scene_background_assets'
+                  and column_name in ('render_format', 'rotation_deg', 'visible', 'z_index')
+                """, Integer.class, schema);
+
+        var sceneVisibilityColumns = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'venue_scenes'
+                  and column_name in ('published_background_visible_to_sales',
+                                      'published_background_visible_to_exhibitor')
+                """, Integer.class, schema);
+
+        assertThat(cadConversionTables).isEqualTo(2);
+        assertThat(backgroundAssetColumns).isEqualTo(4);
+        assertThat(sceneVisibilityColumns).isEqualTo(2);
+    }
 }

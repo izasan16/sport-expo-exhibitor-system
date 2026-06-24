@@ -30,6 +30,13 @@ app:
   file-storage:
     root-path: ${APP_FILE_STORAGE_ROOT:./tmp/uploads}
     public-prefix: ${APP_FILE_STORAGE_PUBLIC_PREFIX:/uploads}
+  scene:
+    cad:
+      dwg-enabled: ${APP_SCENE_CAD_DWG_ENABLED:true}
+      dxf-enabled: ${APP_SCENE_CAD_DXF_ENABLED:true}
+      converter-target-format: SVG
+      work-dir: ${APP_SCENE_CAD_WORK_DIR:${user.dir}/tmp/cad}
+      external-command: ${APP_SCENE_CAD_EXTERNAL_COMMAND:}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
 server:
