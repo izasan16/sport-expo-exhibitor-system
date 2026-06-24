@@ -46,18 +46,19 @@ public class SceneCadConversionService {
         var scene = sceneRepository.findById(sceneId)
                 .filter(item -> eventId.equals(item.getEventId()))
                 .orElseThrow(() -> new BusinessException("Scene does not exist"));
-        revisionRepository.findById(revisionId)
+        var revision = revisionRepository.findById(revisionId)
                 .filter(item -> scene.getId().equals(item.getSceneId()))
                 .orElseThrow(() -> new BusinessException("Scene revision does not exist"));
+        requireCurrentDraftRevision(scene.getId(), revision.getId());
         storedFileRepository.findById(storedFileId)
                 .orElseThrow(() -> new BusinessException("Scene source file does not exist"));
 
-        var sourceFormat = normalizeSourceFormat(originalName);
+        var sourceFormat = requireSupportedSourceFormat(originalName);
         var now = OffsetDateTime.now();
         var sourceFile = sceneSourceFileRepository.save(new SceneSourceFile(
                 UUID.randomUUID(),
                 scene.getId(),
-                revisionId,
+                revision.getId(),
                 storedFileId,
                 sourceFormat,
                 originalName,
@@ -69,7 +70,7 @@ public class SceneCadConversionService {
         var job = sceneConversionJobRepository.save(new SceneConversionJob(
                 UUID.randomUUID(),
                 scene.getId(),
-                revisionId,
+                revision.getId(),
                 sourceFile.getId(),
                 "PENDING",
                 targetFormat,
@@ -94,7 +95,7 @@ public class SceneCadConversionService {
         return toResponse(job);
     }
 
-    private String normalizeSourceFormat(String originalName) {
+    String requireSupportedSourceFormat(String originalName) {
         var extension = StringUtils.getFilenameExtension(originalName);
         if (extension == null) {
             throw new BusinessException("Only DWG and DXF files are supported");
@@ -104,6 +105,14 @@ public class SceneCadConversionService {
             case "dwg" -> "DWG";
             default -> throw new BusinessException("Only DWG and DXF files are supported");
         };
+    }
+
+    private void requireCurrentDraftRevision(UUID sceneId, UUID revisionId) {
+        var currentDraft = revisionRepository.findFirstBySceneIdAndStatusOrderByRevisionNoDesc(sceneId, "DRAFT")
+                .orElseThrow(() -> new BusinessException("Scene revision is not the current draft"));
+        if (!currentDraft.getId().equals(revisionId)) {
+            throw new BusinessException("Scene revision is not the current draft");
+        }
     }
 
     private SceneSourceFileResponse toResponse(SceneSourceFile sourceFile, SceneConversionJob job) {

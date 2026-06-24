@@ -1,5 +1,6 @@
 package com.sportexpo.exhibitor.scene;
 
+import com.sportexpo.exhibitor.TestBusinessFixture;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.DemoActors;
@@ -7,6 +8,7 @@ import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.sportexpo.exhibitor.file.StoredFile;
 import com.sportexpo.exhibitor.file.StoredFileRepository;
+import com.sportexpo.exhibitor.scene.dto.PublishSceneRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +31,9 @@ class SceneCadConversionServiceTest extends TestDatabaseSupport {
     private SceneEditorService sceneEditorService;
 
     @Autowired
+    private ScenePublishService scenePublishService;
+
+    @Autowired
     private SceneCadConversionService sceneCadConversionService;
 
     @Autowired
@@ -39,6 +44,9 @@ class SceneCadConversionServiceTest extends TestDatabaseSupport {
 
     @Autowired
     private StoredFileRepository storedFileRepository;
+
+    @Autowired
+    private TestBusinessFixture fixture;
 
     @Test
     void registersDxfSourceFileAndCreatesPendingConversionJob() {
@@ -124,6 +132,29 @@ class SceneCadConversionServiceTest extends TestDatabaseSupport {
 
         assertThat(draftTarget.sceneId()).isEqualTo(draft.sceneId());
         assertThat(draftTarget.revisionId()).isEqualTo(draft.revisionId());
+    }
+
+    @Test
+    void rejectsRegistrationForPublishedOrStaleRevision() {
+        var event = eventService.create(new CreateEventRequest("过期修订测试展会", 2036, "SCENE_DRIVEN", true));
+        var originalDraft = sceneEditorService.saveDraft(event.id(), fixture.sceneDraftWithTwoBooths(), DemoActors.DEMO_ADMIN_ID);
+        scenePublishService.publishDraft(event.id(), new PublishSceneRequest("首次发布"), DemoActors.DEMO_ADMIN_ID);
+        var currentDraft = queryService.getDraft(event.id(), DemoActors.DEMO_ADMIN_ID);
+        var storedFile = createStoredFile("hall-plan.dxf", "application/dxf", 1024L);
+
+        assertThat(currentDraft.revisionId()).isNotEqualTo(originalDraft.revisionId());
+        assertThatThrownBy(() -> sceneCadConversionService.registerCadSource(
+                event.id(),
+                originalDraft.sceneId(),
+                originalDraft.revisionId(),
+                storedFile.getOriginalName(),
+                storedFile.getMimeType(),
+                storedFile.getFileSize(),
+                storedFile.getId(),
+                DemoActors.DEMO_ADMIN_ID
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Scene revision is not the current draft");
     }
 
     private StoredFile createStoredFile(String originalName, String mimeType, long fileSize) {

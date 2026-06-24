@@ -4,16 +4,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
+import com.sportexpo.exhibitor.file.StoredFileRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.stream.Stream;
+
 import static org.springframework.http.MediaType.MULTIPART_FORM_DATA;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -28,6 +36,12 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private StoredFileRepository storedFileRepository;
+
+    @Value("${app.file-storage.root-path}")
+    private String rootPath;
 
     @Test
     void adminCanUploadCadFileAndPollPendingConversionJob() throws Exception {
@@ -57,5 +71,31 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
                 .andExpect(jsonPath("$.data.jobId").value(jobId))
                 .andExpect(jsonPath("$.data.id").doesNotExist())
                 .andExpect(jsonPath("$.data.jobStatus").value("PENDING"));
+    }
+
+    @Test
+    void rejectsUnsupportedCadUploadBeforePersistingStoredFile() throws Exception {
+        var event = eventService.create(new CreateEventRequest("CAD 错误格式测试展会", 2037, "SCENE_DRIVEN", true));
+        var storedFileCountBefore = storedFileRepository.count();
+        var diskFileCountBefore = storedFileCountOnDisk();
+
+        mockMvc.perform(multipart("/api/events/{eventId}/scene/source-files", event.id())
+                        .file(new MockMultipartFile("file", "hall-plan.svg", "image/svg+xml", "<svg/>".getBytes()))
+                        .contentType(MULTIPART_FORM_DATA))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Only DWG and DXF files are supported")));
+
+        org.junit.jupiter.api.Assertions.assertEquals(storedFileCountBefore, storedFileRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(diskFileCountBefore, storedFileCountOnDisk());
+    }
+
+    private long storedFileCountOnDisk() throws IOException {
+        var uploadRoot = Path.of(rootPath).toAbsolutePath().normalize();
+        if (!Files.exists(uploadRoot)) {
+            return 0L;
+        }
+        try (Stream<Path> paths = Files.walk(uploadRoot)) {
+            return paths.filter(Files::isRegularFile).count();
+        }
     }
 }
