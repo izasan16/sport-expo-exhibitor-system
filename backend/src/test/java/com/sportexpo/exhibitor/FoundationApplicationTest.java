@@ -105,8 +105,58 @@ class FoundationApplicationTest extends TestDatabaseSupport {
                                       'published_background_visible_to_exhibitor')
                 """, Integer.class, schema);
 
+        var cadConversionIndexes = jdbcTemplate.queryForObject("""
+                select count(*)
+                from pg_indexes
+                where schemaname = ?
+                  and indexname in ('idx_scene_source_files_scene_revision',
+                                    'idx_scene_conversion_jobs_scene_revision')
+                """, Integer.class, schema);
+
+        var sourceFileForeignKeyColumns = jdbcTemplate.queryForObject("""
+                select count(distinct kcu.column_name)
+                from information_schema.table_constraints tc
+                join information_schema.key_column_usage kcu
+                  on tc.constraint_schema = kcu.constraint_schema
+                 and tc.constraint_name = kcu.constraint_name
+                 and tc.table_schema = kcu.table_schema
+                 and tc.table_name = kcu.table_name
+                where tc.constraint_type = 'FOREIGN KEY'
+                  and tc.table_schema = ?
+                  and tc.table_name = 'scene_source_files'
+                  and kcu.column_name in ('scene_id', 'scene_revision_id', 'file_id')
+                """, Integer.class, schema);
+
+        var conversionJobForeignKeyColumns = jdbcTemplate.queryForObject("""
+                select count(distinct kcu.column_name)
+                from information_schema.table_constraints tc
+                join information_schema.key_column_usage kcu
+                  on tc.constraint_schema = kcu.constraint_schema
+                 and tc.constraint_name = kcu.constraint_name
+                 and tc.table_schema = kcu.table_schema
+                 and tc.table_name = kcu.table_name
+                where tc.constraint_type = 'FOREIGN KEY'
+                  and tc.table_schema = ?
+                  and tc.table_name = 'scene_conversion_jobs'
+                  and kcu.column_name in ('scene_id', 'scene_revision_id', 'source_file_id', 'result_file_id')
+                """, Integer.class, schema);
+
+        var cadConversionConsistencyConstraints = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.table_constraints
+                where table_schema = ?
+                  and constraint_type = 'FOREIGN KEY'
+                  and constraint_name in ('fk_scene_source_files_scene_revision_match',
+                                          'fk_scene_conversion_jobs_scene_revision_match',
+                                          'fk_scene_conversion_jobs_source_file_match')
+                """, Integer.class, schema);
+
         assertThat(cadConversionTables).isEqualTo(2);
         assertThat(backgroundAssetColumns).isEqualTo(4);
         assertThat(sceneVisibilityColumns).isEqualTo(2);
+        assertThat(cadConversionIndexes).isEqualTo(2);
+        assertThat(sourceFileForeignKeyColumns).isEqualTo(3);
+        assertThat(conversionJobForeignKeyColumns).isEqualTo(4);
+        assertThat(cadConversionConsistencyConstraints).isEqualTo(3);
     }
 }

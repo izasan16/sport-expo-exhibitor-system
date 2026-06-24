@@ -210,6 +210,47 @@ create table if not exists __schema__.scene_conversion_jobs (
     created_at timestamptz not null
 );
 
+alter table __schema__.scene_conversion_jobs
+    drop constraint if exists fk_scene_conversion_jobs_source_file_match;
+
+alter table __schema__.scene_conversion_jobs
+    drop constraint if exists fk_scene_conversion_jobs_scene_revision_match;
+
+alter table __schema__.scene_source_files
+    drop constraint if exists fk_scene_source_files_scene_revision_match;
+
+alter table __schema__.scene_source_files
+    drop constraint if exists ux_scene_source_files_id_scene_revision_id_scene_id;
+
+alter table __schema__.scene_revisions
+    drop constraint if exists ux_scene_revisions_id_scene_id;
+
+alter table __schema__.scene_revisions
+    add constraint ux_scene_revisions_id_scene_id
+        unique (id, scene_id);
+
+alter table __schema__.scene_source_files
+    add constraint ux_scene_source_files_id_scene_revision_id_scene_id
+        unique (id, scene_revision_id, scene_id);
+
+alter table __schema__.scene_source_files
+    add constraint fk_scene_source_files_scene_revision_match
+        foreign key (scene_revision_id, scene_id)
+        references __schema__.scene_revisions(id, scene_id)
+        not valid;
+
+alter table __schema__.scene_conversion_jobs
+    add constraint fk_scene_conversion_jobs_scene_revision_match
+        foreign key (scene_revision_id, scene_id)
+        references __schema__.scene_revisions(id, scene_id)
+        not valid;
+
+alter table __schema__.scene_conversion_jobs
+    add constraint fk_scene_conversion_jobs_source_file_match
+        foreign key (source_file_id, scene_revision_id, scene_id)
+        references __schema__.scene_source_files(id, scene_revision_id, scene_id)
+        not valid;
+
 create table if not exists __schema__.registrations (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
