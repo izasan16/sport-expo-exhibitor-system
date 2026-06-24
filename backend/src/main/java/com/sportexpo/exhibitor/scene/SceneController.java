@@ -97,16 +97,24 @@ public class SceneController {
         var draftTarget = editorService.getDraftTarget(eventId, DemoActors.DEMO_ADMIN_ID);
         cadConversionService.requireSupportedSourceFormat(file.getOriginalFilename());
         var storedFile = fileStorageService.store(file, DemoActors.DEMO_ADMIN_ID);
-        return ApiResponse.ok(cadConversionService.registerCadSource(
-                eventId,
-                draftTarget.sceneId(),
-                draftTarget.revisionId(),
-                storedFile.originalName(),
-                storedFile.mimeType(),
-                storedFile.fileSize(),
-                storedFile.fileId(),
-                DemoActors.DEMO_ADMIN_ID
-        ));
+        try {
+            return ApiResponse.ok(cadConversionService.registerCadSource(
+                    eventId,
+                    draftTarget.sceneId(),
+                    draftTarget.revisionId(),
+                    storedFile.originalName(),
+                    storedFile.mimeType(),
+                    storedFile.fileSize(),
+                    storedFile.fileId(),
+                    DemoActors.DEMO_ADMIN_ID
+            ));
+        } catch (RuntimeException exception) {
+            cleanupStoredFile(storedFile.fileId(), exception);
+            throw exception;
+        } catch (Error error) {
+            cleanupStoredFile(storedFile.fileId(), error);
+            throw error;
+        }
     }
 
     @GetMapping("/conversion-jobs/{jobId}")
@@ -118,6 +126,14 @@ public class SceneController {
     @GetMapping("/revisions/{revisionId}")
     public ApiResponse<SceneDraftResponse> getRevision(@PathVariable UUID eventId, @PathVariable UUID revisionId) {
         return ApiResponse.ok(queryService.getRevision(eventId, revisionId));
+    }
+
+    private void cleanupStoredFile(UUID storedFileId, Throwable originalFailure) {
+        try {
+            fileStorageService.delete(storedFileId);
+        } catch (RuntimeException cleanupFailure) {
+            originalFailure.addSuppressed(cleanupFailure);
+        }
     }
 
     @GetMapping("/published")
