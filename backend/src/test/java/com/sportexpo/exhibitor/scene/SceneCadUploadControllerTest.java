@@ -45,6 +45,9 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
     @Autowired
     private StoredFileRepository storedFileRepository;
 
+    @Autowired
+    private VenueSceneRepository venueSceneRepository;
+
     @SpyBean
     private SceneCadConversionService cadConversionService;
 
@@ -86,6 +89,7 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
         var event = eventService.create(new CreateEventRequest("CAD 错误格式测试展会", 2037, "SCENE_DRIVEN", true));
         var storedFileCountBefore = storedFileRepository.count();
         var diskFileCountBefore = storedFileCountOnDisk();
+        var sceneExistsBefore = venueSceneRepository.findByEventId(event.id()).isPresent();
 
         mockMvc.perform(multipart("/api/events/{eventId}/scene/source-files", event.id())
                         .file(new MockMultipartFile("file", "hall-plan.svg", "image/svg+xml", "<svg/>".getBytes()))
@@ -93,6 +97,7 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Only DWG and DXF files are supported")));
 
+        org.junit.jupiter.api.Assertions.assertEquals(sceneExistsBefore, venueSceneRepository.findByEventId(event.id()).isPresent());
         org.junit.jupiter.api.Assertions.assertEquals(storedFileCountBefore, storedFileRepository.count());
         org.junit.jupiter.api.Assertions.assertEquals(diskFileCountBefore, storedFileCountOnDisk());
     }
