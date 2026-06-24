@@ -94,6 +94,18 @@ public class Booth {
     public BigDecimal getHeight() { return height; }
     public UUID getUpdatedBy() { return updatedBy; }
 
+    public void applySceneSnapshot(BigDecimal areaSqm, String boothType, BigDecimal x, BigDecimal y,
+                                   BigDecimal width, BigDecimal height, UUID actorId, OffsetDateTime now) {
+        this.areaSqm = areaSqm;
+        this.boothType = boothType;
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
     public void markLocked(OffsetDateTime now, UUID actorId) {
         this.status = BusinessStatuses.BOOTH_LOCKED;
         this.updatedAt = now;

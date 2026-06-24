@@ -1,6 +1,10 @@
 spring:
   application:
     name: exhibitor-system
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/exhibitor}
     username: ${SPRING_DATASOURCE_USERNAME:exhibitor}
@@ -23,6 +27,9 @@ spring:
 app:
   db:
     schema: ${APP_DB_SCHEMA:exhibitor_sys}
+  file-storage:
+    root-path: ${APP_FILE_STORAGE_ROOT:./tmp/uploads}
+    public-prefix: ${APP_FILE_STORAGE_PUBLIC_PREFIX:/uploads}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
 server:

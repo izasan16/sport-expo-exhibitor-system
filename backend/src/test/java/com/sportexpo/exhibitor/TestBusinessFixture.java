@@ -25,11 +25,14 @@ import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
 import com.sportexpo.exhibitor.selection.BoothSelectionService;
 import com.sportexpo.exhibitor.selection.dto.BoothSelectionResponse;
 import com.sportexpo.exhibitor.selection.dto.CreateBoothSelectionRequest;
+import com.sportexpo.exhibitor.scene.dto.SaveSceneDraftRequest;
+import com.sportexpo.exhibitor.scene.dto.SceneFeaturePayload;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 
@@ -183,5 +186,107 @@ public class TestBusinessFixture {
         var contract = contractRepository.findByOrderId(confirmed.id()).orElseThrow();
         contractService.markOfflineSigned(contract.getId(), DemoActors.DEMO_ADMIN_ID);
         return orderService.get(order.id());
+    }
+
+    public SaveSceneDraftRequest sceneDraftWithOutsideBooth() {
+        return new SaveSceneDraftRequest(
+                1200,
+                800,
+                new BigDecimal("20.0000"),
+                List.of(
+                        feature(
+                                "hall-boundary",
+                                "HALL_BOUNDARY",
+                                "Polygon",
+                                polygon(0, 0, 1000, 0, 1000, 700, 0, 700, 0, 0),
+                                "主馆边界",
+                                "HALL-1",
+                                1,
+                                Map.of()
+                        ),
+                        feature(
+                                "booth-inside",
+                                "BOOTH",
+                                "Polygon",
+                                polygon(50, 50, 250, 50, 250, 250, 50, 250, 50, 50),
+                                "标准展位 A01",
+                                "A01",
+                                2,
+                                Map.of("boothNo", "A01", "boothType", "STANDARD")
+                        ),
+                        feature(
+                                "booth-outside",
+                                "BOOTH",
+                                "Polygon",
+                                polygon(1100, 700, 1400, 700, 1400, 980, 1100, 980, 1100, 700),
+                                "越界展位 OUT01",
+                                "OUT01",
+                                3,
+                                Map.of("boothNo", "OUT01", "boothType", "STANDARD")
+                        )
+                )
+        );
+    }
+
+    public SaveSceneDraftRequest sceneDraftWithTwoBooths() {
+        return new SaveSceneDraftRequest(
+                1200,
+                800,
+                new BigDecimal("20.0000"),
+                List.of(
+                        feature(
+                                "hall-boundary",
+                                "HALL_BOUNDARY",
+                                "Polygon",
+                                polygon(0, 0, 1000, 0, 1000, 700, 0, 700, 0, 0),
+                                "主馆边界",
+                                "HALL-1",
+                                1,
+                                Map.of()
+                        ),
+                        feature(
+                                "booth-a01",
+                                "BOOTH",
+                                "Polygon",
+                                polygon(50, 50, 250, 50, 250, 250, 50, 250, 50, 50),
+                                "标准展位 A01",
+                                "A01",
+                                2,
+                                Map.of("boothNo", "A01", "boothType", "STANDARD")
+                        ),
+                        feature(
+                                "booth-a02",
+                                "BOOTH",
+                                "Polygon",
+                                polygon(280, 50, 480, 50, 480, 250, 280, 250, 280, 50),
+                                "标准展位 A02",
+                                "A02",
+                                3,
+                                Map.of("boothNo", "A02", "boothType", "STANDARD")
+                        )
+                )
+        );
+    }
+
+    private SceneFeaturePayload feature(String id, String featureType, String geometryType, Object geometry,
+                                        String label, String code, int layerOrder, Map<String, Object> meta) {
+        return new SceneFeaturePayload(id, featureType, geometryType, geometry, label, code, layerOrder, meta);
+    }
+
+    private Object polygon(int... points) {
+        return Map.of(
+                "type", "Polygon",
+                "coordinates", List.of(
+                        toRing(points)
+                )
+        );
+    }
+
+    private List<List<Integer>> toRing(int... points) {
+        var ring = new java.util.ArrayList<List<Integer>>();
+        for (int index = 0; index < points.length; index += 2) {
+            ring.add(List.of(points[index], points[index + 1]));
+        }
+        return ring;
     }
 }

@@ -23,7 +23,21 @@ public class EventService {
     @Transactional
     public EventResponse create(CreateEventRequest request) {
         var now = OffsetDateTime.now();
-        var event = repository.save(new Event(UUID.randomUUID(), request.name(), request.year(), "DRAFT", 1440, now, now));
+        var boothSourceMode = request.boothSourceMode() == null || request.boothSourceMode().isBlank()
+                ? "FORM_ONLY"
+                : request.boothSourceMode();
+        var visualSceneEnabled = "SCENE_DRIVEN".equals(boothSourceMode);
+        var event = repository.save(new Event(
+                UUID.randomUUID(),
+                request.name(),
+                request.year(),
+                "DRAFT",
+                1440,
+                boothSourceMode,
+                visualSceneEnabled,
+                now,
+                now
+        ));
         auditService.record(event.getId(), null, "EVENT_CREATE", "Event", event.getId(), null, "DRAFT", "create event");
         return toResponse(event);
     }
@@ -34,6 +48,13 @@ public class EventService {
     }
 
     private EventResponse toResponse(Event event) {
-        return new EventResponse(event.getId(), event.getName(), event.getYear(), event.getStatus());
+        return new EventResponse(
+                event.getId(),
+                event.getName(),
+                event.getYear(),
+                event.getStatus(),
+                event.getBoothSourceMode(),
+                event.isVisualSceneEnabled()
+        );
     }
 }

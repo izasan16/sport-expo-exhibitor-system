@@ -57,4 +57,25 @@ class FoundationApplicationTest extends TestDatabaseSupport {
         assertThat(contractOrderColumn).isEqualTo(1);
         assertThat(pricingIndexes).isEqualTo(2);
     }
+
+    @Test
+    void createsVenueSceneTablesAndEventModeColumns() {
+        var sceneTables = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.tables
+                where table_schema = ?
+                  and table_name in ('venue_scenes', 'scene_revisions', 'scene_features', 'scene_background_assets', 'booth_scene_bindings', 'scene_edit_locks', 'stored_files')
+                """, Integer.class, schema);
+
+        var eventColumns = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = ?
+                  and table_name = 'events'
+                  and column_name in ('booth_source_mode', 'visual_scene_enabled')
+                """, Integer.class, schema);
+
+        assertThat(sceneTables).isEqualTo(7);
+        assertThat(eventColumns).isEqualTo(2);
+    }
 }

@@ -5,14 +5,18 @@ import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { loadSelectionEligibility } from '../../../app/apiLoaders';
+import { getPublishedSceneBooths } from '../../../app/sceneApi';
 import { formatBoothType, formatEventDisplay } from '../../../app/display';
 import type { Booth, ParticipationOrder, SelectionEligibility } from '../../../app/domain';
 import { formatArea } from '../../../app/formatters';
 import { apiGet, apiPost } from '../../../app/request';
 import { getBoothStatusMeta, StatusTag } from '../../../app/status';
+import type { PublishedSceneBooth } from '../../../app/types/scene';
 import { useEvents } from '../../../app/useEvents';
 import MobileOrderContextHeader from '../MobileOrderContextHeader';
 import { buildOrderContextHeader } from '../mobileViewModels';
+import SceneSelectionMap from './SceneSelectionMap';
+import { mapSelectableSceneBooths } from './sceneSelectionViewModels';
 import {
   buildBoothSelectionBody,
   canSubmitBoothSelection,
@@ -34,6 +38,7 @@ export default function BoothSelectionPage() {
   const orderId = orderIdParam ?? searchParams.get('orderId') ?? undefined;
   const [order, setOrder] = useState<ParticipationOrder>();
   const [booths, setBooths] = useState<Booth[]>([]);
+  const [sceneBooths, setSceneBooths] = useState<PublishedSceneBooth[]>([]);
   const [eligibility, setEligibility] = useState<SelectionEligibility>();
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const [exhibitorRemark, setExhibitorRemark] = useState('');
@@ -43,6 +48,11 @@ export default function BoothSelectionPage() {
   const [reloadSignal, setReloadSignal] = useState(0);
   const isMobile = shouldUseMobileExhibitorView();
   const { events } = useEvents();
+  const orderEvent = useMemo(
+    () => events.find((event) => event.id === order?.eventId),
+    [events, order?.eventId],
+  );
+  const isSceneDriven = orderEvent?.boothSourceMode === 'SCENE_DRIVEN';
 
   useEffect(() => {
     let alive = true;
@@ -51,6 +61,7 @@ export default function BoothSelectionPage() {
       if (!orderId) {
         setOrder(undefined);
         setBooths([]);
+        setSceneBooths([]);
         setEligibility(undefined);
         setSelectedKeys([]);
         setLoadFailed(false);
@@ -62,25 +73,35 @@ export default function BoothSelectionPage() {
       setLoadFailed(false);
       setOrder(undefined);
       setBooths([]);
+      setSceneBooths([]);
       setEligibility(undefined);
       setSelectedKeys([]);
 
       try {
         const loadedOrder = await apiGet<ParticipationOrder>(`/api/participation-orders/${encodeURIComponent(orderId)}`);
-        const [availableBooths, loadedEligibility] = await Promise.all([
-          apiGet<Booth[]>(`/api/booths?eventId=${encodeURIComponent(loadedOrder.eventId)}&status=AVAILABLE`),
+        const currentEvent = events.find((event) => event.id === loadedOrder.eventId);
+        const sceneDriven = currentEvent?.boothSourceMode === 'SCENE_DRIVEN';
+        const [loadedEligibility, availableBooths, publishedSceneBooths] = await Promise.all([
           loadSelectionEligibility(loadedOrder.id),
+          sceneDriven
+            ? Promise.resolve([])
+            : apiGet<Booth[]>(`/api/booths?eventId=${encodeURIComponent(loadedOrder.eventId)}&status=AVAILABLE`),
+          sceneDriven
+            ? getPublishedSceneBooths(loadedOrder.eventId)
+            : Promise.resolve([]),
         ]);
 
         if (!alive) return;
         setOrder(loadedOrder);
         setBooths(filterBoothsForOrderType(availableBooths, loadedOrder));
+        setSceneBooths(publishedSceneBooths);
         setEligibility(loadedEligibility);
       } catch {
         if (!alive) return;
         setLoadFailed(true);
         setOrder(undefined);
         setBooths([]);
+        setSceneBooths([]);
         setEligibility(undefined);
         setSelectedKeys([]);
       } finally {
@@ -92,16 +113,28 @@ export default function BoothSelectionPage() {
     return () => {
       alive = false;
     };
-  }, [orderId, reloadSignal]);
+  }, [events, orderId, reloadSignal]);
 
   const sortedBooths = useMemo(() => sortBoothsForMap(booths), [booths]);
+  const mappedSceneBooths = useMemo(
+    () => (order ? mapSelectableSceneBooths(sceneBooths, order, selectedKeys.map(String)) : []),
+    [order, sceneBooths, selectedKeys],
+  );
   const selectedBooths = useMemo(
     () => booths.filter((booth) => selectedKeys.includes(booth.id)),
     [booths, selectedKeys],
   );
+  const selectedAreaValues = useMemo(
+    () => (
+      isSceneDriven
+        ? mappedSceneBooths.filter((booth) => booth.selected).map((booth) => booth.areaSqm)
+        : selectedBooths.map((booth) => booth.areaSqm)
+    ),
+    [isSceneDriven, mappedSceneBooths, selectedBooths],
+  );
   const areaComparison = useMemo(
-    () => compareAreaToOrder(selectedBooths.map((booth) => booth.areaSqm), order?.areaSqm ?? 0),
-    [order?.areaSqm, selectedBooths],
+    () => compareAreaToOrder(selectedAreaValues, order?.areaSqm ?? 0),
+    [order?.areaSqm, selectedAreaValues],
   );
   const showAreaAlert = order && selectedKeys.length > 0 && !areaComparison.matches;
   const isEligibleForSelection = order?.status === 'PAID' && eligibility?.status === 'AVAILABLE';
@@ -275,75 +308,120 @@ export default function BoothSelectionPage() {
 
         {isMobile ? (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <List<Booth>
-              header="可选展位"
-              dataSource={sortedBooths}
-              locale={{ emptyText: <Empty description="暂无可选展位" /> }}
-              renderItem={(booth) => (
-                <List.Item style={{ paddingInline: 0 }}>
-                  <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Space direction="vertical" size={4}>
-                      <Typography.Text strong>{booth.boothNo}</Typography.Text>
-                      <Typography.Text>{formatArea(booth.areaSqm)} · {formatBoothType(booth.boothType)}</Typography.Text>
-                      <StatusTag meta={getBoothStatusMeta(booth.status)} />
-                    </Space>
-                    <Checkbox
-                      checked={selectedKeys.includes(booth.id)}
-                      onChange={(event) => toggleBooth(booth.id, event.target.checked)}
-                    />
-                  </Space>
-                </List.Item>
-              )}
-            />
+            {isSceneDriven ? (
+              <>
+                <SceneSelectionMap
+                  booths={mappedSceneBooths}
+                  mobile
+                  title="馆图选位"
+                  onToggle={toggleBooth}
+                />
+                <List
+                  header="已选展位"
+                  dataSource={mappedSceneBooths.filter((booth) => booth.selected)}
+                  locale={{ emptyText: <Empty description="先从馆图中点选展位" /> }}
+                  renderItem={(booth) => (
+                    <List.Item
+                      actions={[
+                        <Button key="cancel" size="small" onClick={() => toggleBooth(booth.boothId, false)}>
+                          取消
+                        </Button>,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={booth.boothNo}
+                        description={`${formatArea(booth.areaSqm)} · ${formatBoothType(booth.boothType)}`}
+                      />
+                    </List.Item>
+                  )}
+                />
+              </>
+            ) : (
+              <>
+                <List<Booth>
+                  header="可选展位"
+                  dataSource={sortedBooths}
+                  locale={{ emptyText: <Empty description="暂无可选展位" /> }}
+                  renderItem={(booth) => (
+                    <List.Item style={{ paddingInline: 0 }}>
+                      <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space direction="vertical" size={4}>
+                          <Typography.Text strong>{booth.boothNo}</Typography.Text>
+                          <Typography.Text>{formatArea(booth.areaSqm)} · {formatBoothType(booth.boothType)}</Typography.Text>
+                          <StatusTag meta={getBoothStatusMeta(booth.status)} />
+                        </Space>
+                        <Checkbox
+                          checked={selectedKeys.includes(booth.id)}
+                          onChange={(event) => toggleBooth(booth.id, event.target.checked)}
+                        />
+                      </Space>
+                    </List.Item>
+                  )}
+                />
 
-            <List<Booth>
-              header="已选展位"
-              dataSource={selectedBooths}
-              locale={{ emptyText: <Empty description="暂无已选展位" /> }}
-              renderItem={(booth) => (
-                <List.Item
-                  actions={[
-                    <Button key="cancel" size="small" onClick={() => toggleBooth(booth.id, false)}>
-                      取消
-                    </Button>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={booth.boothNo}
-                    description={`${formatArea(booth.areaSqm)} · ${formatBoothType(booth.boothType)}`}
-                  />
-                </List.Item>
-              )}
-            />
+                <List<Booth>
+                  header="已选展位"
+                  dataSource={selectedBooths}
+                  locale={{ emptyText: <Empty description="暂无已选展位" /> }}
+                  renderItem={(booth) => (
+                    <List.Item
+                      actions={[
+                        <Button key="cancel" size="small" onClick={() => toggleBooth(booth.id, false)}>
+                          取消
+                        </Button>,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={booth.boothNo}
+                        description={`${formatArea(booth.areaSqm)} · ${formatBoothType(booth.boothType)}`}
+                      />
+                    </List.Item>
+                  )}
+                />
+              </>
+            )}
 
             <Button type="primary" block disabled={!canSubmit} loading={submitting} onClick={submitSelection}>
               提交选位
             </Button>
           </Space>
         ) : (
-          <ProTable<Booth>
-            headerTitle="可选展位"
-            rowKey="id"
-            search={false}
-            loading={loading}
-            columns={columns}
-            dataSource={sortedBooths}
-            rowSelection={{
-              selectedRowKeys: selectedKeys,
-              onChange: setSelectedKeys,
-            }}
-            toolBarRender={() => [
-              <Button
-                key="submit"
-                type="primary"
-                disabled={!canSubmit}
-                loading={submitting}
-                onClick={submitSelection}
-              >
+          isSceneDriven ? (
+            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              <SceneSelectionMap
+                booths={mappedSceneBooths}
+                title="馆图选位"
+                onToggle={toggleBooth}
+              />
+              <Button type="primary" disabled={!canSubmit} loading={submitting} onClick={submitSelection}>
                 提交选位
-              </Button>,
-            ]}
-          />
+              </Button>
+            </Space>
+          ) : (
+            <ProTable<Booth>
+              headerTitle="可选展位"
+              rowKey="id"
+              search={false}
+              loading={loading}
+              columns={columns}
+              dataSource={sortedBooths}
+              rowSelection={{
+                selectedRowKeys: selectedKeys,
+                onChange: setSelectedKeys,
+              }}
+              toolBarRender={() => [
+                <Button
+                  key="submit"
+                  type="primary"
+                  disabled={!canSubmit}
+                  loading={submitting}
+                  onClick={submitSelection}
+                >
+                  提交选位
+                </Button>,
+              ]}
+            />
+          )
         )}
       </Space>
     </PageContainer>
