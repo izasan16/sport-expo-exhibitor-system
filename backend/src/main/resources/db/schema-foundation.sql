@@ -17,6 +17,12 @@ create table if not exists __schema__.events (
     updated_by uuid
 );
 
+alter table __schema__.events
+    add column if not exists booth_source_mode varchar(40) not null default 'FORM_ONLY';
+
+alter table __schema__.events
+    add column if not exists visual_scene_enabled boolean not null default false;
+
 create table if not exists __schema__.pavilions (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
@@ -72,6 +78,90 @@ create table if not exists __schema__.event_categories (
     created_at timestamptz not null,
     updated_at timestamptz not null,
     unique(event_id, code)
+);
+
+create table if not exists __schema__.venue_scenes (
+    id uuid primary key,
+    event_id uuid not null unique references __schema__.events(id),
+    status varchar(40) not null,
+    canvas_width int not null,
+    canvas_height int not null,
+    pixel_to_meter_ratio numeric(14,4) not null default 0,
+    published_revision_id uuid,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid
+);
+
+create table if not exists __schema__.scene_revisions (
+    id uuid primary key,
+    scene_id uuid not null references __schema__.venue_scenes(id),
+    revision_no int not null,
+    status varchar(40) not null,
+    change_summary varchar(500),
+    snapshot_json jsonb not null,
+    published_at timestamptz,
+    published_by uuid,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid,
+    unique(scene_id, revision_no)
+);
+
+create table if not exists __schema__.scene_features (
+    id uuid primary key,
+    scene_revision_id uuid not null references __schema__.scene_revisions(id),
+    event_id uuid not null references __schema__.events(id),
+    feature_type varchar(40) not null,
+    geometry_type varchar(40) not null,
+    geometry_json jsonb not null,
+    label varchar(200),
+    code varchar(80),
+    layer_order int not null default 0,
+    style_json jsonb not null default '{}'::jsonb,
+    meta_json jsonb not null default '{}'::jsonb,
+    area_px2 numeric(14,2),
+    area_sqm numeric(14,2),
+    locked boolean not null default false,
+    created_at timestamptz not null,
+    updated_at timestamptz not null
+);
+
+create table if not exists __schema__.stored_files (
+    id uuid primary key,
+    original_name varchar(255) not null,
+    mime_type varchar(120) not null,
+    storage_path varchar(500) not null,
+    public_url varchar(500) not null,
+    file_size bigint not null,
+    width int,
+    height int,
+    created_at timestamptz not null,
+    created_by uuid
+);
+
+create table if not exists __schema__.scene_background_assets (
+    id uuid primary key,
+    scene_id uuid not null references __schema__.venue_scenes(id),
+    scene_revision_id uuid not null references __schema__.scene_revisions(id),
+    file_id uuid not null references __schema__.stored_files(id),
+    file_name varchar(255) not null,
+    mime_type varchar(120) not null,
+    source_type varchar(40) not null,
+    width int,
+    height int,
+    offset_x numeric(14,2) not null default 0,
+    offset_y numeric(14,2) not null default 0,
+    scale numeric(14,4) not null default 1,
+    opacity numeric(5,4) not null default 0.45,
+    locked boolean not null default true,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    created_by uuid,
+    updated_by uuid,
+    unique(scene_revision_id)
 );
 
 create table if not exists __schema__.registrations (
@@ -295,6 +385,30 @@ create table if not exists __schema__.booth_locks (
     updated_by uuid
 );
 
+create table if not exists __schema__.booth_scene_bindings (
+    id uuid primary key,
+    event_id uuid not null references __schema__.events(id),
+    scene_revision_id uuid not null references __schema__.scene_revisions(id),
+    scene_feature_id uuid not null references __schema__.scene_features(id),
+    booth_id uuid not null references __schema__.booths(id),
+    binding_status varchar(40) not null,
+    created_at timestamptz not null,
+    updated_at timestamptz not null,
+    unique(scene_feature_id),
+    unique(booth_id)
+);
+
+create table if not exists __schema__.scene_edit_locks (
+    event_id uuid primary key references __schema__.events(id),
+    revision_id uuid not null references __schema__.scene_revisions(id),
+    locked_by uuid not null,
+    locked_by_name varchar(160) not null,
+    heartbeat_at timestamptz not null,
+    expires_at timestamptz not null,
+    created_at timestamptz not null,
+    updated_at timestamptz not null
+);
+
 create table if not exists __schema__.booth_release_tasks (
     id uuid primary key,
     event_id uuid not null references __schema__.events(id),
@@ -355,6 +469,16 @@ create index if not exists idx_participation_orders_status_created_at
     on __schema__.participation_orders(status, created_at desc);
 create index if not exists idx_participation_orders_created_at
     on __schema__.participation_orders(created_at);
+create index if not exists idx_scene_revisions_scene_status
+    on __schema__.scene_revisions(scene_id, status, revision_no desc);
+create index if not exists idx_scene_features_revision_type
+    on __schema__.scene_features(scene_revision_id, feature_type, layer_order);
+create index if not exists idx_scene_background_assets_revision
+    on __schema__.scene_background_assets(scene_revision_id);
+create index if not exists idx_stored_files_created_at
+    on __schema__.stored_files(created_at desc);
+create index if not exists idx_booth_scene_bindings_event_revision
+    on __schema__.booth_scene_bindings(event_id, scene_revision_id);
 create index if not exists idx_payments_order_status on __schema__.payments(order_id, status);
 create index if not exists idx_payments_status_created_at
     on __schema__.payments(status, created_at desc);

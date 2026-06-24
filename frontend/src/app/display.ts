@@ -7,6 +7,8 @@ export type EventLookupSource = {
   name: string;
   year: number;
   status?: string;
+  boothSourceMode?: string;
+  visualSceneEnabled?: boolean;
 };
 
 export type AreaTierLookupSource = {

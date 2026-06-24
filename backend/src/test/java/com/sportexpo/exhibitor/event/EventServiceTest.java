@@ -22,4 +22,12 @@ class EventServiceTest extends TestDatabaseSupport {
         assertThat(response.year()).isEqualTo(2026);
         assertThat(response.status()).isEqualTo("DRAFT");
     }
+
+    @Test
+    void createsFormOnlyEventByDefault() {
+        var response = eventService.create(new CreateEventRequest("2027体博会", 2027));
+
+        assertThat(response.boothSourceMode()).isEqualTo("FORM_ONLY");
+        assertThat(response.visualSceneEnabled()).isFalse();
+    }
 }

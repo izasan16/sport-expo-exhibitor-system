@@ -16,6 +16,7 @@ import {
   formatNullableAdminText,
   formatSelectionBoothNumbers,
 } from '../pageLogic';
+import SelectionScenePreview from './SelectionScenePreview';
 
 type SelectionRow = BoothSelection & {
   boothNumbersDisplay: string;
@@ -26,6 +27,9 @@ export default function SelectionReviewPage() {
   const [loadingId, setLoadingId] = useState<string>();
   const [rejectLoadingId, setRejectLoadingId] = useState<string>();
   const { events } = useEvents();
+  const isSceneDrivenSelection = (eventId: string) => (
+    events.find((event) => event.id === eventId)?.boothSourceMode === 'SCENE_DRIVEN'
+  );
 
   const columns: ProColumns<SelectionRow>[] = [
     { title: '展会', dataIndex: 'eventId', render: (_, record) => formatEventDisplay(record.eventId, events) },
@@ -163,6 +167,12 @@ export default function SelectionReviewPage() {
             boothNumbersDisplay: formatSelectionBoothNumbers(selection, boothNoById),
           }));
           return { data, success: true, total: data.length };
+        }}
+        expandable={{
+          rowExpandable: (record) => isSceneDrivenSelection(record.eventId) && record.boothIds.length > 0,
+          expandedRowRender: (record) => (
+            <SelectionScenePreview eventId={record.eventId} highlightedIds={record.boothIds} />
+          ),
         }}
       />
     </PageContainer>

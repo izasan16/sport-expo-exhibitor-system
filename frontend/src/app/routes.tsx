@@ -19,6 +19,7 @@ const SelectionReviewPage = lazy(() => import('../pages/admin/selections/Selecti
 const AdminExhibitorListPage = lazy(() => import('../pages/admin/exhibitors/AdminExhibitorListPage'));
 const AdminRegistrationListPage = lazy(() => import('../pages/admin/registrations/AdminRegistrationListPage'));
 const AdminRegistrationDetailPage = lazy(() => import('../pages/admin/registrations/AdminRegistrationDetailPage'));
+const SceneEditorPage = lazy(() => import('../pages/admin/scenes/SceneEditorPage'));
 const ExhibitorHomePage = lazy(() => import('../pages/exhibitor/HomePage'));
 const ExhibitorProfilePage = lazy(() => import('../pages/exhibitor/profile/ExhibitorProfilePage'));
 const RegistrationListPage = lazy(() => import('../pages/exhibitor/registrations/RegistrationListPage'));
@@ -46,6 +47,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
       { path: 'dashboard', element: lazyPage(<DashboardPage />) },
       { path: 'events', element: lazyPage(<EventListPage />) },
+      { path: 'events/:eventId/scene', element: lazyPage(<SceneEditorPage />) },
       { path: 'booths', element: lazyPage(<BoothListPage />) },
       { path: 'area-tiers', element: lazyPage(<AreaTierListPage />) },
       { path: 'price-rules', element: lazyPage(<PriceRuleListPage />) },

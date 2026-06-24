@@ -3,6 +3,7 @@ import { ModalForm, PageContainer, ProFormDigit, ProFormText, ProTable } from '@
 import type { ActionType } from '@ant-design/pro-components';
 import { Button, message } from 'antd';
 import { useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost } from '../../../app/request';
 
 type EventRow = {
@@ -14,6 +15,7 @@ type EventRow = {
 
 export default function EventListPage() {
   const actionRef = useRef<ActionType>();
+  const navigate = useNavigate();
 
   return (
     <PageContainer title="展会管理">
@@ -26,6 +28,15 @@ export default function EventListPage() {
           { title: '展会名称', dataIndex: 'name' },
           { title: '年份', dataIndex: 'year' },
           { title: '状态', dataIndex: 'status' },
+          {
+            title: '操作',
+            valueType: 'option',
+            render: (_, record) => [
+              <Button key="scene" type="link" onClick={() => navigate(`/admin/events/${record.id}/scene`)}>
+                编辑馆图
+              </Button>,
+            ],
+          },
         ]}
         request={async () => {
           const data = await apiGet<EventRow[]>('/api/events');

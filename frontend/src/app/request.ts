@@ -91,3 +91,26 @@ export async function apiPut<T, B = unknown>(url: string, body?: B): Promise<T> 
 
   return parseApiResponse<T>(response);
 }
+
+export async function apiDelete<T>(url: string): Promise<T> {
+  const response = await fetch(withApiBaseUrl(url), {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  return parseApiResponse<T>(response);
+}
+
+export async function apiMultipartPost<T>(url: string, body: FormData): Promise<T> {
+  const response = await fetch(withApiBaseUrl(url), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+    body,
+  });
+
+  return parseApiResponse<T>(response);
+}
