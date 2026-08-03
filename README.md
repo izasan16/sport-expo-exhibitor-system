@@ -90,22 +90,31 @@ flowchart TB
 
 ## 页面截图
 
-以下图片来自当前前端开发服务器连接本地后端和 PostgreSQL 后的真实页面，包含管理员工作台、展会配置、馆图编辑和展位审核等功能。
+以下图片来自当前前端开发服务器连接本地后端和 PostgreSQL 后的真实页面，按功能分组展示，不重复放置同一页面。
 
-| 页面 | 截图 |
-| --- | --- |
-| 管理员工作台 | ![管理员工作台](docs/screenshots/admin-dashboard.png) |
-| 展会管理 | ![展会管理](docs/screenshots/event-management.png) |
-| 馆图编辑器（含馆图要素与展位） | ![馆图编辑器](docs/screenshots/scene-editor-with-floorplan.png) |
-| 馆图编辑器宽屏视图 | ![馆图编辑器宽屏视图](docs/screenshots/scene-editor-wide.png) |
-| 展位管理 | ![展位管理](docs/screenshots/booth-management.png) |
-| 选位审核 | ![选位审核](docs/screenshots/selection-review.png) |
+### 管理端工作台与资源配置
 
-登录页和权限提示页也保留在截图目录中，便于查看认证与权限边界：
+![管理员工作台](docs/screenshots/admin-dashboard.png)
+
+![展会管理](docs/screenshots/event-management.png)
+
+![展位管理](docs/screenshots/booth-management.png)
+
+### 馆图场景编辑
+
+![馆图编辑器：宽屏视图、图层、画布和展位要素](docs/screenshots/scene-editor-wide.png)
+
+### 选位审核
+
+![选位审核](docs/screenshots/selection-review.png)
+
+登录页和权限提示页保留在截图目录中，便于查看认证与权限边界：
 
 - [登录页截图](docs/screenshots/login.png)
 - [未登录提示页截图](docs/screenshots/unauthorized.png)
 - [无权限提示页截图](docs/screenshots/forbidden.png)
+
+架构图 AI 生图提示词见：[无连线技术架构图 AI 生图提示词](docs/architecture-ai-prompts.md)。
 
 启动完整环境后，可访问以下页面查看管理员工作台、场景编辑器和展商选位页面：
 
