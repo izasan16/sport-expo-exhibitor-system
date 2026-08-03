@@ -62,6 +62,12 @@ public class SceneEditorService {
     }
 
     @Transactional
+    public DraftTarget getDraftTarget(UUID eventId, UUID actorId) {
+        var draftContext = loadOrCreateDraft(eventId, actorId, null);
+        return new DraftTarget(draftContext.scene().getId(), draftContext.revision().getId());
+    }
+
+    @Transactional
     public SceneDraftResponse saveDraft(UUID eventId, SaveSceneDraftRequest request, UUID actorId) {
         var draftContext = loadOrCreateDraft(eventId, actorId, request);
         var now = OffsetDateTime.now();
@@ -284,5 +290,8 @@ public class SceneEditorService {
     }
 
     record DraftContext(VenueScene scene, SceneRevision revision) {
+    }
+
+    public record DraftTarget(UUID sceneId, UUID revisionId) {
     }
 }

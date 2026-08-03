@@ -62,4 +62,16 @@ public class LocalFileStorageService {
             throw new IllegalStateException("Failed to store file", exception);
         }
     }
+
+    public void delete(UUID storedFileId) {
+        var storedFile = repository.findById(storedFileId)
+                .orElseThrow(() -> new IllegalStateException("Stored file does not exist"));
+        var absolutePath = rootPath.resolve(storedFile.getStoragePath()).normalize();
+        try {
+            Files.deleteIfExists(absolutePath);
+            repository.delete(storedFile);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to delete file", exception);
+        }
+    }
 }
