@@ -26,6 +26,7 @@ public final class BusinessStatuses {
     public static final String BOOTH_AVAILABLE = "AVAILABLE";
     public static final String BOOTH_LOCKED = "LOCKED";
     public static final String BOOTH_CONFIRMED = "CONFIRMED";
+    public static final String BOOTH_REMOVED = "REMOVED";
 
     public static final String CONTRACT_DRAFT = "DRAFT";
     public static final String CONTRACT_GENERATED = "GENERATED";

@@ -17,6 +17,7 @@ public interface RegistrationRepository extends JpaRepository<Registration, UUID
     Optional<Registration> findByIdForUpdate(@Param("id") UUID id);
 
     boolean existsByEventIdAndExhibitorIdAndStatusIn(UUID eventId, UUID exhibitorId, Collection<String> statuses);
+    boolean existsByEventIdAndExhibitorId(UUID eventId, UUID exhibitorId);
     @Query("""
             select registration
             from Registration registration

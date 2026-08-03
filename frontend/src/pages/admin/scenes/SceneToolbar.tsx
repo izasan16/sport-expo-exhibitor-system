@@ -10,6 +10,7 @@ type SceneToolbarProps = {
   hasBackground: boolean;
   saving?: boolean;
   publishing?: boolean;
+  readOnly?: boolean;
   onUploadBackground: () => void;
   onDrawHall: () => void;
   onDrawBooth: () => void;
@@ -28,39 +29,39 @@ export default function SceneToolbar(props: SceneToolbarProps) {
   return (
     <Card bodyStyle={{ padding: 12 }}>
       <Space wrap size={[8, 8]}>
-        {props.uploadTrigger ?? (
+        {props.uploadTrigger ?? (!props.readOnly ? (
           <Button icon={<FolderOpenOutlined />} onClick={props.onUploadBackground}>
             上传底图
           </Button>
-        )}
+        ) : null)}
         {props.viewportControls}
-        <Button disabled={!props.hasBackground} onClick={props.onCalibrate}>
+        <Button disabled={props.readOnly || !props.hasBackground} onClick={props.onCalibrate}>
           校准比例尺
         </Button>
-        <Button type="dashed" icon={<EnvironmentOutlined />} onClick={props.onDrawHall}>
+        <Button disabled={props.readOnly} type="dashed" icon={<EnvironmentOutlined />} onClick={props.onDrawHall}>
           绘制主馆边界
         </Button>
-        <Button type="dashed" onClick={props.onDrawBooth}>
+        <Button disabled={props.readOnly} type="dashed" onClick={props.onDrawBooth}>
           新增展位
         </Button>
-        <Button type="primary" disabled={!props.canCompleteDrawing} onClick={props.onCompleteDrawing}>
+        <Button disabled={props.readOnly || !props.canCompleteDrawing} type="primary" onClick={props.onCompleteDrawing}>
           完成绘制
         </Button>
-        <Button disabled={!props.canCompleteDrawing} onClick={props.onCancelDrawing}>
+        <Button disabled={props.readOnly || !props.canCompleteDrawing} onClick={props.onCancelDrawing}>
           取消绘制
         </Button>
-        <Button danger icon={<DeleteOutlined />} disabled={!props.canDeleteSelected} onClick={props.onDeleteSelected}>
+        <Button danger icon={<DeleteOutlined />} disabled={props.readOnly || !props.canDeleteSelected} onClick={props.onDeleteSelected}>
           删除要素
         </Button>
-        <Button disabled={!props.hasBackground} onClick={props.onClearBackground}>
+        <Button disabled={props.readOnly || !props.hasBackground} onClick={props.onClearBackground}>
           清除底图
         </Button>
-        <Button icon={<SaveOutlined />} loading={props.saving} onClick={props.onSaveDraft}>
+        <Button disabled={props.readOnly} icon={<SaveOutlined />} loading={props.saving} onClick={props.onSaveDraft}>
           保存草稿
         </Button>
-        <Button onClick={props.onValidate}>校验</Button>
+        <Button disabled={props.readOnly} onClick={props.onValidate}>校验</Button>
         <Button onClick={props.onOpenHistory}>发布历史</Button>
-        <Button type="primary" loading={props.publishing} onClick={props.onPublish}>
+        <Button disabled={props.readOnly} type="primary" loading={props.publishing} onClick={props.onPublish}>
           发布
         </Button>
       </Space>

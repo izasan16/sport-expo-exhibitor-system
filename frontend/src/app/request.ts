@@ -55,11 +55,12 @@ async function parseBody<T>(response: Response): Promise<ApiResponse<T> | undefi
 
 async function apiRequest<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
   const token = getAccessToken();
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(withApiBaseUrl(url), {
     ...options,
     headers: {
       Accept: 'application/json',
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
@@ -133,24 +134,12 @@ export async function apiPut<T, B = unknown>(url: string, body?: B, options?: Ap
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {
-  const response = await fetch(withApiBaseUrl(url), {
-    method: 'DELETE',
-    headers: {
-      Accept: 'application/json',
-    },
-  });
-
-  return parseApiResponse<T>(response);
+  return apiRequest<T>(url, { method: 'DELETE' });
 }
 
 export async function apiMultipartPost<T>(url: string, body: FormData): Promise<T> {
-  const response = await fetch(withApiBaseUrl(url), {
+  return apiRequest<T>(url, {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-    },
     body,
   });
-
-  return parseApiResponse<T>(response);
 }

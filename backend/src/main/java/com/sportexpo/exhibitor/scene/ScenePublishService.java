@@ -11,6 +11,8 @@ import com.sportexpo.exhibitor.scene.dto.SaveSceneDraftRequest;
 import com.sportexpo.exhibitor.scene.dto.SceneFeaturePayload;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -33,6 +35,8 @@ public class ScenePublishService {
     private final SceneValidationService validationService;
     private final SceneEditorService editorService;
     private final AuditService auditService;
+    private final JdbcTemplate jdbcTemplate;
+    private final String schema;
 
     public ScenePublishService(EventRepository eventRepository,
                                VenueSceneRepository sceneRepository,
@@ -43,7 +47,9 @@ public class ScenePublishService {
                                BoothSceneBindingRepository boothSceneBindingRepository,
                                SceneValidationService validationService,
                                SceneEditorService editorService,
-                               AuditService auditService) {
+                               AuditService auditService,
+                               JdbcTemplate jdbcTemplate,
+                               @Value("${app.db.schema}") String schema) {
         this.eventRepository = eventRepository;
         this.sceneRepository = sceneRepository;
         this.revisionRepository = revisionRepository;
@@ -54,6 +60,8 @@ public class ScenePublishService {
         this.validationService = validationService;
         this.editorService = editorService;
         this.auditService = auditService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.schema = schema;
     }
 
     @Transactional
@@ -96,17 +104,14 @@ public class ScenePublishService {
         boothRepository.findByEventId(scene.getEventId()).forEach(booth -> existingByBoothNo.put(booth.getBoothNo(), booth));
 
         var publishedBoothNos = new java.util.HashSet<String>();
-        var boundBoothIds = new ArrayList<UUID>();
-        var existingBindings = boothSceneBindingRepository.findByEventId(scene.getEventId());
-        var bindingsByBoothId = new HashMap<UUID, BoothSceneBinding>();
-        existingBindings.forEach(binding -> bindingsByBoothId.put(binding.getBoothId(), binding));
-
         for (var feature : boothFeatures) {
             var boothNo = boothNo(feature);
             publishedBoothNos.add(boothNo);
             var areaSqm = feature.getAreaSqm() == null ? BigDecimal.ZERO : feature.getAreaSqm();
             var bounds = polygonBounds(validationService.geometry(editorService.rawGeometry(feature)));
             var boothType = boothType(feature);
+            var zoneId = zoneId(feature);
+            validateZoneBelongsToEvent(scene.getEventId(), zoneId);
             var existing = existingByBoothNo.get(boothNo);
             Booth persisted;
             if (existing == null) {
@@ -114,7 +119,7 @@ public class ScenePublishService {
                         UUID.randomUUID(),
                         scene.getEventId(),
                         null,
-                        null,
+                        zoneId,
                         boothNo,
                         areaSqm,
                         boothType,
@@ -128,15 +133,15 @@ public class ScenePublishService {
                         actorId
                 ));
             } else {
-                existing.applySceneSnapshot(areaSqm, boothType, bounds.minX(), bounds.minY(), bounds.width(), bounds.height(),
+                existing.applySceneSnapshot(areaSqm, boothType, zoneId, bounds.minX(), bounds.minY(), bounds.width(), bounds.height(),
                         actorId, now);
+                if (BusinessStatuses.BOOTH_REMOVED.equals(existing.getStatus())) {
+                    existing.markAvailable(now, actorId);
+                }
                 persisted = boothRepository.save(existing);
             }
 
-            boundBoothIds.add(persisted.getId());
-            var currentBinding = bindingsByBoothId.get(persisted.getId());
-            if (currentBinding == null) {
-                boothSceneBindingRepository.save(new BoothSceneBinding(
+            boothSceneBindingRepository.save(new BoothSceneBinding(
                         UUID.randomUUID(),
                         scene.getEventId(),
                         revision.getId(),
@@ -145,11 +150,7 @@ public class ScenePublishService {
                         "ACTIVE",
                         now,
                         now
-                ));
-            } else {
-                currentBinding.rebind(revision.getId(), feature.getId(), now);
-                boothSceneBindingRepository.save(currentBinding);
-            }
+            ));
         }
 
         boothRepository.findByEventId(scene.getEventId()).stream()
@@ -158,8 +159,8 @@ public class ScenePublishService {
                     if (!BusinessStatuses.BOOTH_AVAILABLE.equals(booth.getStatus())) {
                         throw new BusinessException("Published scene cannot remove non-available booth");
                     }
-                    boothSceneBindingRepository.deleteByBoothId(booth.getId());
-                    boothRepository.delete(booth);
+                    booth.markRemoved(now, actorId);
+                    boothRepository.save(booth);
                 });
     }
 
@@ -253,6 +254,30 @@ public class ScenePublishService {
         return rawValue == null || String.valueOf(rawValue).isBlank()
                 ? "STANDARD"
                 : String.valueOf(rawValue);
+    }
+
+    private UUID zoneId(SceneFeature feature) {
+        var rawValue = editorService.rawMeta(feature).get("zoneId");
+        if (rawValue == null || String.valueOf(rawValue).isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(String.valueOf(rawValue));
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException("Scene booth zoneId is invalid");
+        }
+    }
+
+    private void validateZoneBelongsToEvent(UUID eventId, UUID zoneId) {
+        if (zoneId == null) {
+            return;
+        }
+        var count = jdbcTemplate.queryForObject(
+                "select count(*) from " + schema + ".zones where id = ? and event_id = ?",
+                Integer.class, zoneId, eventId);
+        if (count == null || count == 0) {
+            throw new BusinessException("Scene booth zone does not belong to event");
+        }
     }
 
     private PolygonBounds polygonBounds(SceneGeometry geometry) {

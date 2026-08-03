@@ -89,7 +89,7 @@ public class SceneQueryService {
         var featuresById = featureRepository.findBySceneRevisionIdOrderByLayerOrderAsc(revision.getId()).stream()
                 .collect(java.util.stream.Collectors.toMap(SceneFeature::getId, feature -> feature));
 
-        return boothSceneBindingRepository.findBySceneRevisionId(revision.getId()).stream()
+        return boothSceneBindingRepository.findBySceneRevisionIdAndBindingStatus(revision.getId(), "ACTIVE").stream()
                 .map(binding -> {
                     var booth = boothRepository.findById(binding.getBoothId())
                             .orElseThrow(() -> new BusinessException("Scene booth does not exist"));

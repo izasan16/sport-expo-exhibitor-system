@@ -19,6 +19,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -69,6 +70,7 @@ public class SceneEditorService {
 
     @Transactional
     public SceneDraftResponse saveDraft(UUID eventId, SaveSceneDraftRequest request, UUID actorId) {
+        validationService.validatePayloadShape(request.safeFeatures());
         var draftContext = loadOrCreateDraft(eventId, actorId, request);
         var now = OffsetDateTime.now();
         draftContext.scene().updateDraftMetrics(request.canvasWidth(), request.canvasHeight(), request.pixelToMeterRatio(), actorId, now);
@@ -98,6 +100,13 @@ public class SceneEditorService {
         var draftContext = loadOrCreateDraft(eventId, actorId, null);
         var storedFile = storedFileRepository.findById(request.fileId())
                 .orElseThrow(() -> new BusinessException("Scene background file does not exist"));
+        if (!Set.of("image/png", "image/jpeg", "image/svg+xml", "application/pdf")
+                .contains(storedFile.getMimeType().toLowerCase())) {
+            throw new BusinessException("Scene background file type is not supported");
+        }
+        if (!storedFile.getMimeType().equalsIgnoreCase(request.mimeType())) {
+            throw new BusinessException("Scene background MIME type does not match stored file");
+        }
         var now = OffsetDateTime.now();
         backgroundAssetRepository.deleteBySceneRevisionId(draftContext.revision().getId());
         backgroundAssetRepository.save(new SceneBackgroundAsset(

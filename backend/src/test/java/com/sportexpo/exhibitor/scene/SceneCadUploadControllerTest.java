@@ -3,6 +3,8 @@ package com.sportexpo.exhibitor.scene;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
 import com.sportexpo.exhibitor.common.BusinessException;
+import com.sportexpo.exhibitor.auth.AuthService;
+import com.sportexpo.exhibitor.auth.LoginRequest;
 import com.sportexpo.exhibitor.event.EventService;
 import com.sportexpo.exhibitor.event.dto.CreateEventRequest;
 import com.sportexpo.exhibitor.file.StoredFileRepository;
@@ -48,6 +50,9 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
     @Autowired
     private VenueSceneRepository venueSceneRepository;
 
+    @Autowired
+    private AuthService authService;
+
     @SpyBean
     private SceneCadConversionService cadConversionService;
 
@@ -59,7 +64,8 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
         var event = eventService.create(new CreateEventRequest("CAD 控制器测试展会", 2034, "SCENE_DRIVEN", true));
 
         var uploadResponse = mockMvc.perform(multipart("/api/events/{eventId}/scene/source-files", event.id())
-                        .file(new MockMultipartFile("file", "hall-plan.dxf", "application/dxf", "dxf-content".getBytes()))
+                        .file(new MockMultipartFile("file", "hall-plan.dxf", "application/dxf", "0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nEOF".getBytes()))
+                        .header("Authorization", "Bearer " + tokenFor("admin"))
                         .contentType(MULTIPART_FORM_DATA))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.sourceFileId").isNotEmpty())
@@ -77,7 +83,8 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
                 .path("jobId")
                 .asText();
 
-        mockMvc.perform(get("/api/events/{eventId}/scene/conversion-jobs/{jobId}", event.id(), jobId))
+        mockMvc.perform(get("/api/events/{eventId}/scene/conversion-jobs/{jobId}", event.id(), jobId)
+                        .header("Authorization", "Bearer " + tokenFor("admin")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.jobId").value(jobId))
                 .andExpect(jsonPath("$.data.id").doesNotExist())
@@ -93,6 +100,7 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
 
         mockMvc.perform(multipart("/api/events/{eventId}/scene/source-files", event.id())
                         .file(new MockMultipartFile("file", "hall-plan.svg", "image/svg+xml", "<svg/>".getBytes()))
+                        .header("Authorization", "Bearer " + tokenFor("admin"))
                         .contentType(MULTIPART_FORM_DATA))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Only DWG and DXF files are supported")));
@@ -112,7 +120,8 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
                 .registerCadSource(any(), any(), any(), any(), any(), anyLong(), any(), any());
 
         mockMvc.perform(multipart("/api/events/{eventId}/scene/source-files", event.id())
-                        .file(new MockMultipartFile("file", "hall-plan.dxf", "application/dxf", "dxf-content".getBytes()))
+                        .file(new MockMultipartFile("file", "hall-plan.dxf", "application/dxf", "0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nEOF".getBytes()))
+                        .header("Authorization", "Bearer " + tokenFor("admin"))
                         .contentType(MULTIPART_FORM_DATA))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Scene revision is not the current draft")));
@@ -129,5 +138,9 @@ class SceneCadUploadControllerTest extends TestDatabaseSupport {
         try (Stream<Path> paths = Files.walk(uploadRoot)) {
             return paths.filter(Files::isRegularFile).count();
         }
+    }
+
+    private String tokenFor(String username) {
+        return authService.login(new LoginRequest(username, "demo123")).accessToken();
     }
 }

@@ -6,6 +6,7 @@ import type {
   PublishedSceneResponse,
   SceneRevisionSummary,
   SceneValidationResult,
+  SceneSourceFileResponse,
   UploadedFileResponse,
 } from './types/scene';
 
@@ -13,6 +14,15 @@ export async function uploadSceneFile(file: File): Promise<UploadedFileResponse>
   const formData = new FormData();
   formData.append('file', file);
   return apiMultipartPost<UploadedFileResponse>('/api/files/upload', formData);
+}
+
+export async function uploadSceneCadFile(eventId: string, file: File): Promise<SceneSourceFileResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiMultipartPost<SceneSourceFileResponse>(
+    `/api/events/${encodeURIComponent(eventId)}/scene/source-files`,
+    formData,
+  );
 }
 
 export async function getSceneDraft(eventId: string): Promise<SceneDraftState> {

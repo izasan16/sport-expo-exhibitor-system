@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.test.web.servlet.MockMvc;
+import com.sportexpo.exhibitor.auth.AuthService;
+import com.sportexpo.exhibitor.auth.LoginRequest;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -30,16 +32,25 @@ class FileUploadControllerTest extends TestDatabaseSupport {
     private MockMvc mockMvc;
     @Autowired
     private TestRestTemplate restTemplate;
+    @Autowired
+    private AuthService authService;
 
     @Test
     void adminCanUploadSceneBackground() throws Exception {
         mockMvc.perform(multipart("/api/files/upload")
-                        .file("file", "fake-png".getBytes())
+                        .file(new org.springframework.mock.web.MockMultipartFile(
+                                "file", "floorplan.png", "image/png",
+                                new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}))
+                        .header("Authorization", "Bearer " + tokenFor("admin"))
                         .contentType(MediaType.MULTIPART_FORM_DATA))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.fileId").isNotEmpty())
                 .andExpect(jsonPath("$.data.url").isNotEmpty())
-                .andExpect(jsonPath("$.data.originalName").value("file"));
+                .andExpect(jsonPath("$.data.originalName").value("floorplan.png"));
+    }
+
+    private String tokenFor(String username) {
+        return authService.login(new LoginRequest(username, "demo123")).accessToken();
     }
 
     @Test

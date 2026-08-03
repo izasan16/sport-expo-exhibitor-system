@@ -1,4 +1,30 @@
-import type { SceneDraftState, SceneFeaturePayload } from '../../../app/types/scene';
+import type { SceneBackground, SceneDraftState, SceneFeaturePayload } from '../../../app/types/scene';
+
+type CalibrationPoint = { x: number; y: number };
+
+export function addCalibrationPoint(points: CalibrationPoint[], point: CalibrationPoint) {
+  const nextPoints = points.length >= 2 ? [point] : [...points, point];
+  return { points: nextPoints, ready: nextPoints.length === 2 };
+}
+
+export function buildSceneDraftPayload(state: SceneDraftState) {
+  return {
+    canvasWidth: state.canvasWidth,
+    canvasHeight: state.canvasHeight,
+    pixelToMeterRatio: state.pixelToMeterRatio,
+    features: state.features,
+  };
+}
+
+export function backgroundRenderAttributes(background: SceneBackground, fallbackWidth = 0, fallbackHeight = 0) {
+  return {
+    x: background.offsetX,
+    y: background.offsetY,
+    width: (background.width ?? fallbackWidth) * background.scale,
+    height: (background.height ?? fallbackHeight) * background.scale,
+    opacity: background.opacity,
+  };
+}
 
 export function createEmptySceneDraft(): SceneDraftState {
   return {

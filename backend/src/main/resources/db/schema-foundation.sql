@@ -482,8 +482,11 @@ create table if not exists __schema__.booth_scene_bindings (
     created_at timestamptz not null,
     updated_at timestamptz not null,
     unique(scene_feature_id),
-    unique(booth_id)
+    unique(scene_revision_id, booth_id)
 );
+
+alter table __schema__.booth_scene_bindings
+    drop constraint if exists booth_scene_bindings_booth_id_key;
 
 create table if not exists __schema__.scene_edit_locks (
     event_id uuid primary key references __schema__.events(id),

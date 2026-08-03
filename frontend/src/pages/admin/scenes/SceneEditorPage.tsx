@@ -13,6 +13,7 @@ import {
   saveSceneBackground,
   saveSceneDraft,
   uploadSceneFile,
+  uploadSceneCadFile,
   validateSceneDraft,
 } from '../../../app/sceneApi';
 import type { SceneDraftState, SceneFeatureType, SceneRevisionSummary, SceneValidationResult } from '../../../app/types/scene';
@@ -23,7 +24,9 @@ import SceneViewportControls from './SceneViewportControls';
 import { applyCompletedDrawing, canCompleteDrawing } from './sceneEditorDrawing';
 import {
   applyCalibrationRatio,
+  addCalibrationPoint,
   applyServerDraft,
+  buildSceneDraftPayload,
   createEmptySceneDraft,
   removeFeature,
   toggleSelectedFeature,
@@ -32,7 +35,7 @@ import {
 import CalibrateScaleModal from './CalibrateScaleModal';
 import SceneCanvas from './SceneCanvas';
 import SceneRevisionDrawer from './SceneRevisionDrawer';
-import { validateSceneBackgroundFile } from './sceneUploadValidation';
+import { validateSceneBackgroundFile, validateSceneCadFile } from './sceneUploadValidation';
 
 export default function SceneEditorPage() {
   const { eventId = '' } = useParams();
@@ -49,9 +52,11 @@ export default function SceneEditorPage() {
   const [revisions, setRevisions] = useState<SceneRevisionSummary[]>([]);
   const [revisionDrawerOpen, setRevisionDrawerOpen] = useState(false);
   const [revisionLoading, setRevisionLoading] = useState(false);
+  const [revisionPreview, setRevisionPreview] = useState<SceneDraftState>();
   const [drawingFeatureType, setDrawingFeatureType] = useState<SceneFeatureType>();
   const [drawingPoints, setDrawingPoints] = useState<Array<[number, number]>>([]);
   const [viewport, setViewport] = useState(() => createViewportState());
+  const [cadConversion, setCadConversion] = useState<{ status: string; message: string }>();
 
   useEffect(() => {
     let alive = true;
@@ -79,28 +84,29 @@ export default function SceneEditorPage() {
     };
   }, [eventId]);
 
-  const backgroundUrl = useMemo(() => draft.background?.url ?? null, [draft.background]);
-  const backgroundName = useMemo(() => draft.background?.fileName ?? null, [draft.background]);
+  const displayedDraft = revisionPreview ?? draft;
+  const backgroundUrl = useMemo(() => displayedDraft.background?.url ?? null, [displayedDraft]);
+  const backgroundName = useMemo(() => displayedDraft.background?.fileName ?? null, [displayedDraft.background]);
   const selectedFeature = useMemo(
-    () => draft.features.find((feature) => feature.id === draft.selectedFeatureId),
-    [draft.features, draft.selectedFeatureId],
+    () => displayedDraft.features.find((feature) => feature.id === draft.selectedFeatureId),
+    [displayedDraft.features, draft.selectedFeatureId],
   );
   const canDeleteSelected = Boolean(selectedFeature);
   const canFinishDrawing = canCompleteDrawing(drawingPoints);
 
   const autoFitViewport = useCallback(() => {
-    if (draft.background) {
+    if (displayedDraft.background) {
       setViewport(
         fitViewportToBounds(
-          { minX: 0, minY: 0, width: draft.canvasWidth, height: draft.canvasHeight },
-          { canvasWidth: draft.canvasWidth, canvasHeight: draft.canvasHeight },
+          { minX: 0, minY: 0, width: displayedDraft.canvasWidth, height: displayedDraft.canvasHeight },
+          { canvasWidth: displayedDraft.canvasWidth, canvasHeight: displayedDraft.canvasHeight },
         ),
       );
       return;
     }
 
-    if (draft.features.length > 0) {
-      const points = draft.features.flatMap((feature) => feature.geometry.coordinates[0] ?? []);
+    if (displayedDraft.features.length > 0) {
+      const points = displayedDraft.features.flatMap((feature) => feature.geometry.coordinates[0] ?? []);
       if (points.length > 0) {
         const xs = points.map(([x]) => x);
         const ys = points.map(([, y]) => y);
@@ -112,12 +118,12 @@ export default function SceneEditorPage() {
               width: Math.max(...xs) - Math.min(...xs),
               height: Math.max(...ys) - Math.min(...ys),
             },
-            { canvasWidth: draft.canvasWidth, canvasHeight: draft.canvasHeight },
+            { canvasWidth: displayedDraft.canvasWidth, canvasHeight: displayedDraft.canvasHeight },
           ),
         );
       }
     }
-  }, [draft.background, draft.canvasHeight, draft.canvasWidth, draft.features]);
+  }, [displayedDraft.background, displayedDraft.canvasHeight, displayedDraft.canvasWidth, displayedDraft.features]);
 
   useEffect(() => {
     if (loading) {
@@ -127,16 +133,12 @@ export default function SceneEditorPage() {
   }, [autoFitViewport, loading]);
 
   const handleCalibrate = async (meters: number) => {
+    if (revisionPreview) return;
     const [point1, point2] = calibrationPoints;
     const pixelDistance = Math.hypot(point2.x - point1.x, point2.y - point1.y);
     const ratio = Number((pixelDistance / meters).toFixed(4));
     const next = applyCalibrationRatio(draft, ratio);
-    const saved = await saveSceneDraft(eventId, {
-      canvasWidth: next.canvasWidth,
-      canvasHeight: next.canvasHeight,
-      pixelToMeterRatio: next.pixelToMeterRatio,
-      features: next.features,
-    });
+    const saved = await saveSceneDraft(eventId, buildSceneDraftPayload(next));
     setDraft((current) => applyServerDraft({ ...current, pixelToMeterRatio: ratio }, saved));
     setCalibrateOpen(false);
     setCalibrationMode(false);
@@ -145,6 +147,7 @@ export default function SceneEditorPage() {
   };
 
   const handleUploadBackground = async (file: File) => {
+    if (revisionPreview) return;
     const validationResult = validateSceneBackgroundFile(file);
     if (!validationResult.valid) {
       message.error(validationResult.message!);
@@ -165,7 +168,7 @@ export default function SceneEditorPage() {
       });
       setDraft((current) => applyServerDraft(current, saved));
       setCalibrationMode(true);
-      setCalibrateOpen(true);
+      setCalibrateOpen(false);
       setCalibrationPoints([]);
       message.success('参考底图已上传，请校准比例尺');
     } catch {
@@ -173,7 +176,32 @@ export default function SceneEditorPage() {
     }
   };
 
+  const handleUploadCad = async (file: File) => {
+    if (revisionPreview) return;
+    const validationResult = validateSceneCadFile(file);
+    if (!validationResult.valid) {
+      message.error(validationResult.message!);
+      return;
+    }
+    try {
+      const response = await uploadSceneCadFile(eventId, file);
+      const job = response.job;
+      setCadConversion({
+        status: job.jobStatus,
+        message: job.jobStatus === 'FAILED'
+          ? (job.errorMessage || 'CAD 转换失败')
+          : `转换任务 ${job.jobStatus}`,
+      });
+      message[job.jobStatus === 'FAILED' ? 'error' : 'success'](
+        job.jobStatus === 'FAILED' ? (job.errorMessage || 'CAD 转换失败') : 'CAD 文件已提交转换',
+      );
+    } catch {
+      // request helper already handles message output
+    }
+  };
+
   const startDrawing = (featureType: SceneFeatureType) => {
+    if (revisionPreview) return;
     setCalibrationMode(false);
     setCalibrationPoints([]);
     setDrawingFeatureType(featureType);
@@ -187,6 +215,7 @@ export default function SceneEditorPage() {
   };
 
   const completeDrawing = () => {
+    if (revisionPreview) return;
     if (!drawingFeatureType || !canFinishDrawing) {
       return;
     }
@@ -197,6 +226,7 @@ export default function SceneEditorPage() {
   };
 
   const deleteSelectedFeature = () => {
+    if (revisionPreview) return;
     if (!selectedFeature?.id) {
       return;
     }
@@ -205,6 +235,7 @@ export default function SceneEditorPage() {
   };
 
   const handleClearBackground = async () => {
+    if (revisionPreview) return;
     const saved = await clearSceneBackground(eventId);
     setDraft((current) => applyServerDraft(current, saved));
     setCalibrationMode(false);
@@ -213,14 +244,10 @@ export default function SceneEditorPage() {
   };
 
   const handleSaveDraft = async () => {
+    if (revisionPreview) return;
     setSaving(true);
     try {
-      const saved = await saveSceneDraft(eventId, {
-        canvasWidth: draft.canvasWidth,
-        canvasHeight: draft.canvasHeight,
-        pixelToMeterRatio: draft.pixelToMeterRatio,
-        features: draft.features,
-      });
+      const saved = await saveSceneDraft(eventId, buildSceneDraftPayload(draft));
       setDraft((current) => applyServerDraft(current, saved));
       message.success('草稿已保存');
     } finally {
@@ -229,6 +256,7 @@ export default function SceneEditorPage() {
   };
 
   const handleValidate = async () => {
+    if (revisionPreview) return;
     const result = await validateSceneDraft(eventId, {
       canvasWidth: draft.canvasWidth,
       canvasHeight: draft.canvasHeight,
@@ -240,8 +268,10 @@ export default function SceneEditorPage() {
   };
 
   const handlePublish = async () => {
+    if (revisionPreview) return;
     setPublishing(true);
     try {
+      await handleSaveDraft();
       await publishSceneDraft(eventId, publishSummary.trim() || '发布馆图');
       const latestDraft = await getSceneDraft(eventId);
       setDraft((current) => applyServerDraft(current, latestDraft));
@@ -266,31 +296,44 @@ export default function SceneEditorPage() {
 
   const previewRevision = async (revisionId: string) => {
     const revision = await getSceneRevision(eventId, revisionId);
-    setDraft((current) => applyServerDraft(current, revision));
+    setRevisionPreview(revision);
     setDrawingFeatureType(undefined);
     setDrawingPoints([]);
     setCalibrationMode(false);
     setCalibrationPoints([]);
     setRevisionDrawerOpen(false);
-    message.info('已载入所选版本预览');
+    message.info('已打开所选版本只读预览');
   };
 
   return (
     <PageContainer title="馆图编辑器" loading={loading}>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <SceneToolbar
-          uploadTrigger={(
-            <Upload
-              accept=".png,.jpg,.jpeg,.svg,.pdf"
-              maxCount={1}
-              showUploadList={false}
-              beforeUpload={async (file) => {
-                await handleUploadBackground(file);
-                return false;
-              }}
-            >
-              <Button icon={<UploadOutlined />}>上传 CAD 导出底图（PNG / JPG / SVG / PDF，最大 10MB）</Button>
-            </Upload>
+          uploadTrigger={revisionPreview ? undefined : (
+            <Space wrap>
+              <Upload
+                accept=".png,.jpg,.jpeg,.svg,.pdf"
+                maxCount={1}
+                showUploadList={false}
+                beforeUpload={async (file) => {
+                  await handleUploadBackground(file);
+                  return false;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>上传 CAD 导出底图（PNG / JPG / SVG / PDF，最大 10MB）</Button>
+              </Upload>
+              <Upload
+                accept=".dwg,.dxf"
+                maxCount={1}
+                showUploadList={false}
+                beforeUpload={async (file) => {
+                  await handleUploadCad(file);
+                  return false;
+                }}
+              >
+                <Button>上传 DWG / DXF 并转换</Button>
+              </Upload>
+            </Space>
           )}
           viewportControls={(
             <SceneViewportControls
@@ -305,6 +348,7 @@ export default function SceneEditorPage() {
           hasBackground={Boolean(backgroundUrl)}
           saving={saving}
           publishing={publishing}
+          readOnly={Boolean(revisionPreview)}
           onUploadBackground={() => undefined}
           onDrawHall={() => startDrawing('HALL_BOUNDARY')}
           onDrawBooth={() => startDrawing('BOOTH')}
@@ -312,6 +356,7 @@ export default function SceneEditorPage() {
           onCancelDrawing={cancelDrawing}
           onDeleteSelected={deleteSelectedFeature}
           onCalibrate={() => {
+            if (revisionPreview) return;
             setCalibrationMode(true);
             setCalibrateOpen(true);
             setCalibrationPoints([]);
@@ -325,11 +370,28 @@ export default function SceneEditorPage() {
           onPublish={() => setPublishOpen(true)}
         />
 
+        {revisionPreview ? (
+          <Alert
+            showIcon
+            type="warning"
+            message="历史版本只读预览"
+            description="当前草稿没有被覆盖。退出预览后可继续编辑当前草稿。"
+            action={<Button size="small" onClick={() => setRevisionPreview(undefined)}>退出预览</Button>}
+          />
+        ) : null}
         <Alert
           showIcon
           type="info"
           message="先上传 CAD 导出底图并校准比例尺，再绘制主馆边界和展位范围。发布后，场景里的展位会同步成真实 Booth 主数据。"
         />
+        {cadConversion ? (
+          <Alert
+            showIcon
+            type={cadConversion.status === 'FAILED' ? 'error' : 'info'}
+            message={`CAD 转换状态：${cadConversion.status}`}
+            description={cadConversion.message}
+          />
+        ) : null}
         {validation && !validation.valid ? (
           <Alert
             showIcon
@@ -357,34 +419,49 @@ export default function SceneEditorPage() {
         <Row gutter={16}>
           <Col xs={24} lg={5}>
             <SceneLayersPanel
-              features={draft.features}
+              features={displayedDraft.features}
               selectedFeatureId={draft.selectedFeatureId}
-              onSelectFeature={(featureId) => setDraft((current) => toggleSelectedFeature(current, featureId))}
+              onSelectFeature={(featureId) => {
+                if (!revisionPreview) {
+                  setDraft((current) => toggleSelectedFeature(current, featureId));
+                }
+              }}
             />
           </Col>
           <Col xs={24} lg={14}>
             <SceneCanvas
-              width={draft.canvasWidth}
-              height={draft.canvasHeight}
-              backgroundUrl={backgroundUrl}
+              width={displayedDraft.canvasWidth}
+              height={displayedDraft.canvasHeight}
+              backgroundUrl={displayedDraft.background?.url ?? null}
+              background={displayedDraft.background}
               calibrationEnabled={calibrationMode}
               calibrationPoints={calibrationPoints}
-              features={draft.features}
-              selectedFeatureId={draft.selectedFeatureId}
+              features={displayedDraft.features}
+              selectedFeatureId={revisionPreview ? undefined : draft.selectedFeatureId}
               drawingFeatureType={drawingFeatureType}
               drawingPoints={drawingPoints}
               viewport={viewport}
               onViewportChange={setViewport}
               onCanvasPointPick={(point) => {
-                if (calibrationMode) {
-                  setCalibrationPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
+                if (calibrationMode && !revisionPreview) {
+                  setCalibrationPoints((current) => {
+                    const next = addCalibrationPoint(current, point);
+                    if (next.ready) {
+                      setCalibrateOpen(true);
+                    }
+                    return next.points;
+                  });
                   return;
                 }
-                if (drawingFeatureType) {
+                if (drawingFeatureType && !revisionPreview) {
                   setDrawingPoints((current) => [...current, [point.x, point.y]]);
                 }
               }}
-              onSelectFeature={(featureId) => setDraft((current) => toggleSelectedFeature(current, featureId))}
+              onSelectFeature={(featureId) => {
+                if (!revisionPreview) {
+                  setDraft((current) => toggleSelectedFeature(current, featureId));
+                }
+              }}
             />
           </Col>
           <Col xs={24} lg={5} style={{ minWidth: 320 }}>
@@ -392,26 +469,26 @@ export default function SceneEditorPage() {
               <Card title="当前草稿">
                 <Descriptions column={1} size="small">
                   <Descriptions.Item label="场景状态">
-                    <Tag color="blue">{draft.status || 'DRAFT'}</Tag>
+                    <Tag color="blue">{displayedDraft.status || 'DRAFT'}</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="底图文件">
                     <Typography.Text ellipsis={{ tooltip: backgroundName || undefined }}>
-                      {backgroundName || '未上传'}
+          {backgroundName || (revisionPreview ? '历史版本无底图' : '未上传')}
                     </Typography.Text>
                   </Descriptions.Item>
                   <Descriptions.Item label="画布尺寸">
-                    {draft.canvasWidth} x {draft.canvasHeight}
+                    {displayedDraft.canvasWidth} x {displayedDraft.canvasHeight}
                   </Descriptions.Item>
                   <Descriptions.Item label="比例尺">
-                    {draft.pixelToMeterRatio.toFixed(4)} px/m
+                    {displayedDraft.pixelToMeterRatio.toFixed(4)} px/m
                   </Descriptions.Item>
                   <Descriptions.Item label="当前修订">
                     <Typography.Text ellipsis={{ tooltip: draft.revisionId || undefined }}>
-                      {draft.revisionId ? `${draft.revisionId.slice(0, 8)}...${draft.revisionId.slice(-4)}` : '未生成'}
+                      {displayedDraft.revisionId ? `${displayedDraft.revisionId.slice(0, 8)}...${displayedDraft.revisionId.slice(-4)}` : '未生成'}
                     </Typography.Text>
                   </Descriptions.Item>
                   <Descriptions.Item label="要素数量">
-                    {draft.features.length}
+                    {displayedDraft.features.length}
                   </Descriptions.Item>
                 </Descriptions>
                 <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
@@ -419,8 +496,8 @@ export default function SceneEditorPage() {
                 </Typography.Paragraph>
               </Card>
               <SceneInspectorPanel
-                draft={draft}
-                selectedFeature={selectedFeature}
+                draft={displayedDraft}
+                selectedFeature={revisionPreview ? undefined : selectedFeature}
                 onSceneChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
                 onFeatureChange={(featureId, patch) => {
                   setDraft((current) => updateFeature(current, featureId, patch));

@@ -98,3 +98,21 @@ export type UploadedFileResponse = {
   width?: number | null;
   height?: number | null;
 };
+
+export type SceneConversionJob = {
+  jobId: string;
+  sourceFileId: string;
+  jobStatus: string;
+  targetFormat: string;
+  resultFileId?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+};
+
+export type SceneSourceFileResponse = {
+  sourceFileId: string;
+  sourceFormat: string;
+  originalName: string;
+  uploadedAt: string;
+  job: SceneConversionJob;
+};

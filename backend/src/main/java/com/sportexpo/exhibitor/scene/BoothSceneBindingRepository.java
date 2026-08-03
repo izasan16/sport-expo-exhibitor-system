@@ -10,5 +10,7 @@ public interface BoothSceneBindingRepository extends JpaRepository<BoothSceneBin
 
     List<BoothSceneBinding> findBySceneRevisionId(UUID sceneRevisionId);
 
+    List<BoothSceneBinding> findBySceneRevisionIdAndBindingStatus(UUID sceneRevisionId, String bindingStatus);
+
     void deleteByBoothId(UUID boothId);
 }

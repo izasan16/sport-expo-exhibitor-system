@@ -2,6 +2,14 @@
 worktrees/
 .superpowers/
 
+# Local generated artifacts and one-off smoke/demo files
+output/
+tmp/
+tmp-smoke/
+.playwright-cli/
+backend/tmp/
+second-round-companion.html
+
 # Java / Maven
 target/
 *.class

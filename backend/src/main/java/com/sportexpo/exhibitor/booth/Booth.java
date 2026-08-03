@@ -94,10 +94,11 @@ public class Booth {
     public BigDecimal getHeight() { return height; }
     public UUID getUpdatedBy() { return updatedBy; }
 
-    public void applySceneSnapshot(BigDecimal areaSqm, String boothType, BigDecimal x, BigDecimal y,
+    public void applySceneSnapshot(BigDecimal areaSqm, String boothType, UUID zoneId, BigDecimal x, BigDecimal y,
                                    BigDecimal width, BigDecimal height, UUID actorId, OffsetDateTime now) {
         this.areaSqm = areaSqm;
         this.boothType = boothType;
+        this.zoneId = zoneId;
         this.x = x;
         this.y = y;
         this.width = width;
@@ -114,6 +115,12 @@ public class Booth {
 
     public void markAvailable(OffsetDateTime now, UUID actorId) {
         this.status = BusinessStatuses.BOOTH_AVAILABLE;
+        this.updatedAt = now;
+        this.updatedBy = actorId;
+    }
+
+    public void markRemoved(OffsetDateTime now, UUID actorId) {
+        this.status = BusinessStatuses.BOOTH_REMOVED;
         this.updatedAt = now;
         this.updatedBy = actorId;
     }

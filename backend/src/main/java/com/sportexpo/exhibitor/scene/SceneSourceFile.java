@@ -99,4 +99,12 @@ public class SceneSourceFile {
     public UUID getCreatedBy() {
         return createdBy;
     }
+
+    public void markConverted() {
+        this.uploadStatus = "CONVERTED";
+    }
+
+    public void markConversionFailed() {
+        this.uploadStatus = "CONVERSION_FAILED";
+    }
 }

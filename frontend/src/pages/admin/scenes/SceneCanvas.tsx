@@ -1,7 +1,8 @@
 import { Card, Empty, Tag } from 'antd';
 import { useMemo, useRef } from 'react';
 import { screenToScenePoint, toViewBox, type ViewportState } from '../../../app/sceneViewport';
-import type { SceneFeaturePayload } from '../../../app/types/scene';
+import type { SceneDraftState, SceneFeaturePayload } from '../../../app/types/scene';
+import { backgroundRenderAttributes } from './sceneEditorState';
 
 type Point = { x: number; y: number };
 
@@ -9,6 +10,7 @@ type SceneCanvasProps = {
   width: number;
   height: number;
   backgroundUrl?: string | null;
+  background?: SceneDraftState['background'];
   calibrationEnabled: boolean;
   calibrationPoints: Point[];
   features: SceneFeaturePayload[];
@@ -124,7 +126,13 @@ export default function SceneCanvas(props: SceneCanvasProps) {
           }}
         >
           {props.backgroundUrl ? (
-            <image href={props.backgroundUrl} x={0} y={0} width={props.width} height={props.height} preserveAspectRatio="xMidYMid meet" />
+            <image
+              href={props.backgroundUrl}
+              {...(props.background
+                ? backgroundRenderAttributes(props.background, props.width, props.height)
+                : { x: 0, y: 0, width: props.width, height: props.height, opacity: 1 })}
+              preserveAspectRatio="none"
+            />
           ) : null}
 
           {props.features.map((feature) => {

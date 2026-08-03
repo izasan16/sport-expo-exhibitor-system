@@ -115,4 +115,19 @@ public class SceneConversionJob {
     public OffsetDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public void markSucceeded(UUID resultFileId, OffsetDateTime now) {
+        this.jobStatus = "SUCCEEDED";
+        this.resultFileId = resultFileId;
+        this.errorCode = null;
+        this.errorMessage = null;
+        this.finishedAt = now;
+    }
+
+    public void markFailed(String errorCode, String errorMessage, OffsetDateTime now) {
+        this.jobStatus = "FAILED";
+        this.errorCode = errorCode;
+        this.errorMessage = errorMessage;
+        this.finishedAt = now;
+    }
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addCalibrationPoint,
+  backgroundRenderAttributes,
+  buildSceneDraftPayload,
   applyCalibrationRatio,
   applyServerDraft,
   createEmptySceneDraft,
@@ -10,6 +13,41 @@ import {
 } from './sceneEditorState';
 
 describe('sceneEditorState', () => {
+  it('opens calibration only after the second canvas point', () => {
+    const first = addCalibrationPoint([], { x: 12, y: 18 });
+    const second = addCalibrationPoint(first.points, { x: 42, y: 58 });
+
+    expect(first).toEqual({ points: [{ x: 12, y: 18 }], ready: false });
+    expect(second).toEqual({
+      points: [{ x: 12, y: 18 }, { x: 42, y: 58 }],
+      ready: true,
+    });
+  });
+
+  it('builds a draft payload without changing the current background transform', () => {
+    const draft = {
+      ...createEmptySceneDraft(),
+      background: {
+        fileId: 'file-1', fileName: 'hall.svg', mimeType: 'image/svg+xml', width: 1200, height: 800,
+        offsetX: 12, offsetY: -8, scale: 1.4, opacity: 0.35, locked: true,
+      },
+    };
+
+    expect(buildSceneDraftPayload(draft)).toEqual({
+      canvasWidth: 1200,
+      canvasHeight: 800,
+      pixelToMeterRatio: 20,
+      features: [],
+    });
+    expect(backgroundRenderAttributes(draft.background!)).toEqual({
+      x: 12,
+      y: -8,
+      width: 1680,
+      height: 1120,
+      opacity: 0.35,
+    });
+  });
+
   it('adds a feature and selects it', () => {
     const draft = createEmptySceneDraft();
     const next = insertFeature(draft, {
