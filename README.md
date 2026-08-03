@@ -90,13 +90,22 @@ flowchart TB
 
 ## 页面截图
 
-以下图片来自当前前端开发服务器的真实页面。登录后的业务页面需要 PostgreSQL、Redis 和后端 API 同时运行，因此不使用伪造数据生成截图。
+以下图片来自当前前端开发服务器连接本地后端和 PostgreSQL 后的真实页面，包含管理员工作台、展会配置、馆图编辑和展位审核等功能。
 
 | 页面 | 截图 |
 | --- | --- |
-| 登录页 | ![系统登录页](docs/screenshots/login.png) |
-| 未登录提示页 | ![未登录提示页](docs/screenshots/unauthorized.png) |
-| 无权限提示页 | ![无权限提示页](docs/screenshots/forbidden.png) |
+| 管理员工作台 | ![管理员工作台](docs/screenshots/admin-dashboard.png) |
+| 展会管理 | ![展会管理](docs/screenshots/event-management.png) |
+| 馆图编辑器（含馆图要素与展位） | ![馆图编辑器](docs/screenshots/scene-editor-with-floorplan.png) |
+| 馆图编辑器宽屏视图 | ![馆图编辑器宽屏视图](docs/screenshots/scene-editor-wide.png) |
+| 展位管理 | ![展位管理](docs/screenshots/booth-management.png) |
+| 选位审核 | ![选位审核](docs/screenshots/selection-review.png) |
+
+登录页和权限提示页也保留在截图目录中，便于查看认证与权限边界：
+
+- [登录页截图](docs/screenshots/login.png)
+- [未登录提示页截图](docs/screenshots/unauthorized.png)
+- [无权限提示页截图](docs/screenshots/forbidden.png)
 
 启动完整环境后，可访问以下页面查看管理员工作台、场景编辑器和展商选位页面：
 
