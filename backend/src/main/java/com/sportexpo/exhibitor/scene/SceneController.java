@@ -58,13 +58,13 @@ public class SceneController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneDraftResponse> getDraft(@PathVariable UUID eventId, Authentication authentication) {
         return ApiResponse.ok(queryService.getDraft(eventId, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PutMapping("/background")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneDraftResponse> saveBackground(@PathVariable UUID eventId,
                                                           @Valid @RequestBody SaveSceneBackgroundRequest request,
                                                           Authentication authentication) {
@@ -72,13 +72,13 @@ public class SceneController {
     }
 
     @DeleteMapping("/background")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneDraftResponse> clearBackground(@PathVariable UUID eventId, Authentication authentication) {
         return ApiResponse.ok(editorService.clearBackground(eventId, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PostMapping("/draft")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneDraftResponse> saveDraft(@PathVariable UUID eventId,
                                                      @Valid @RequestBody SaveSceneDraftRequest request,
                                                      Authentication authentication) {
@@ -86,14 +86,14 @@ public class SceneController {
     }
 
     @PostMapping("/draft/validate")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneValidationResponse> validateDraft(@PathVariable UUID eventId,
                                                               @Valid @RequestBody SaveSceneDraftRequest request) {
         return ApiResponse.ok(validationService.validateDraft(request));
     }
 
     @PostMapping("/draft/publish")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneDraftResponse> publishDraft(@PathVariable UUID eventId,
                                                         @Valid @RequestBody PublishSceneRequest request,
                                                         Authentication authentication) {
@@ -101,13 +101,13 @@ public class SceneController {
     }
 
     @GetMapping("/revisions")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<List<SceneRevisionResponse>> getRevisions(@PathVariable UUID eventId) {
         return ApiResponse.ok(queryService.getRevisions(eventId));
     }
 
     @PostMapping(value = "/source-files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneSourceFileResponse> uploadSourceFile(@PathVariable UUID eventId,
                                                                  @RequestPart("file") MultipartFile file,
                                                                  Authentication authentication) {
@@ -136,14 +136,14 @@ public class SceneController {
     }
 
     @GetMapping("/conversion-jobs/{jobId}")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneConversionJobResponse> getConversionJob(@PathVariable UUID eventId,
                                                                     @PathVariable UUID jobId) {
         return ApiResponse.ok(cadConversionService.getJob(eventId, jobId));
     }
 
     @GetMapping("/revisions/{revisionId}")
-    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN') and @eventAccessService.canManageEvent(authentication, #eventId)")
     public ApiResponse<SceneDraftResponse> getRevision(@PathVariable UUID eventId, @PathVariable UUID revisionId) {
         return ApiResponse.ok(queryService.getRevision(eventId, revisionId));
     }

@@ -105,8 +105,11 @@ public class SceneCadConversionService {
         if (!"PENDING".equals(job.getJobStatus())) {
             throw new BusinessException("Scene conversion job is not pending");
         }
-        storedFileRepository.findById(resultFileId)
+        var resultFile = storedFileRepository.findById(resultFileId)
                 .orElseThrow(() -> new BusinessException("Scene conversion result file does not exist"));
+        if (!job.getId().equals(resultFile.getSceneConversionJobId())) {
+            throw new BusinessException("Scene conversion result file does not belong to job");
+        }
         var source = sceneSourceFileRepository.findById(job.getSourceFileId()).orElseThrow();
         job.markSucceeded(resultFileId, OffsetDateTime.now());
         source.markConverted();
@@ -139,8 +142,11 @@ public class SceneCadConversionService {
 
     @Transactional
     protected void markSucceededForJob(SceneConversionJob job, UUID resultFileId) {
-        storedFileRepository.findById(resultFileId)
+        var resultFile = storedFileRepository.findById(resultFileId)
                 .orElseThrow(() -> new BusinessException("Scene conversion result file does not exist"));
+        if (!job.getId().equals(resultFile.getSceneConversionJobId())) {
+            throw new BusinessException("Scene conversion result file does not belong to job");
+        }
         var source = sceneSourceFileRepository.findById(job.getSourceFileId()).orElseThrow();
         job.markSucceeded(resultFileId, OffsetDateTime.now());
         source.markConverted();

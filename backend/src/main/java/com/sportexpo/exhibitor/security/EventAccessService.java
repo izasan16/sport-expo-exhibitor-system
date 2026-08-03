@@ -35,4 +35,9 @@ public class EventAccessService {
         }
         return false;
     }
+
+    public boolean canManageEvent(Authentication authentication, UUID eventId) {
+        var currentUser = currentUserService.getCurrentUser(authentication);
+        return currentUser.hasRole("SYSTEM_ADMIN") || currentUser.hasRole("ORGANIZER_ADMIN");
+    }
 }

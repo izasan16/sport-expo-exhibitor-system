@@ -148,6 +148,9 @@ create table if not exists __schema__.stored_files (
     created_by uuid
 );
 
+alter table __schema__.stored_files
+    add column if not exists scene_conversion_job_id uuid;
+
 create table if not exists __schema__.scene_background_assets (
     id uuid primary key,
     scene_id uuid not null references __schema__.venue_scenes(id),
@@ -249,6 +252,14 @@ alter table __schema__.scene_conversion_jobs
     add constraint fk_scene_conversion_jobs_source_file_match
         foreign key (source_file_id, scene_revision_id, scene_id)
         references __schema__.scene_source_files(id, scene_revision_id, scene_id)
+        not valid;
+
+alter table __schema__.stored_files
+    drop constraint if exists fk_stored_files_scene_conversion_job;
+alter table __schema__.stored_files
+    add constraint fk_stored_files_scene_conversion_job
+        foreign key (scene_conversion_job_id)
+        references __schema__.scene_conversion_jobs(id)
         not valid;
 
 create table if not exists __schema__.registrations (

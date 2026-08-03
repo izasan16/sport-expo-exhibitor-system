@@ -76,7 +76,7 @@ public class ProcessCadConversionGateway implements CadConversionGateway {
                 conversionService.markFailedForGateway(job, "CONVERTER_FAILED", truncate(outputLog));
                 return;
             }
-            var result = fileStorageService.storeBytes(Files.readAllBytes(output), output.getFileName().toString(), "image/svg+xml", sourceFile.getCreatedBy());
+            var result = fileStorageService.storeBytes(Files.readAllBytes(output), output.getFileName().toString(), "image/svg+xml", sourceFile.getCreatedBy(), job.getId());
             conversionService.markSucceededForGateway(job, result.fileId());
         } catch (Exception exception) {
             conversionService.markFailedForGateway(job, "CONVERTER_ERROR", truncate(exception.getMessage()));

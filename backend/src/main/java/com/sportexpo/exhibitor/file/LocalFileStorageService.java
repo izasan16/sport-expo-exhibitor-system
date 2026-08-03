@@ -84,6 +84,11 @@ public class LocalFileStorageService {
     }
 
     public UploadedFileResponse storeBytes(byte[] content, String originalName, String mimeType, UUID actorId) {
+        return storeBytes(content, originalName, mimeType, actorId, null);
+    }
+
+    public UploadedFileResponse storeBytes(byte[] content, String originalName, String mimeType, UUID actorId,
+                                           UUID sceneConversionJobId) {
         try {
             var fileId = UUID.randomUUID();
             var extension = StringUtils.getFilenameExtension(originalName);
@@ -93,11 +98,13 @@ public class LocalFileStorageService {
             var absolutePath = rootPath.resolve(relativePath).normalize();
             Files.createDirectories(absolutePath.getParent());
             Files.write(absolutePath, content);
-            var stored = repository.save(new StoredFile(
+            var stored = new StoredFile(
                     fileId, originalName, mimeType, relativePath.toString().replace('\\', '/'),
                     publicPrefix + "/" + relativePath.toString().replace('\\', '/'), content.length,
-                    null, null, OffsetDateTime.now(), actorId));
-            return UploadedFileResponse.from(stored);
+                    null, null, OffsetDateTime.now(), actorId);
+            stored.bindToSceneConversionJob(sceneConversionJobId);
+            var saved = repository.save(stored);
+            return UploadedFileResponse.from(saved);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to store generated file", exception);
         }
@@ -106,7 +113,7 @@ public class LocalFileStorageService {
     public void discardContent(UUID storedFileId) {
         var storedFile = repository.findById(storedFileId)
                 .orElseThrow(() -> new IllegalStateException("Stored file does not exist"));
-        var absolutePath = rootPath.resolve(storedFile.getStoragePath()).normalize();
+        var absolutePath = resolveInsideRoot(storedFile.getStoragePath());
         try {
             Files.deleteIfExists(absolutePath);
         } catch (IOException exception) {
@@ -118,7 +125,7 @@ public class LocalFileStorageService {
         var storedFile = repository.findById(storedFileId)
                 .orElseThrow(() -> new IllegalStateException("Stored file does not exist"));
         try {
-            return Files.readAllBytes(rootPath.resolve(storedFile.getStoragePath()).normalize());
+            return Files.readAllBytes(resolveInsideRoot(storedFile.getStoragePath()));
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read stored file", exception);
         }
@@ -127,12 +134,25 @@ public class LocalFileStorageService {
     public void delete(UUID storedFileId) {
         var storedFile = repository.findById(storedFileId)
                 .orElseThrow(() -> new IllegalStateException("Stored file does not exist"));
-        var absolutePath = rootPath.resolve(storedFile.getStoragePath()).normalize();
+        var absolutePath = resolveInsideRoot(storedFile.getStoragePath());
         try {
             Files.deleteIfExists(absolutePath);
             repository.delete(storedFile);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to delete file", exception);
         }
+    }
+
+    public StoredFile findByStoragePath(String storagePath) {
+        return repository.findByStoragePath(storagePath)
+                .orElseThrow(() -> new com.sportexpo.exhibitor.common.BusinessException("Stored file does not exist"));
+    }
+
+    private Path resolveInsideRoot(String storagePath) {
+        var resolved = rootPath.resolve(storagePath).normalize();
+        if (!resolved.startsWith(rootPath)) {
+            throw new SecurityException("Stored file path escapes storage root");
+        }
+        return resolved;
     }
 }

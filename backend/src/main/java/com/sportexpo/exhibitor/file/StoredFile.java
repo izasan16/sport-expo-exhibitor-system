@@ -42,6 +42,9 @@ public class StoredFile {
     @Column(name = "created_by")
     private UUID createdBy;
 
+    @Column(name = "scene_conversion_job_id")
+    private UUID sceneConversionJobId;
+
     protected StoredFile() {
     }
 
@@ -57,6 +60,7 @@ public class StoredFile {
         this.height = height;
         this.createdAt = createdAt;
         this.createdBy = createdBy;
+        this.sceneConversionJobId = null;
     }
 
     public UUID getId() {
@@ -97,5 +101,13 @@ public class StoredFile {
 
     public UUID getCreatedBy() {
         return createdBy;
+    }
+
+    public UUID getSceneConversionJobId() {
+        return sceneConversionJobId;
+    }
+
+    public void bindToSceneConversionJob(UUID jobId) {
+        this.sceneConversionJobId = jobId;
     }
 }
