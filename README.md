@@ -261,7 +261,6 @@ render.yaml              Render Blueprint 部署配置
 
 - [业务流程说明](中国国际体育用品博览会展商系统业务流程.md)
 - [场景编辑器设计](docs/superpowers/specs/2026-06-23-venue-scene-editor-design.md)
-- [CAD 场景工作区设计](docs/superpowers/specs/2026-06-24-cad-vector-scene-workspace-design.md)
 - [认证与销售服务中心设计](docs/superpowers/specs/2026-06-20-auth-sales-service-center-design.md)
 
 ## 仓库清理约定
