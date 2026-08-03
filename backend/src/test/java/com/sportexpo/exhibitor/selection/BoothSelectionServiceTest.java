@@ -2,10 +2,13 @@ package com.sportexpo.exhibitor.selection;
 
 import com.sportexpo.exhibitor.TestBusinessFixture;
 import com.sportexpo.exhibitor.TestDatabaseSupport;
+import com.sportexpo.exhibitor.auth.AuthService;
+import com.sportexpo.exhibitor.auth.LoginRequest;
 import com.sportexpo.exhibitor.booth.BoothService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
 import com.sportexpo.exhibitor.common.DemoActors;
+import com.sportexpo.exhibitor.common.SystemActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
@@ -42,6 +45,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     @Autowired EventRepository eventRepository;
     @Autowired NotificationService notificationService;
     @Autowired MockMvc mockMvc;
+    @Autowired AuthService authService;
 
     @Test
     void rejectsEmptyBoothIds() {
@@ -105,14 +109,14 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         selectionService.submit(new CreateBoothSelectionRequest(
                 order.id(), order.exhibitorId(), List.of(booth.id())));
 
-        assertThat(notificationService.list(DemoActors.DEMO_ADMIN_ID))
+        assertThat(notificationService.list(SystemActors.SYSTEM_ACTOR_ID))
                 .filteredOn(notification -> notification.type().equals(NotificationTypes.SELECTION_SUBMITTED))
                 .filteredOn(notification -> notification.eventId().equals(order.eventId()))
                 .filteredOn(notification -> order.id().equals(notification.relatedOrderId()))
                 .hasSize(1)
                 .first()
                 .satisfies(notification -> {
-                    assertThat(notification.recipientId()).isEqualTo(DemoActors.DEMO_ADMIN_ID);
+                    assertThat(notification.recipientId()).isEqualTo(SystemActors.SYSTEM_ACTOR_ID);
                     assertThat(notification.title()).isEqualTo("新选位申请");
                     assertThat(notification.relatedOrderId()).isEqualTo(order.id());
                 });
@@ -166,12 +170,13 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
-    void publicSubmitUsesDemoExhibitorIdentity() throws Exception {
+    void authenticatedSubmitUsesCurrentExhibitorIdentity() throws Exception {
         var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
         var booth = fixture.createBooth(order.eventId(), "A001", "9.00", "STANDARD");
         var attackerExhibitorId = UUID.randomUUID();
 
         mockMvc.perform(post("/api/booth-selections")
+                        .header("Authorization", "Bearer " + tokenFor("exhibitor01"))
                         .contentType("application/json")
                         .content("""
                                 {
@@ -186,11 +191,12 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
     }
 
     @Test
-    void publicSubmitAcceptsRemarkFieldAsDocumentedApi() throws Exception {
+    void authenticatedSubmitAcceptsRemarkFieldAsDocumentedApi() throws Exception {
         var order = fixture.createPaidOrder("9.00", "1200.00", "STANDARD");
         var booth = fixture.createBooth(order.eventId(), "A001", "9.00", "STANDARD");
 
         mockMvc.perform(post("/api/booth-selections")
+                        .header("Authorization", "Bearer " + tokenFor("exhibitor01"))
                         .contentType("application/json")
                         .content("""
                                 {
@@ -310,7 +316,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var pending = fixture.createExpiredPendingSelection("9.00", "STANDARD");
 
         var releasedCount = selectionService.releaseExpiredSelections(
-                java.time.OffsetDateTime.now(), DemoActors.SYSTEM_ACTOR_ID);
+                java.time.OffsetDateTime.now(), SystemActors.SYSTEM_ACTOR_ID);
 
         assertThat(releasedCount).isEqualTo(1);
         assertThat(notificationService.list(pending.exhibitorId()))
@@ -332,7 +338,7 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var second = fixture.createExpiredPendingSelection("9.00", "STANDARD");
 
         var releasedCount = selectionService.releaseExpiredSelections(
-                java.time.OffsetDateTime.now(), DemoActors.SYSTEM_ACTOR_ID);
+                java.time.OffsetDateTime.now(), SystemActors.SYSTEM_ACTOR_ID);
 
         assertThat(releasedCount).isGreaterThanOrEqualTo(2);
         assertThat(selectionService.list(first.orderId(), null))
@@ -413,6 +419,10 @@ class BoothSelectionServiceTest extends TestDatabaseSupport {
         var completed = done.await(30, TimeUnit.SECONDS);
         pool.shutdownNow();
         return new ConcurrentSelectionResult(completed, successes, businessFailures, errors);
+    }
+
+    private String tokenFor(String username) {
+        return authService.login(new LoginRequest(username, "demo123")).accessToken();
     }
 
     private record ConcurrentSelectionResult(boolean completed, List<?> successes,

@@ -1,9 +1,16 @@
 import { message } from 'antd';
+import { clearAccessToken, clearStoredActiveRole, getAccessToken } from './auth';
 
 type ApiResponse<T> = {
   success: boolean;
   data: T;
   message?: string;
+  errorCode?: string | null;
+};
+
+type ApiRequestOptions = RequestInit & {
+  authMode?: 'required' | 'public';
+  redirectOnForbidden?: boolean;
 };
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -46,18 +53,49 @@ async function parseBody<T>(response: Response): Promise<ApiResponse<T> | undefi
   }
 }
 
-export async function apiGet<T>(url: string): Promise<T> {
+async function apiRequest<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
+  const token = getAccessToken();
   const response = await fetch(withApiBaseUrl(url), {
+    ...options,
     headers: {
       Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
     },
   });
+
+  if (response.status === 401 && options.authMode !== 'public') {
+    clearAccessToken();
+    clearStoredActiveRole();
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/401?returnTo=${encodeURIComponent(returnTo)}`);
+    throw new Error('未登录或登录已过期');
+  }
+
+  if (response.status === 403 && options.redirectOnForbidden !== false) {
+    const body = await parseBody<unknown>(response);
+    const requiredPermission = typeof body?.errorCode === 'string' ? body.errorCode : '';
+    window.location.assign(`/403?requiredPermission=${encodeURIComponent(requiredPermission)}`);
+    throw new Error(body?.message || '无权限访问');
+  }
 
   return parseApiResponse<T>(response);
 }
 
-export async function apiPost<T, B = unknown>(url: string, body?: B): Promise<T> {
-  const options: RequestInit = {
+export async function apiGet<T>(url: string, options?: ApiRequestOptions): Promise<T> {
+  return apiRequest<T>(url, {
+    ...options,
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...options?.headers,
+    },
+  });
+}
+
+export async function apiPost<T, B = unknown>(url: string, body?: B, options?: ApiRequestOptions): Promise<T> {
+  const requestOptions: RequestInit = {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -66,16 +104,17 @@ export async function apiPost<T, B = unknown>(url: string, body?: B): Promise<T>
   };
 
   if (body !== undefined) {
-    options.body = JSON.stringify(body);
+    requestOptions.body = JSON.stringify(body);
   }
 
-  const response = await fetch(withApiBaseUrl(url), options);
-
-  return parseApiResponse<T>(response);
+  return apiRequest<T>(url, {
+    ...requestOptions,
+    ...options,
+  });
 }
 
-export async function apiPut<T, B = unknown>(url: string, body?: B): Promise<T> {
-  const options: RequestInit = {
+export async function apiPut<T, B = unknown>(url: string, body?: B, options?: ApiRequestOptions): Promise<T> {
+  const requestOptions: RequestInit = {
     method: 'PUT',
     headers: {
       Accept: 'application/json',
@@ -84,12 +123,13 @@ export async function apiPut<T, B = unknown>(url: string, body?: B): Promise<T> 
   };
 
   if (body !== undefined) {
-    options.body = JSON.stringify(body);
+    requestOptions.body = JSON.stringify(body);
   }
 
-  const response = await fetch(withApiBaseUrl(url), options);
-
-  return parseApiResponse<T>(response);
+  return apiRequest<T>(url, {
+    ...requestOptions,
+    ...options,
+  });
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {

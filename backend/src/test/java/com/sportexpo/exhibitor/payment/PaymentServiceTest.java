@@ -37,14 +37,14 @@ class PaymentServiceTest extends TestDatabaseSupport {
     void partialPaymentKeepsEligibilityClosedAndFullPaymentOpensSelection() {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
 
-        var p1 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10000.00"), "OFFLINE_TRANSFER"));
+        var p1 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10000.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
         paymentService.confirm(p1.id(), DemoActors.DEMO_ADMIN_ID);
 
         assertThat(orderService.get(order.id()).status()).isEqualTo(BusinessStatuses.ORDER_PARTIALLY_PAID);
         assertThat(eligibilityRepository.findByOrderId(order.id()).orElseThrow().getStatus())
                 .isEqualTo(BusinessStatuses.ELIGIBILITY_NOT_OPEN);
 
-        var p2 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("11600.00"), "OFFLINE_TRANSFER"));
+        var p2 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("11600.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
         paymentService.confirm(p2.id(), DemoActors.DEMO_ADMIN_ID);
 
         assertThat(orderService.get(order.id()).status()).isEqualTo(BusinessStatuses.ORDER_PAID);
@@ -55,7 +55,7 @@ class PaymentServiceTest extends TestDatabaseSupport {
     @Test
     void confirmCreatesChineseExhibitorNotification() {
         var order = fixture.createPendingPaymentOrder("9.00", "1200.00", "STANDARD");
-        var payment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10800.00"), "OFFLINE_TRANSFER"));
+        var payment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10800.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
 
         paymentService.confirm(payment.id(), DemoActors.DEMO_ADMIN_ID);
 
@@ -73,8 +73,8 @@ class PaymentServiceTest extends TestDatabaseSupport {
     @Test
     void concurrentFinanceConfirmationsConvergeToPaid() throws Exception {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
-        var p1 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10000.00"), "OFFLINE_TRANSFER"));
-        var p2 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("11600.00"), "OFFLINE_TRANSFER"));
+        var p1 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("10000.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
+        var p2 = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("11600.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
 
         var pool = Executors.newFixedThreadPool(2);
         var start = new CountDownLatch(1);
@@ -109,8 +109,8 @@ class PaymentServiceTest extends TestDatabaseSupport {
     @Test
     void extraPaymentDoesNotReopenPausedEligibility() {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
-        var fullPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
-        var extraPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("100.00"), "OFFLINE_TRANSFER"));
+        var fullPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
+        var extraPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("100.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
 
         paymentService.confirm(fullPayment.id(), DemoActors.DEMO_ADMIN_ID);
         var eligibility = eligibilityRepository.findByOrderId(order.id()).orElseThrow();
@@ -127,8 +127,8 @@ class PaymentServiceTest extends TestDatabaseSupport {
     @Test
     void extraPaymentDoesNotReopenClosedEligibility() {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
-        var fullPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
-        var extraPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("100.00"), "OFFLINE_TRANSFER"));
+        var fullPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
+        var extraPayment = paymentService.create(new CreatePaymentRequest(order.id(), new BigDecimal("100.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
 
         paymentService.confirm(fullPayment.id(), DemoActors.DEMO_ADMIN_ID);
         var eligibility = eligibilityRepository.findByOrderId(order.id()).orElseThrow();
@@ -147,11 +147,11 @@ class PaymentServiceTest extends TestDatabaseSupport {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
 
         assertThatThrownBy(() -> paymentService.create(new CreatePaymentRequest(
-                order.id(), new BigDecimal("0.004"), "OFFLINE_TRANSFER")))
+                order.id(), new BigDecimal("0.004"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Payment amount must have at most 2 decimal places");
         assertThatThrownBy(() -> paymentService.create(new CreatePaymentRequest(
-                order.id(), new BigDecimal("21599.995"), "OFFLINE_TRANSFER")))
+                order.id(), new BigDecimal("21599.995"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Payment amount must have at most 2 decimal places");
     }
@@ -160,7 +160,7 @@ class PaymentServiceTest extends TestDatabaseSupport {
     void failRequiresAndPersistsFailureReason() {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
         var payment = paymentService.create(new CreatePaymentRequest(
-                order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
+                order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
 
         var failed = paymentService.fail(payment.id(), DemoActors.DEMO_ADMIN_ID, "户名不符");
 
@@ -180,7 +180,7 @@ class PaymentServiceTest extends TestDatabaseSupport {
                 });
 
         var otherPayment = paymentService.create(new CreatePaymentRequest(
-                order.id(), new BigDecimal("1.00"), "OFFLINE_TRANSFER"));
+                order.id(), new BigDecimal("1.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
         assertThatThrownBy(() -> paymentService.fail(otherPayment.id(), DemoActors.DEMO_ADMIN_ID, " "))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Payment failure reason must not be blank");
@@ -190,7 +190,7 @@ class PaymentServiceTest extends TestDatabaseSupport {
     void failRejectsFailureReasonLongerThanColumnAfterTrim() {
         var order = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
         var payment = paymentService.create(new CreatePaymentRequest(
-                order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
+                order.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID, DemoActors.DEMO_EXHIBITOR_ID);
         var tooLongReason = " " + "x".repeat(501) + " ";
 
         assertThatThrownBy(() -> paymentService.fail(payment.id(), DemoActors.DEMO_ADMIN_ID, tooLongReason))

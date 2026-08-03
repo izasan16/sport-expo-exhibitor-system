@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,4 +28,17 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findByOrderId(UUID orderId);
 
     List<Payment> findByStatus(String status);
+
+    @Query("""
+            select payment
+            from Payment payment, ParticipationOrder participationOrder
+            where payment.orderId = participationOrder.id
+              and (:orderId is null or payment.orderId = :orderId)
+              and (:status is null or payment.status = :status)
+              and participationOrder.exhibitorId in :exhibitorIds
+            order by payment.createdAt desc
+            """)
+    List<Payment> findByFiltersAndExhibitorIdIn(@Param("orderId") UUID orderId,
+                                                @Param("status") String status,
+                                                @Param("exhibitorIds") Collection<UUID> exhibitorIds);
 }

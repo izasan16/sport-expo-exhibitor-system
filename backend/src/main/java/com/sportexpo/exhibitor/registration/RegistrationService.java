@@ -3,10 +3,10 @@ package com.sportexpo.exhibitor.registration;
 import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
+import com.sportexpo.exhibitor.common.SystemActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.eventcategory.EventCategoryRepository;
 import com.sportexpo.exhibitor.exhibitor.ExhibitorRepository;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.registration.dto.RegistrationRequest;
@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Value;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -169,6 +170,17 @@ public class RegistrationService {
         return registrations.stream().map(registration -> toResponse(registration, categoryNames)).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<RegistrationResponse> listScoped(UUID eventId, UUID exhibitorId, String status,
+                                                 Collection<UUID> allowedExhibitorIds) {
+        if (allowedExhibitorIds == null || allowedExhibitorIds.isEmpty()) {
+            return List.of();
+        }
+        var registrations = repository.findByFiltersAndExhibitorIdIn(eventId, exhibitorId, status, allowedExhibitorIds);
+        var categoryNames = loadCategoryNames(registrations);
+        return registrations.stream().map(registration -> toResponse(registration, categoryNames)).toList();
+    }
+
     private RegistrationResponse toResponse(Registration registration) {
         return toResponse(registration, loadCategoryNames(List.of(registration)));
     }
@@ -199,7 +211,7 @@ public class RegistrationService {
     }
 
     private void notifyAdmin(Registration registration, String type, String title, String content) {
-        notificationService.create(registration.getEventId(), "ADMIN", DemoActors.DEMO_ADMIN_ID, title, content, type,
+        notificationService.create(registration.getEventId(), "ADMIN", SystemActors.SYSTEM_ACTOR_ID, title, content, type,
                 "Registration", registration.getId(), null);
     }
 

@@ -1,9 +1,11 @@
 package com.sportexpo.exhibitor;
 
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+@ActiveProfiles("test")
 public abstract class TestDatabaseSupport {
     private static PostgreSQLContainer<?> postgres;
 
@@ -16,6 +18,7 @@ public abstract class TestDatabaseSupport {
             registry.add("spring.datasource.username", () -> envOrDefault("SPRING_DATASOURCE_USERNAME", "exhibitor"));
             registry.add("spring.datasource.password", () -> envOrDefault("SPRING_DATASOURCE_PASSWORD", ""));
             registry.add("app.db.schema", () -> schema);
+            registry.add("app.db.seed-demo-data", () -> "true");
             registry.add("spring.jpa.properties.hibernate.default_schema", () -> schema);
             return;
         }
@@ -32,6 +35,7 @@ public abstract class TestDatabaseSupport {
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("app.db.schema", () -> "exhibitor_sys_test");
+        registry.add("app.db.seed-demo-data", () -> "true");
         registry.add("spring.jpa.properties.hibernate.default_schema", () -> "exhibitor_sys_test");
     }
 

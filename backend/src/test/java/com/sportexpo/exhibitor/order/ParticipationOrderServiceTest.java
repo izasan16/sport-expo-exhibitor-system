@@ -57,8 +57,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void createsOrderWithCalculatedAmountAndNotOpenEligibility() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
         var order = orderService.create(new CreateParticipationOrderRequest(
@@ -76,8 +76,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void roundsCalculatedAmountsToMoneyScale() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.25"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.50"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.25"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.50"), true), DemoActors.DEMO_ADMIN_ID);
         createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
         var order = orderService.create(new CreateParticipationOrderRequest(
@@ -94,8 +94,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void returnsOrderDetailWithCreatedAndUpdatedTimes() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
         var created = orderService.create(new CreateParticipationOrderRequest(
@@ -176,8 +176,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     void rejectsAreaTierZoneMismatch() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
         var zoneId = createZone(event.id());
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), zoneId, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), zoneId, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
         assertThatThrownBy(() -> orderService.create(new CreateParticipationOrderRequest(
@@ -188,7 +188,7 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void rejectsMissingEnabledPriceRule() {
         var event = eventService.create(new CreateEventRequest("体博会", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
         createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
         assertThatThrownBy(() -> orderService.create(new CreateParticipationOrderRequest(
@@ -199,8 +199,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void createOrderFailsWithoutApprovedRegistration() {
         var event = eventService.create(new CreateEventRequest("报名校验测试展", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
 
         assertThatThrownBy(() -> orderService.create(new CreateParticipationOrderRequest(
                 event.id(), DemoActors.DEMO_EXHIBITOR_ID, null, null, tier.id(), "STANDARD"
@@ -211,8 +211,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void createOrderBindsApprovedRegistration() {
         var event = eventService.create(new CreateEventRequest("报名绑定测试展", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         var registration = createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
         var order = orderService.create(new CreateParticipationOrderRequest(
@@ -225,8 +225,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void createOrderAutoBindsOnlyApprovedRegistration() {
         var event = eventService.create(new CreateEventRequest("报名自动绑定测试展", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         var registration = createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
         var order = orderService.create(new CreateParticipationOrderRequest(
@@ -239,8 +239,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void createOrderRejectsInactiveExhibitor() {
         var event = eventService.create(new CreateEventRequest("非活跃展商测试展", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         var suspended = exhibitorService.create(new ExhibitorRequest(
                 "暂停展商", "SUSPENDED-" + UUID.randomUUID(), "李总", "13600000000",
                 "suspended@example.com", "北京市", BusinessStatuses.EXHIBITOR_SUSPENDED
@@ -255,8 +255,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void createOrderRejectsRegistrationThatIsNotApproved() {
         var event = eventService.create(new CreateEventRequest("未审核报名测试展", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         ensureEventCategory(event.id());
         var draft = registrationService.create(new RegistrationRequest(
                 event.id(), DemoActors.DEMO_EXHIBITOR_ID, "SPORTS_EQUIPMENT", null, new BigDecimal("18.00"),
@@ -272,8 +272,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     @Test
     void createOrderRequiresExplicitChoiceWhenMultipleApprovedRegistrationsExist() {
         var event = eventService.create(new CreateEventRequest("多报名测试展", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
         createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
 
@@ -287,8 +287,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
     void createOrderRejectsRegistrationFromDifferentEventOrExhibitor() {
         var event = eventService.create(new CreateEventRequest("订单展会", 2026));
         var otherEvent = eventService.create(new CreateEventRequest("报名展会", 2026));
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), null, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), null, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         var otherEventRegistration = createApprovedRegistration(otherEvent.id(), DemoActors.DEMO_EXHIBITOR_ID, null);
         var otherExhibitor = exhibitorService.create(new ExhibitorRequest(
                 "其他展商", "CREDIT-" + UUID.randomUUID(), "张总", "13700000000",
@@ -310,8 +310,8 @@ class ParticipationOrderServiceTest extends TestDatabaseSupport {
         var event = eventService.create(new CreateEventRequest("报名展区测试展", 2026));
         var approvedZone = createZone(event.id());
         var orderZone = createZone(event.id());
-        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), orderZone, new BigDecimal("18.00"), true));
-        priceRuleService.create(new CreatePriceRuleRequest(event.id(), orderZone, "STANDARD", new BigDecimal("1200.00"), true));
+        var tier = areaTierService.create(new CreateAreaTierRequest(event.id(), orderZone, new BigDecimal("18.00"), true), DemoActors.DEMO_ADMIN_ID);
+        priceRuleService.create(new CreatePriceRuleRequest(event.id(), orderZone, "STANDARD", new BigDecimal("1200.00"), true), DemoActors.DEMO_ADMIN_ID);
         var registration = createApprovedRegistration(event.id(), DemoActors.DEMO_EXHIBITOR_ID, approvedZone);
 
         assertThatThrownBy(() -> orderService.create(new CreateParticipationOrderRequest(

@@ -41,7 +41,8 @@ class AdminDashboardServiceTest extends TestDatabaseSupport {
         var salesOrder = fixture.createPendingSalesOrder("18.00", "1200.00", "STANDARD");
         var paymentOrder = fixture.createPendingPaymentOrder("18.00", "1200.00", "STANDARD");
         var payment = paymentService.create(new CreatePaymentRequest(
-                paymentOrder.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"));
+                paymentOrder.id(), new BigDecimal("21600.00"), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID,
+                DemoActors.DEMO_EXHIBITOR_ID);
         var selection = fixture.createPendingSelection("9.00", "STANDARD");
 
         var dashboard = dashboardService.getDashboard();

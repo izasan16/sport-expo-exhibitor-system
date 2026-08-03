@@ -1,12 +1,15 @@
 package com.sportexpo.exhibitor.order;
 
 import com.sportexpo.exhibitor.common.ApiResponse;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.order.dto.BatchConfirmOrdersRequest;
 import com.sportexpo.exhibitor.order.dto.BatchConfirmOrdersResponse;
 import com.sportexpo.exhibitor.order.dto.CreateParticipationOrderRequest;
 import com.sportexpo.exhibitor.order.dto.ParticipationOrderResponse;
+import com.sportexpo.exhibitor.security.CurrentUserService;
+import com.sportexpo.exhibitor.security.DataScopeService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,35 +25,65 @@ import java.util.UUID;
 @RequestMapping("/api/participation-orders")
 public class ParticipationOrderController {
     private final ParticipationOrderService service;
+    private final CurrentUserService currentUserService;
+    private final DataScopeService dataScopeService;
 
-    public ParticipationOrderController(ParticipationOrderService service) {
+    public ParticipationOrderController(ParticipationOrderService service, CurrentUserService currentUserService,
+                                        DataScopeService dataScopeService) {
         this.service = service;
+        this.currentUserService = currentUserService;
+        this.dataScopeService = dataScopeService;
     }
 
     @PostMapping
-    public ApiResponse<ParticipationOrderResponse> create(@Valid @RequestBody CreateParticipationOrderRequest request) {
-        return ApiResponse.ok(service.create(request));
+    @PreAuthorize("hasAuthority('EXHIBITOR')")
+    public ApiResponse<ParticipationOrderResponse> create(@Valid @RequestBody CreateParticipationOrderRequest request,
+                                                          Authentication authentication) {
+        var scopedRequest = new CreateParticipationOrderRequest(
+                request.eventId(),
+                currentUserService.requireCurrentExhibitorId(authentication),
+                request.registrationId(),
+                request.zoneId(),
+                request.areaTierId(),
+                request.boothType()
+        );
+        return ApiResponse.ok(service.create(scopedRequest));
     }
 
     @PostMapping("/{orderId}/confirm")
-    public ApiResponse<ParticipationOrderResponse> confirm(@PathVariable UUID orderId) {
-        return ApiResponse.ok(service.confirmSales(orderId, DemoActors.DEMO_ADMIN_ID));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
+    public ApiResponse<ParticipationOrderResponse> confirm(@PathVariable UUID orderId, Authentication authentication) {
+        dataScopeService.requireCanAccessExhibitorIfScoped(authentication, service.get(orderId).exhibitorId());
+        return ApiResponse.ok(service.confirmSales(orderId, currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @PostMapping("/batch-confirm")
-    public ApiResponse<BatchConfirmOrdersResponse> batchConfirm(@Valid @RequestBody BatchConfirmOrdersRequest request) {
-        return ApiResponse.ok(service.batchConfirmSales(request.orderIds(), DemoActors.DEMO_ADMIN_ID));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES')")
+    public ApiResponse<BatchConfirmOrdersResponse> batchConfirm(@Valid @RequestBody BatchConfirmOrdersRequest request,
+                                                                Authentication authentication) {
+        request.orderIds().forEach(orderId ->
+                dataScopeService.requireCanAccessExhibitorIfScoped(authentication, service.get(orderId).exhibitorId()));
+        return ApiResponse.ok(service.batchConfirmSales(request.orderIds(), currentUserService.getCurrentUser(authentication).userId()));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','SERVICE_STAFF','EXHIBITOR')")
     public ApiResponse<List<ParticipationOrderResponse>> list(@RequestParam(required = false) UUID eventId,
                                                               @RequestParam(required = false) UUID exhibitorId,
-                                                              @RequestParam(required = false) String status) {
-        return ApiResponse.ok(service.list(eventId, exhibitorId, status));
+                                                              @RequestParam(required = false) String status,
+                                                              Authentication authentication) {
+        if (!dataScopeService.isExhibitorScoped(authentication)) {
+            return ApiResponse.ok(service.list(eventId, exhibitorId, status));
+        }
+        return ApiResponse.ok(service.listScoped(eventId, exhibitorId, status,
+                dataScopeService.accessibleExhibitorIds(authentication)));
     }
 
     @GetMapping("/{orderId}")
-    public ApiResponse<ParticipationOrderResponse> get(@PathVariable UUID orderId) {
-        return ApiResponse.ok(service.get(orderId));
+    @PreAuthorize("hasAnyAuthority('SYSTEM_ADMIN','ORGANIZER_ADMIN','SALES','FINANCE','SERVICE_STAFF','EXHIBITOR')")
+    public ApiResponse<ParticipationOrderResponse> get(@PathVariable UUID orderId, Authentication authentication) {
+        var order = service.get(orderId);
+        dataScopeService.requireCanAccessExhibitorIfScoped(authentication, order.exhibitorId());
+        return ApiResponse.ok(order);
     }
 }

@@ -2,7 +2,6 @@ package com.sportexpo.exhibitor.pricing;
 
 import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.common.BusinessException;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.event.EventRepository;
 import com.sportexpo.exhibitor.pricing.dto.CreatePriceRuleRequest;
 import com.sportexpo.exhibitor.pricing.dto.PriceRuleResponse;
@@ -25,7 +24,7 @@ public class PriceRuleService {
     }
 
     @Transactional
-    public PriceRuleResponse create(CreatePriceRuleRequest request) {
+    public PriceRuleResponse create(CreatePriceRuleRequest request, UUID actorId) {
         eventRepository.findById(request.eventId())
                 .orElseThrow(() -> new BusinessException("Event does not exist"));
         if (request.enabled() && repository.existsByEventIdAndZoneIdAndBoothTypeAndEnabled(
@@ -40,7 +39,7 @@ public class PriceRuleService {
                 request.unitPrice(),
                 request.enabled()
         ));
-        auditService.record(priceRule.getEventId(), DemoActors.DEMO_ADMIN_ID, "PRICE_RULE_CREATE", "PriceRule",
+        auditService.record(priceRule.getEventId(), actorId, "PRICE_RULE_CREATE", "PriceRule",
                 priceRule.getId(), null, null, "create price rule");
         return toResponse(priceRule);
     }

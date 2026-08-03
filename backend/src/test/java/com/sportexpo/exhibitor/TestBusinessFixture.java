@@ -86,14 +86,16 @@ public class TestBusinessFixture {
                 .filter(existing -> existing.zoneId() == null)
                 .filter(existing -> existing.areaSqm().compareTo(area) == 0)
                 .findFirst()
-                .orElseGet(() -> areaTierService.create(new CreateAreaTierRequest(eventId, null, area, true)));
+                .orElseGet(() -> areaTierService.create(new CreateAreaTierRequest(eventId, null, area, true),
+                        DemoActors.DEMO_ADMIN_ID));
         var price = new BigDecimal(unitPrice);
         var hasPriceRule = priceRuleService.list(eventId).stream()
                 .anyMatch(existing -> existing.zoneId() == null
                         && existing.boothType().equals(boothType)
                         && existing.enabled());
         if (!hasPriceRule) {
-            priceRuleService.create(new CreatePriceRuleRequest(eventId, null, boothType, price, true));
+            priceRuleService.create(new CreatePriceRuleRequest(eventId, null, boothType, price, true),
+                    DemoActors.DEMO_ADMIN_ID);
         }
         ensureApprovedRegistration(eventId);
         return orderService.create(new CreateParticipationOrderRequest(
@@ -139,7 +141,8 @@ public class TestBusinessFixture {
                                                               String boothType) {
         var order = createPendingPaymentOrderForEvent(eventId, areaSqm, unitPrice, boothType);
         var payment = paymentService.create(new CreatePaymentRequest(
-                order.id(), order.totalAmount(), "OFFLINE_TRANSFER"));
+                order.id(), order.totalAmount(), "OFFLINE_TRANSFER"), DemoActors.DEMO_EXHIBITOR_ID,
+                DemoActors.DEMO_EXHIBITOR_ID);
         paymentService.confirm(payment.id(), DemoActors.DEMO_ADMIN_ID);
         return orderService.get(order.id());
     }

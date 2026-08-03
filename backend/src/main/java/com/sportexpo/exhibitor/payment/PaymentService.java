@@ -3,7 +3,6 @@ package com.sportexpo.exhibitor.payment;
 import com.sportexpo.exhibitor.audit.AuditService;
 import com.sportexpo.exhibitor.common.BusinessException;
 import com.sportexpo.exhibitor.common.BusinessStatuses;
-import com.sportexpo.exhibitor.common.DemoActors;
 import com.sportexpo.exhibitor.notification.NotificationService;
 import com.sportexpo.exhibitor.notification.NotificationTypes;
 import com.sportexpo.exhibitor.order.ParticipationOrder;
@@ -12,12 +11,14 @@ import com.sportexpo.exhibitor.payment.dto.CreatePaymentRequest;
 import com.sportexpo.exhibitor.payment.dto.PaymentResponse;
 import com.sportexpo.exhibitor.selection.SelectionEligibility;
 import com.sportexpo.exhibitor.selection.SelectionEligibilityRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,9 +44,12 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponse create(CreatePaymentRequest request) {
+    public PaymentResponse create(CreatePaymentRequest request, UUID actorId, UUID expectedExhibitorId) {
         var order = orderRepository.findById(request.orderId())
                 .orElseThrow(() -> new BusinessException("Participation order does not exist"));
+        if (expectedExhibitorId == null || !expectedExhibitorId.equals(order.getExhibitorId())) {
+            throw new AccessDeniedException("Access denied for order");
+        }
         if (!BusinessStatuses.ORDER_PENDING_PAYMENT.equals(order.getStatus())
                 && !BusinessStatuses.ORDER_PARTIALLY_PAID.equals(order.getStatus())) {
             throw new BusinessException("Order is not pending payment");
@@ -69,10 +73,10 @@ public class PaymentService {
                 null,
                 now,
                 now,
-                DemoActors.DEMO_EXHIBITOR_ID,
-                DemoActors.DEMO_EXHIBITOR_ID
+                actorId,
+                actorId
         ));
-        auditService.record(payment.getEventId(), DemoActors.DEMO_EXHIBITOR_ID, "PAYMENT_CREATE", "Payment",
+        auditService.record(payment.getEventId(), actorId, "PAYMENT_CREATE", "Payment",
                 payment.getId(), null, payment.getStatus(), "create payment");
         return toResponse(payment);
     }
@@ -81,6 +85,18 @@ public class PaymentService {
     public List<PaymentResponse> list(UUID orderId, String status) {
         var payments = findPayments(orderId, status);
         return payments.stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> listScoped(UUID orderId, String status, Collection<UUID> allowedExhibitorIds) {
+        if (allowedExhibitorIds == null || allowedExhibitorIds.isEmpty()) {
+            return List.of();
+        }
+        var normalizedStatus = status == null || status.isBlank() ? null : status;
+        return paymentRepository.findByFiltersAndExhibitorIdIn(orderId, normalizedStatus, allowedExhibitorIds)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional

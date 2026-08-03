@@ -1,0 +1,24 @@
+drop index if exists __schema__.idx_app_values_field_code;
+drop index if exists __schema__.idx_app_values_field_text;
+drop index if exists __schema__.idx_service_payments_order_status;
+drop index if exists __schema__.idx_service_orders_exhibitor_status;
+drop index if exists __schema__.idx_service_applications_exhibitor_status;
+drop index if exists __schema__.idx_orders_exhibitor_status;
+drop index if exists __schema__.uk_exhibitor_primary_sales;
+drop index if exists __schema__.idx_sales_assignments_exhibitor;
+drop index if exists __schema__.idx_sales_assignments_sales_user;
+
+drop table if exists __schema__.service_payments;
+drop table if exists __schema__.service_order_items;
+drop table if exists __schema__.service_orders;
+drop table if exists __schema__.service_application_attachments;
+drop table if exists __schema__.service_application_values;
+drop table if exists __schema__.service_application_booths;
+drop table if exists __schema__.service_applications;
+drop table if exists __schema__.service_fields;
+drop table if exists __schema__.service_types;
+drop table if exists __schema__.sales_follow_ups;
+drop table if exists __schema__.exhibitor_sales_assignments;
+drop table if exists __schema__.user_roles;
+drop table if exists __schema__.users;
+drop table if exists __schema__.roles;
