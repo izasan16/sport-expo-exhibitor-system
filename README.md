@@ -68,25 +68,7 @@ sequenceDiagram
 
 ## 技术架构图
 
-```mermaid
-flowchart TB
-    U[浏览器 / 移动端浏览器]
-    FE["React + TypeScript<br/>Ant Design + ProComponents<br/>Vite"]
-    API["Spring Boot 3 API<br/>Java 17<br/>认证 / RBAC / 业务服务"]
-    DB[("PostgreSQL<br/>业务数据 / 场景 revision")]
-    Redis[("Redis<br/>缓存 / TTL / 任务状态")]
-    FS[("持久化文件存储<br/>底图 / DWG / DXF / SVG")]
-    CAD["CAD 转换进程<br/>DWG/DXF → SVG"]
-
-    U --> FE
-    FE --> API
-    API --> DB
-    API --> Redis
-    API --> FS
-    API --> CAD
-    CAD --> FS
-    API -->|发布时校验与绑定| DB
-```
+![中国国际体育用品博览会展商业务系统技术架构图](docs/architecture.png)
 
 ## 页面截图
 
@@ -114,7 +96,7 @@ flowchart TB
 - [未登录提示页截图](docs/screenshots/unauthorized.png)
 - [无权限提示页截图](docs/screenshots/forbidden.png)
 
-架构图 AI 生图提示词见：[无连线技术架构图 AI 生图提示词](docs/architecture-ai-prompts.md)。
+技术架构图 AI 生图提示词见：[技术架构图 AI 生图提示词](docs/architecture-ai-prompts.md)。
 
 启动完整环境后，可访问以下页面查看管理员工作台、场景编辑器和展商选位页面：
 
